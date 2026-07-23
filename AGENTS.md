@@ -58,6 +58,22 @@ Use Node.js 24 LTS and pnpm 11.
 - Put replaceable integrations behind provider interfaces.
 - Add or update an ADR when a durable architectural constraint changes.
 
+## UI and UX expectations
+
+- Use shared shadcn-based primitives from `src/components/ui` and ShopOS domain compositions from
+  `src/components/shopos`; do not create feature-local button, field, dialog, table, status, or feedback
+  systems.
+- Use semantic design tokens. Do not hard-code organization colors into components or accept arbitrary
+  customer CSS.
+- Preserve visible organization/location context for sensitive actions.
+- Keep common cases short and use progressive disclosure for advanced options without hiding totals,
+  authorization state, permission effects, or irreversible outcomes.
+- High-consequence actions must provide clear validation, review, outcome-specific commit labels, and a
+  recovery or reconciliation path.
+- Design loading, empty, partial, degraded, permission-denied, offline, and error states.
+- Meet keyboard, focus, screen-reader, contrast, zoom, reduced-motion, responsive, and touch-target
+  requirements as part of feature acceptance.
+
 ## Tenant isolation
 
 Every business record must carry `organization_id`. Operational records normally also carry

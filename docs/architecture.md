@@ -5,6 +5,8 @@
 ShopOS is one deployable TypeScript modular monolith:
 
 - Next.js renders the responsive web application and exposes required HTTP endpoints.
+- shadcn/ui supplies source-owned interface primitives composed into ShopOS domain components. Semantic
+  design tokens support validated presets and organization/user appearance preferences.
 - Prisma ORM provides the generated, type-safe persistence client. Prisma Migrate manages migration
   history, while reviewed migration SQL preserves PostgreSQL-specific tenant constraints, checks, and
   indexes.
@@ -47,6 +49,11 @@ messaging, reporting, accounting, catalogs, provider integrations, and workflow 
 Dependencies point toward stable domain contracts. Work orders may request customer and asset summaries
 through module APIs; they should not join arbitrary implementation tables from route code.
 
+The UI follows the same boundary. `src/components/ui` contains shared primitives,
+`src/components/shopos` contains domain compositions, and feature routes call application services.
+Theme configuration changes presentation only; it never changes authorization, workflow, or financial
+semantics.
+
 ## Request path
 
 1. Authentication resolves a user.
@@ -85,4 +92,6 @@ The repository currently implements the scaffolding, initial schema, pure financ
 federated-provider isolation policies, a demonstration application shell, health response, and tests.
 Better Auth is selected and declared but its generated schema, route, and user interface are not yet
 implemented. Persisted workflow services, the job runner, outbox dispatcher, storage providers, and a
-stable public API remain planned.
+stable public API remain planned. The bootstrap screen demonstrates the intended warm visual direction,
+but shadcn integration, semantic tokens, preset themes, the authenticated application shell, and
+persisted organization/user appearance settings remain planned.

@@ -11,9 +11,14 @@ Future surfaces may include:
 
 Branded applications should share one codebase and use validated configuration for name, bundle ID,
 icons, splash assets, colors, enabled features, locations, contact details, store metadata, and
-notification settings. They must not become independent product forks.
+notification settings. They must not become independent product forks. Mobile themes should consume
+the same semantic token intent and validated organization theme configuration as the web application,
+translated into native platform tokens rather than copying web CSS.
 
 Mobile and web clients should call stable application/API boundaries for identity, customers, assets,
 service requests, estimates, authorizations, work status, messages, files, invoices, payments, push
 notifications, and project updates. Offline behavior, device trust, deep links, push-token handling,
 store operations, and account deletion require dedicated design before mobile implementation.
+
+Core navigation, task sequencing, content language, status meaning, financial review, and accessibility
+expectations remain consistent across web and mobile even when platform interaction patterns differ.
