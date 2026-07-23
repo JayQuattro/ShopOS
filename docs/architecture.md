@@ -16,7 +16,9 @@ ShopOS is one deployable TypeScript modular monolith:
   contracts.
 - PostgreSQL is the source of truth.
 - A worker process will consume a database-backed outbox/job queue without introducing a microservice.
-- Replaceable providers handle email, SMS, storage, payments, and data services.
+- A dedicated integrations module registers replaceable adapters and resolves database-backed,
+  tenant-scoped connector instances for communication, storage, mapping, scheduling, payments,
+  accounting, and data services.
 
 The browser is not a security boundary. Server application services authorize tenant context and perform
 mutations. Route handlers translate HTTP concerns and call those services.
@@ -42,9 +44,10 @@ Initial modules:
 - audit
 - settings
 - terminology
+- integrations
 
 Planned boundaries include scheduling, inspections, inventory, purchasing, vendors, projects,
-messaging, reporting, accounting, catalogs, provider integrations, and workflow automation.
+messaging, reporting, accounting, catalogs, and workflow automation.
 
 Dependencies point toward stable domain contracts. Work orders may request customer and asset summaries
 through module APIs; they should not join arbitrary implementation tables from route code.
@@ -73,6 +76,11 @@ not fully represented by the Prisma schema. Row-level security is a defense-in-d
 substitute for service authorization; its production adoption remains to be proven by an ADR and
 connection-pooling design.
 
+Integration adapter definitions are code-shipped, while connector instances, assignments,
+non-secret configuration, lifecycle state, and secret references are persisted. Connector resolution
+uses explicit organization and optional location context. Platform-managed connections require
+per-organization entitlement and isolation; no connector may silently cross tenant boundaries.
+
 ## APIs
 
 Only workflow endpoints needed by the web application are implemented initially. Application service
@@ -89,9 +97,10 @@ stable error codes. A health endpoint distinguishes process liveness from future
 ## Current implementation status
 
 The repository currently implements the scaffolding, initial schema, pure financial, tenant, and
-federated-provider isolation policies, a demonstration application shell, health response, and tests.
-Better Auth is selected and declared but its generated schema, route, and user interface are not yet
-implemented. Persisted workflow services, the job runner, outbox dispatcher, storage providers, and a
-stable public API remain planned. The bootstrap screen demonstrates the intended warm visual direction,
-but shadcn integration, semantic tokens, preset themes, the authenticated application shell, and
-persisted organization/user appearance settings remain planned.
+federated-provider isolation policies, Better Auth's reviewed schema and guarded server configuration,
+the Tailwind/shadcn design-system foundation, the demonstration application shell, health response, and
+tests. Authentication routes, recovery delivery, sign-in and enrollment UI, the authenticated
+application shell, persisted organization/user appearance settings, workflow services, the job runner,
+outbox dispatcher, storage providers, and a stable public API remain planned. The configurable adapter
+model is accepted, but its registry, connector persistence, administration UI, secret lifecycle, jobs,
+and provider implementations are not yet implemented.

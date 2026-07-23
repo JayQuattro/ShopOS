@@ -34,8 +34,11 @@ Before committing a payment, financing, warranty, CARFAX, or other partner integ
 - documented and contractually available API access
 - test/sandbox access
 - authentication and secret-rotation model
+- platform-managed versus customer-managed ownership, tenant/location scope, entitlement, and billing
+- inbound, outbound, or bidirectional capability boundaries and conflict/reconciliation behavior
 - data ownership, retention, privacy, and customer-consent requirements
 - webhook delivery, idempotency, retry, reconciliation, and outage behavior
+- data residency, attribution/licensing, caching, rate limits, quotas, and provider exit behavior
 - certification, branding, support, and commercial obligations
 - tenant/location scoping and audit requirements
 - a provider-independent fallback for existing ShopOS records

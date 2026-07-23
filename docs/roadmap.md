@@ -78,6 +78,31 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [ ] Custom report builder with field-level authorization and query limits
 - [ ] Replaceable warehouse/export boundary for larger analytical workloads
 
+### Integration platform and adapters
+
+- [ ] Adapter registry with versioned capabilities, directionality, configuration schemas, normalized
+      errors, health, retry, idempotency, webhook, and data-handling contracts
+- [ ] Database-backed platform, organization, and location connector instances and assignments
+- [ ] In-application administration for provider selection, routing, entitlements, lifecycle,
+      connection testing, reauthorization, and safe fallback policy
+- [ ] Envelope-encrypted or externally referenced secrets with masked display, write-only updates,
+      rotation, revocation, and audit history
+- [ ] Tenant-aware outbox delivery, inbound webhook verification, reconciliation, circuit breakers,
+      usage metering, and cross-tenant denial tests
+- [ ] Email adapters covering outbound SMTP/SES/Mailgun/Resend/SendGrid and bidirectional Google
+      Workspace, Microsoft 365, and IMAP-capable workflows
+- [ ] SMS and telephony adapter contracts for Twilio, AWS, Azure, and additional regional providers
+- [ ] Storage adapters for S3, tested S3-compatible presets, Google Cloud Storage, Azure Blob Storage,
+      and Cloudflare R2
+- [ ] Mapping/location adapters for Google, Mapbox, OpenStreetMap-based providers, Azure, and AWS
+- [ ] Electronic-signature discovery kept separate from estimate authorization
+- [ ] Built-in scheduling plus Google Calendar, Outlook Calendar, and iCalendar publication/sync
+- [ ] Accounting adapters beginning with QuickBooks Online and Xero, plus marketing/web discovery
+- [ ] Automotive identification adapters for VIN decoding/lookup and license-plate lookup
+- [ ] Licensed repair-guide, diagram, procedure, specification, and labor-time provider adapters
+- [ ] Parts catalog, availability, fitment, ordering, returns, and reconciliation adapters for
+      supplier and network providers
+
 ### Payments and financing
 
 - [ ] Payment-provider abstraction for card-present, card-not-present, ACH, refunds, disputes, and
@@ -99,9 +124,9 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 
 ### Additional platform expansion
 
-Scheduling, inspections, inventory, purchase orders, vendors, messaging, project builds, accounting,
-vehicle and equipment data, parts and labor catalogs, customer/technician mobile applications, plugin
-permissions, public API clients, webhooks, and workflow automation follow validated core operations.
+Scheduling, inspections, inventory, purchase orders, vendors, messaging, project builds,
+customer/technician mobile applications, plugin permissions, public API clients, and workflow
+automation follow validated core operations.
 
 New partner ideas should enter discovery first. A named integration is not committed until commercial
 access, API capability, security, data rights, support burden, and customer demand are validated.
