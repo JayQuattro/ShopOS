@@ -59,12 +59,21 @@ Server code receives an immutable context containing:
 Client-supplied IDs select a candidate context only. The server rebuilds and verifies it from stored
 membership data.
 
+UI locale is presentation context, not authorization context. Organization-enabled locales,
+membership/user preferences, customer communication preferences, translation-provider bindings,
+glossaries, jobs, and translated projections are tenant-scoped where applicable. A translation record
+never grants access to its source; the canonical source module must authorize every request.
+
 ## Roles and permissions
 
 Initial role templates are Owner, Manager, Advisor, Technician, Parts, and Administrator. Authorization
 checks use permissions such as `customers.read`, `work_orders.write`, `estimates.present`,
 `authorizations.record`, `invoices.issue`, and `payments.record`, not hard-coded role-name comparisons.
 Organizations may eventually customize roles without changing policy code.
+
+Translation capabilities use separate permissions such as `translations.request`,
+`translations.review`, `translations.approve`, `translation_glossaries.manage`, and
+`translation_providers.configure`.
 
 ## Repository rules
 
@@ -90,6 +99,8 @@ Organizations may eventually customize roles without changing policy code.
   organization-managed SSO.
 - Platform-wide Microsoft/Google sign-in does not create organization membership.
 - Background jobs revalidate tenant scope when executed.
+- Translation requests cannot submit or reveal content from another organization or disallowed
+  location, including through a guessed translation/job identifier.
 
 ## Open decisions
 

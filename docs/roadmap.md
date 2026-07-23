@@ -11,8 +11,10 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [x] Financial calculation and tenant-policy primitives with unit tests
 - [x] Health endpoint and responsive product shell
 - [x] UI/UX principles, customizable theme architecture, and shadcn design-system decision
+- [x] Core localization, bidirectional UI, and provider-neutral content-translation architecture
 - [x] Tailwind/shadcn foundation, semantic tokens, typography, spacing, motion, and component catalog
 - [x] Light, Dark, Warm, Dusk, and System presets with automated contrast checks
+- [ ] Locale-prefixed routing, ICU catalogs, `Intl` formatting, pseudo-locales, RTL, and localization CI
 - [ ] Responsive authenticated app shell and standard record/list/form/feedback patterns
 - [ ] CI workflow and container production image
 - [ ] Database-backed integration-test harness
@@ -28,15 +30,18 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [ ] Organization and first-location onboarding
 - [ ] Membership, role, permission, and location-access management
 - [ ] Organization theme publishing and individual appearance/density preferences
+- [ ] Organization/location enabled and default locales plus user/membership locale preferences
+- [ ] Tenant-scoped translation provider binding, policy, permission, secret-reference, and budget model
 - [ ] Tenant-aware request context and repositories
 - [ ] Cross-tenant, cross-location, nested-resource, and mutation-denial integration tests
 
 ## Phase 2 - Customers and assets
 
 - [ ] Individual and business customers
-- [ ] Contacts, addresses, preferences, notes, and organization references
+- [ ] Contacts, addresses, locale/communication preferences, notes, and organization references
 - [ ] General assets with automotive and equipment typed profiles
 - [ ] Fast tenant-scoped customer and asset search
+- [ ] Provider-neutral on-demand translation for allowlisted low-risk user content
 
 ## Phase 3 - Repair work orders
 
@@ -50,6 +55,7 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [ ] Line or service-group approval and decline
 - [ ] Expiring, revocable customer authorization links
 - [ ] Enforcement preventing unauthorized work from becoming approved or complete
+- [ ] Immutable locale and reviewed-translation provenance for presented estimates and authorizations
 
 ## Phase 5 - Invoices and payments
 
@@ -65,6 +71,8 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [ ] Representative-role usability testing and accessibility, responsive, keyboard, zoom, and
       screen-reader review
 - [ ] Automated accessibility checks, interaction tests, and visual regression for supported themes
+- [ ] Catalog completeness, pseudo-locale, RTL, formatting, mixed-direction, and multilingual workflow
+      tests
 - [ ] Lint, format, types, tests, migrations, seed, and production build in CI
 
 ## Later
@@ -127,6 +135,14 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 Scheduling, inspections, inventory, purchase orders, vendors, messaging, project builds,
 customer/technician mobile applications, plugin permissions, public API clients, and workflow
 automation follow validated core operations.
+
+### Translation expansion
+
+- [ ] Google Cloud Translation, Azure Translator, Amazon Translate, and DeepL adapter discovery
+- [ ] Background pretranslation, deduplication, retry, reconciliation, and usage/cost controls
+- [ ] Versioned organization glossaries, translation memory/reuse, and human-review queues
+- [ ] Document, email, SMS, PDF, and customer-portal translation with exact presentation provenance
+- [ ] Commercially licensed self-hosted/open-model evaluation for validated language gaps
 
 New partner ideas should enter discovery first. A named integration is not committed until commercial
 access, API capability, security, data rights, support burden, and customer demand are validated.

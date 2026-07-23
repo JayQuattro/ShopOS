@@ -14,11 +14,13 @@ ShopOS is one deployable TypeScript modular monolith:
   invitations, and federation protocol handling through its Prisma adapter.
 - Domain modules contain entities, policies, calculations, application services, and repository
   contracts.
+- Versioned ICU message catalogs and locale services localize ShopOS-owned interface copy without a
+  runtime translation provider.
 - PostgreSQL is the source of truth.
 - A worker process will consume a database-backed outbox/job queue without introducing a microservice.
 - A dedicated integrations module registers replaceable adapters and resolves database-backed,
   tenant-scoped connector instances for communication, storage, mapping, scheduling, payments,
-  accounting, and data services.
+  accounting, translation, and data services.
 
 The browser is not a security boundary. Server application services authorize tenant context and perform
 mutations. Route handlers translate HTTP concerns and call those services.
@@ -44,6 +46,8 @@ Initial modules:
 - audit
 - settings
 - terminology
+- localization
+- translation
 - integrations
 
 Planned boundaries include scheduling, inspections, inventory, purchasing, vendors, projects,
@@ -55,17 +59,21 @@ through module APIs; they should not join arbitrary implementation tables from r
 The UI follows the same boundary. `src/components/ui` contains shared primitives,
 `src/components/shopos` contains domain compositions, and feature routes call application services.
 Theme configuration changes presentation only; it never changes authorization, workflow, or financial
-semantics.
+semantics. UI locale and content translation are also presentation concerns: locale never selects
+currency, time zone, tenant, or authority. Application messages come from checked-in catalogs;
+translated user content remains a derived projection whose canonical source is owned and authorized by
+its domain module.
 
 ## Request path
 
 1. Authentication resolves a user.
 2. Better Auth's active organization or the route selects a candidate organization.
 3. Membership policy grants organization-wide or selected-location access.
-4. Input is validated at the transport boundary.
-5. An application service revalidates resource scope, applies domain rules, and commits a transaction.
-6. The transaction records domain/activity/audit events and an outbox message when needed.
-7. The response exposes a stable view model, not raw database rows.
+4. The server resolves a supported presentation locale without treating it as authority.
+5. Input is validated at the transport boundary.
+6. An application service revalidates resource scope, applies domain rules, and commits a transaction.
+7. The transaction records domain/activity/audit events and an outbox message when needed.
+8. The response exposes a stable locale-aware view model, not raw database rows.
 
 ## Data and consistency
 
@@ -93,6 +101,8 @@ audit behavior before declaring the API stable.
 Use structured logs with request, organization, location, actor, and trace identifiers where safe.
 Never log secrets, authorization tokens, or customer contact details by default. Domain errors map to
 stable error codes. A health endpoint distinguishes process liveness from future database readiness.
+Translation metrics record provider, locale pair, usage, latency, and normalized outcome without
+logging source or translated content.
 
 ## Current implementation status
 
@@ -103,4 +113,6 @@ tests. Authentication routes, recovery delivery, sign-in and enrollment UI, the 
 application shell, persisted organization/user appearance settings, workflow services, the job runner,
 outbox dispatcher, storage providers, and a stable public API remain planned. The configurable adapter
 model is accepted, but its registry, connector persistence, administration UI, secret lifecycle, jobs,
-and provider implementations are not yet implemented.
+and provider implementations are not yet implemented. The localization model is accepted, but
+locale-aware routing, message catalogs, translated-content persistence, translation jobs, and provider
+adapters are not yet implemented.

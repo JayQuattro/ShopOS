@@ -74,6 +74,23 @@ Use Node.js 24 LTS and pnpm 11.
 - Meet keyboard, focus, screen-reader, contrast, zoom, reduced-motion, responsive, and touch-target
   requirements as part of feature acceptance.
 
+## Localization expectations
+
+- Treat product localization and user-content translation as separate boundaries.
+- Put ShopOS-owned messages in checked-in ICU catalogs. Do not embed new user-visible English strings in
+  components or assemble translated sentences from fragments.
+- Use canonical BCP 47 locales and shared `Intl` formatters. Keep locale separate from currency, time
+  zone, units, stored instants, tenant context, and authority.
+- Set and test `lang`/`dir`; use logical layout properties and protect mixed-direction identifiers.
+- Preserve canonical user content. Translations are labeled, tenant-scoped, versioned projections that
+  never authorize access or overwrite the source.
+- Translate only allowlisted fields through provider interfaces. Revalidate tenant context in every
+  request and background job, and never log source or translated content.
+- Require approved language or human review and immutable presentation provenance for financial,
+  authorization, legal, warranty, safety, and compliance content.
+- Add pseudo-locale, RTL, placeholder, plural, formatting, stale-translation, provider-failure, and
+  cross-tenant denial tests as applicable.
+
 ## Tenant isolation
 
 Every business record must carry `organization_id`. Operational records normally also carry

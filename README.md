@@ -57,6 +57,7 @@ pnpm build
 - [Architecture](docs/architecture.md)
 - [Tenancy and permissions](docs/tenancy-and-permissions.md)
 - [Integration strategy](docs/integration-strategy.md)
+- [Localization and translation](docs/localization-and-translation.md)
 - [Mobile strategy](docs/mobile-strategy.md)
 - [UI, UX, and design system](docs/ui-ux-design-system.md)
 - [Design system maintenance](docs/design-system-maintenance.md)

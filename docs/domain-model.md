@@ -77,3 +77,14 @@ each authorization-required line.
 - Manual payments may be partial but cannot produce a negative balance without an explicit credit model.
 
 These assumptions are initial decisions and may require jurisdiction-specific tax providers later.
+
+## Localization and translation projections
+
+Organization settings define enabled/default locales and translation policy. Users, memberships,
+customers, and contacts may carry distinct presentation or communication preferences. Locale remains
+separate from currency, time zone, units, and authorization.
+
+Canonical domain modules own user-generated source content. The translation module stores
+tenant-scoped, versioned projections keyed by source identity/hash, target locale, glossary, and
+provider/policy version. Source changes make earlier projections stale rather than overwriting history.
+Reads authorize the canonical source first; translations never become independent access paths.

@@ -93,6 +93,7 @@ as `message.send`, `calendar.event.publish`, `file.store`, `payment.capture`, or
 | Automotive identity     | VIN decoding, VIN lookup, license-plate lookup, registration and vehicle-data providers                         | Data provenance, region, permitted use, confidence, caching, customer consent, and manual override are required.                                                                                             |
 | Repair information      | MOTOR, ALLDATA, and other licensed repair-guide, diagram, procedure, specification, and labor-time providers    | Entitlements, technician access, deep links versus licensed content storage, vehicle matching, versioning, and attribution vary by contract.                                                                 |
 | Parts ordering          | Nexpart, AutoZone, Advance Auto Parts, WORLDPAC, NAPA, RepairLink, and other suppliers/networks                 | Availability, fitment, pricing, account terms, ordering, substitutions, returns, cores, shipping, status, and reconciliation are distinct capabilities.                                                      |
+| Content translation     | Google Cloud Translation, Azure Translator, Amazon Translate, DeepL, and validated self-hosted models           | Locale pairs, glossary support, content class, privacy, residency, retention/training terms, review state, provenance, cost, and asynchronous operation must be explicit.                                    |
 
 Presets for common S3-compatible and similar providers supply known endpoints and defaults; they do not
 bypass capability probing, TLS validation, credential isolation, or organization ownership checks.
@@ -123,6 +124,26 @@ connector assignment, retry policy, and idempotency keys.
 Inbound webhooks are signature-verified, replay-protected, stored in a bounded form where necessary,
 and processed asynchronously. Delivery attempts and reconciliation state are operational records, not
 the source of truth for core ShopOS invoices, payments, work orders, or files.
+
+## Translation integrations
+
+Product UI localization uses checked-in ICU catalogs and never depends on a translation provider at
+runtime. Tenant/user-generated content may use a capability-aware `TranslationProvider` for text,
+batch, HTML, or document translation.
+
+Provider capabilities describe locale pairs, detection, request limits, glossary/terminology, context,
+formality/style, markup preservation, custom models, regional processing, retention/training
+characteristics, usage units, and asynchronous behavior. Google Cloud Translation, Azure Translator,
+Amazon Translate, and DeepL are initial discovery candidates. A self-hosted model is a separate
+deployment and licensing class, not an assumed equivalent to a hosted provider.
+
+Translation bindings may be global managed-service connections or organization-owned connections.
+Fallback is explicit; ShopOS never silently sends content to a provider with different privacy,
+residency, contractual, or cost terms. Source records remain readable and authoritative during every
+provider failure.
+
+The complete policy, data, review, and high-consequence rules are in
+[Localization and translation](localization-and-translation.md).
 
 ## Failure behavior
 

@@ -29,6 +29,11 @@ configuration unless a concept is genuinely different.
 | Connector assignment       | Tenant policy selecting a connector instance for a capability and optional fallback        |
 | Platform-managed connector | A provider account operated by ShopOS and explicitly offered to eligible organizations     |
 | Customer-managed connector | A provider account supplied and controlled by one organization                             |
+| Locale                     | A canonical BCP 47 language, script, and optional region presentation context              |
+| Source content             | The canonical user- or tenant-authored text retained exactly by its owning module          |
+| Translation                | A derived, versioned rendering of source content into a target locale                      |
+| Translation job            | A tenant-aware on-demand or background request to produce a translation                    |
+| Glossary                   | A versioned locale-pair terminology policy used when translating approved content          |
 
 ## Industry presentation terms
 
@@ -40,6 +45,10 @@ These labels must not change authorization or storage identity.
 
 Money is represented by integer minor units and ISO 4217 currency. Recorded instants are stored in UTC.
 Locations carry IANA time zones for calendars and display.
+
+Locale is presentation context. It does not select currency, time zone, unit storage, tenant,
+authorization, or workflow state. Product messages come from reviewed catalogs; translated user
+content never replaces its canonical source.
 
 ## Avoid
 
