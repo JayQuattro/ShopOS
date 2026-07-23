@@ -58,6 +58,7 @@ pnpm build
 - [Tenancy and permissions](docs/tenancy-and-permissions.md)
 - [Integration strategy](docs/integration-strategy.md)
 - [Mobile strategy](docs/mobile-strategy.md)
+- [UI, UX, and design system](docs/ui-ux-design-system.md)
 - [Deployment principles](docs/deployment-principles.md)
 - [Roadmap](docs/roadmap.md)
 - [Planning and issue tracking](docs/planning-and-tracking.md)

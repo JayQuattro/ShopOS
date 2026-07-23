@@ -10,6 +10,10 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [x] Initial database schema and migration
 - [x] Financial calculation and tenant-policy primitives with unit tests
 - [x] Health endpoint and responsive product shell
+- [x] UI/UX principles, customizable theme architecture, and shadcn design-system decision
+- [ ] Tailwind/shadcn foundation, semantic tokens, typography, spacing, motion, and component catalog
+- [ ] Light, Dark, Warm, Dusk, and System presets with automated contrast checks
+- [ ] Responsive authenticated app shell and standard record/list/form/feedback patterns
 - [ ] CI workflow and container production image
 - [ ] Database-backed integration-test harness
 
@@ -23,6 +27,7 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [ ] Implement invitation-only organization SSO with verified domain and issuer/tenant checks
 - [ ] Organization and first-location onboarding
 - [ ] Membership, role, permission, and location-access management
+- [ ] Organization theme publishing and individual appearance/density preferences
 - [ ] Tenant-aware request context and repositories
 - [ ] Cross-tenant, cross-location, nested-resource, and mutation-denial integration tests
 
@@ -57,7 +62,9 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [ ] Deterministic automotive, motorcycle, and lawn-equipment examples
 - [ ] Disabled future custom-build example without fake project functionality
 - [ ] Full workflow integration tests
-- [ ] Accessibility, responsive, and keyboard review
+- [ ] Representative-role usability testing and accessibility, responsive, keyboard, zoom, and
+      screen-reader review
+- [ ] Automated accessibility checks, interaction tests, and visual regression for supported themes
 - [ ] Lint, format, types, tests, migrations, seed, and production build in CI
 
 ## Later
