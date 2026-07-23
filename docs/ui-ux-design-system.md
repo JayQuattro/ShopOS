@@ -248,5 +248,6 @@ Metrics identify friction; they do not replace observation and interviews.
 6. Validate the first vertical workflows with representative users and iterate before broad feature
    expansion.
 
-The current bootstrap screen demonstrates the intended warm, restrained direction but is not yet the
-ShopOS design system or authenticated application shell.
+The foundation screen and `/design-system` preview implement the shared token, component, and preset
+baseline. They remain an honest bootstrap and presentation catalog, not an authenticated application
+shell or simulated persisted workflow.

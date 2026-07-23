@@ -59,6 +59,7 @@ pnpm build
 - [Integration strategy](docs/integration-strategy.md)
 - [Mobile strategy](docs/mobile-strategy.md)
 - [UI, UX, and design system](docs/ui-ux-design-system.md)
+- [Design system maintenance](docs/design-system-maintenance.md)
 - [Deployment principles](docs/deployment-principles.md)
 - [Roadmap](docs/roadmap.md)
 - [Planning and issue tracking](docs/planning-and-tracking.md)
