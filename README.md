@@ -66,10 +66,11 @@ pnpm build
 
 ## Current limitations
 
-The authentication architecture is selected, but the Better Auth schema migration, route, and user
-interface are not implemented yet. Persisted application workflows, customer-facing authorization
-links, invoicing, payments, file storage, and background-job execution also remain roadmap work. The
-schema and module boundaries prepare for them but must not be mistaken for implemented behavior.
+The Better Auth schema and guarded server configuration are implemented, but authentication routes,
+recovery delivery, and user interfaces are not implemented yet. Persisted application workflows,
+customer-facing authorization links, invoicing, payments, file storage, and background-job execution
+also remain roadmap work. The schema and module boundaries prepare for them but must not be mistaken
+for implemented behavior.
 
 ## License
 
