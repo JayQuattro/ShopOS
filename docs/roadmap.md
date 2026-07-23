@@ -21,7 +21,7 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 
 - [x] Select Better Auth with the official Prisma adapter and record the identity/authorization split
 - [x] Define organization-isolated Microsoft, Google Workspace, OIDC, and SAML policy
-- [ ] Generate and review the Better Auth schema migration
+- [x] Generate and review the Better Auth schema migration
 - [ ] Configure secure sessions, email/password recovery, MFA, passkeys, and auth routes
 - [ ] Configure optional platform-wide Microsoft and Google sign-in without membership provisioning
 - [ ] Implement invitation-only organization SSO with verified domain and issuer/tenant checks
