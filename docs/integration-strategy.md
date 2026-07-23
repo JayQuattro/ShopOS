@@ -11,6 +11,7 @@ Initial provider boundaries:
 - vehicle/equipment data
 - parts and labor data
 - accounting export
+- content translation
 - identity providers
 - push notifications
 
@@ -24,6 +25,26 @@ Meaningful lifecycle events—such as `estimate.presented`, `authorization.recor
 `work_order.completed`, and `invoice.issued`—are recorded in the same transaction as state changes. A
 future outbox dispatcher delivers them to jobs, integrations, and webhooks with retry and idempotency.
 Events carry organization context and stable identifiers, not unrestricted record dumps.
+
+## Translation integrations
+
+Product UI localization uses checked-in ICU catalogs and never depends on a translation provider at
+runtime. Tenant/user-generated content may use a capability-aware `TranslationProvider` for text,
+batch, HTML, or document translation.
+
+Provider capabilities describe locale pairs, detection, request limits, glossary/terminology, context,
+formality/style, markup preservation, custom models, regional processing, retention/training
+characteristics, usage units, and asynchronous behavior. Google Cloud Translation, Azure Translator,
+Amazon Translate, and DeepL are initial discovery candidates. A self-hosted model is a separate
+deployment and licensing class, not an assumed equivalent to a hosted provider.
+
+Translation bindings may be global managed-service connections or organization-owned connections.
+Fallback is explicit; ShopOS never silently sends content to a provider with different privacy,
+residency, contractual, or cost terms. Source records remain readable and authoritative during every
+provider failure.
+
+The complete policy, data, review, and high-consequence rules are in
+[Localization and translation](localization-and-translation.md).
 
 ## Failure behavior
 

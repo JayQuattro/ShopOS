@@ -15,6 +15,7 @@ without forcing each market into vehicle-specific data.
 - Structured enough for multi-location operations
 - A polished managed SaaS and a genuinely self-hostable application from the same codebase
 - Core functionality that remains useful without paid data or messaging providers
+- Multilingual staff and customer experiences without making a translation provider a core dependency
 - Clear records of what was proposed, authorized, completed, invoiced, and paid
 
 ## Initial users
@@ -42,6 +43,8 @@ applications, training, and enterprise implementation—not artificial removal o
 - Make customer and asset retrieval fast.
 - Avoid duplicate entry.
 - Support responsive layouts, keyboard use, and baseline accessibility.
+- Localize product messages, formatting, and bidirectional layouts from the start.
+- Preserve original user content and clearly label optional machine translations.
 - Apply familiar industry terminology at presentation boundaries while keeping the core domain general.
 
 ## Success for the bootstrap

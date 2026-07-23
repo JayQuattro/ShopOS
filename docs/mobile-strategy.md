@@ -22,3 +22,7 @@ store operations, and account deletion require dedicated design before mobile im
 
 Core navigation, task sequencing, content language, status meaning, financial review, and accessibility
 expectations remain consistent across web and mobile even when platform interaction patterns differ.
+Mobile clients consume the same BCP 47 locale policy, ICU message semantics, formatter contracts,
+customer communication preferences, and content-translation provenance as the web application. Native
+catalog packaging may differ, but it must not create independently worded business rules or silently
+replace canonical user content with machine output.

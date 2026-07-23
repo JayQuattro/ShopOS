@@ -224,6 +224,25 @@ Accessibility is a component and feature acceptance criterion, not only a final 
 Automated checks, lint rules, component tests, browser tests, and visual regression reduce common
 failures. Manual keyboard, screen-reader, zoom, and real-device review remains required.
 
+## Localization and bidirectional design
+
+ShopOS-owned interface messages come from ICU catalogs; components do not embed English-only labels or
+assemble sentences from translated fragments. Shared primitives receive localized accessible names
+from their caller, while domain compositions resolve a stable business-message namespace.
+
+- Design against realistic long translations and an expanded pseudo-locale.
+- Use logical inline/block properties instead of assuming left and right.
+- Set `lang` and `dir` at the document boundary and test an RTL pseudo-locale.
+- Preserve readable wrapping for actions, status, errors, tabs, tables, money, dates, and identifiers.
+- Isolate VINs, part numbers, phone numbers, email addresses, and codes in mixed-direction content.
+- Treat locale switching as a context-preserving preference change, never an authorization change.
+- Clearly distinguish machine-translated user content from the original and expose stale, pending,
+  failed, and human-reviewed states.
+
+High-consequence translations follow the normal review pattern plus exact source/translation version,
+locale, provenance, and human-approval requirements. See
+[Localization and translation](localization-and-translation.md).
+
 ## Research and measurement
 
 Test representative workflows with shop owners, service advisors, technicians, parts staff,
@@ -240,12 +259,14 @@ Metrics identify friction; they do not replace observation and interviews.
 1. Establish Tailwind/shadcn, semantic tokens, typography, spacing, elevation, motion, and component
    ownership rules.
 2. Implement Light, Dark, Warm, Dusk, and System presets with accessibility validation.
-3. Build the responsive app shell, tenant context, global search/command pattern, record header, forms,
+3. Establish locale routing, ICU catalogs, formatting, pseudo-locales, RTL behavior, and localized
+   component stress tests.
+4. Build the responsive app shell, tenant context, global search/command pattern, record header, forms,
    feedback, data display, and complex-task compositions.
-4. Persist organization theme publication and individual appearance/density preferences with
+5. Persist organization theme publication and individual appearance/density/locale preferences with
    server-resolved startup.
-5. Add the component catalog, automated accessibility checks, visual regression, and interaction tests.
-6. Validate the first vertical workflows with representative users and iterate before broad feature
+6. Add the component catalog, automated accessibility checks, visual regression, and interaction tests.
+7. Validate the first vertical workflows with representative users and iterate before broad feature
    expansion.
 
 The current bootstrap screen demonstrates the intended warm, restrained direction but is not yet the
