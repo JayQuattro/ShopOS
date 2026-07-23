@@ -1,0 +1,555 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CustomerKind {
+  INDIVIDUAL @map("individual")
+  BUSINESS   @map("business")
+
+  @@map("customer_kind")
+}
+
+enum AssetStatus {
+  ACTIVE   @map("active")
+  INACTIVE @map("inactive")
+  SOLD     @map("sold")
+  ARCHIVED @map("archived")
+
+  @@map("asset_status")
+}
+
+enum WorkType {
+  REPAIR      @map("repair")
+  MAINTENANCE @map("maintenance")
+  PROJECT     @map("project")
+
+  @@map("work_type")
+}
+
+enum WorkOrderStatus {
+  DRAFT                  @map("draft")
+  ESTIMATING             @map("estimating")
+  AWAITING_AUTHORIZATION @map("awaiting_authorization")
+  AUTHORIZED             @map("authorized")
+  IN_PROGRESS            @map("in_progress")
+  BLOCKED                @map("blocked")
+  COMPLETED              @map("completed")
+  INVOICED               @map("invoiced")
+  CLOSED                 @map("closed")
+  CANCELLED              @map("cancelled")
+
+  @@map("work_order_status")
+}
+
+enum EstimateRevisionStatus {
+  DRAFT      @map("draft")
+  PRESENTED  @map("presented")
+  SUPERSEDED @map("superseded")
+  EXPIRED    @map("expired")
+
+  @@map("estimate_revision_status")
+}
+
+enum PricedLineKind {
+  LABOR @map("labor")
+  PART  @map("part")
+  FEE   @map("fee")
+
+  @@map("priced_line_kind")
+}
+
+enum AuthorizationDecisionValue {
+  APPROVED @map("approved")
+  DECLINED @map("declined")
+
+  @@map("authorization_decision")
+}
+
+enum AuthorizationMethod {
+  CUSTOMER_LINK @map("customer_link")
+  PHONE         @map("phone")
+  IN_PERSON     @map("in_person")
+  EMAIL         @map("email")
+  OTHER         @map("other")
+
+  @@map("authorization_method")
+}
+
+enum InvoiceStatus {
+  DRAFT          @map("draft")
+  ISSUED         @map("issued")
+  PARTIALLY_PAID @map("partially_paid")
+  PAID           @map("paid")
+  VOID           @map("void")
+
+  @@map("invoice_status")
+}
+
+enum PaymentMethod {
+  CASH          @map("cash")
+  CARD_EXTERNAL @map("card_external")
+  CHECK         @map("check")
+  BANK_TRANSFER @map("bank_transfer")
+  OTHER         @map("other")
+
+  @@map("payment_method")
+}
+
+model User {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                  String                   @unique(map: "users_email_unique") @db.VarChar(320)
+  displayName            String                   @map("display_name") @db.VarChar(160)
+  disabledAt             DateTime?                @map("disabled_at") @db.Timestamptz(6)
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  memberships            OrganizationMembership[]
+  createdEstimates       EstimateRevision[]       @relation("EstimateCreatedBy")
+  recordedAuthorizations Authorization[]          @relation("AuthorizationRecordedBy")
+  recordedPayments       Payment[]                @relation("PaymentRecordedBy")
+  activityEvents         ActivityEvent[]          @relation("ActivityActor")
+  auditEvents            AuditEvent[]             @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Organization {
+  id                String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug              String                   @unique @db.VarChar(80)
+  name              String                   @db.VarChar(180)
+  status            String                   @default("active") @db.VarChar(24)
+  defaultCurrency   String                   @default("USD") @map("default_currency") @db.VarChar(3)
+  subscriptionState String                   @default("unmanaged") @map("subscription_state") @db.VarChar(32)
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  locations         Location[]
+  memberships       OrganizationMembership[]
+  roles             Role[]
+  membershipRoles   MembershipRole[]
+  locationAccess    LocationAccess[]
+  customers         Customer[]
+  assets            Asset[]
+  workOrders        WorkOrder[]
+  estimateRevisions EstimateRevision[]
+  estimateLines     EstimateLine[]
+  authorizations    Authorization[]
+  authDecisions     AuthorizationDecision[]
+  invoices          Invoice[]
+  invoiceLines      InvoiceLine[]
+  payments          Payment[]
+  activityEvents    ActivityEvent[]
+  auditEvents       AuditEvent[]
+
+  @@map("organizations")
+}
+
+model Location {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  code           String           @db.VarChar(32)
+  name           String           @db.VarChar(180)
+  timeZone       String           @map("time_zone") @db.VarChar(80)
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accessGrants   LocationAccess[]
+  homeAssets     Asset[]
+  workOrders     WorkOrder[]
+  estimates      EstimateRevision[]
+  invoices       Invoice[]
+  payments       Payment[]
+  activityEvents ActivityEvent[]
+  auditEvents    AuditEvent[]
+
+  @@unique([organizationId, code], map: "locations_org_code_unique")
+  @@unique([organizationId, id], map: "locations_org_id_unique")
+  @@index([organizationId], map: "locations_org_idx")
+  @@map("locations")
+}
+
+model OrganizationMembership {
+  id                             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                 String           @map("organization_id") @db.Uuid
+  userId                         String           @map("user_id") @db.Uuid
+  organizationWideLocationAccess Boolean          @default(false) @map("organization_wide_location_access")
+  active                         Boolean          @default(true)
+  createdAt                      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization                  Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles                         MembershipRole[]
+  locationAccess                LocationAccess[]
+
+  @@unique([organizationId, userId], map: "memberships_org_user_unique")
+  @@unique([organizationId, id], map: "memberships_org_id_unique")
+  @@index([userId], map: "memberships_user_idx")
+  @@map("organization_memberships")
+}
+
+model Role {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String           @map("organization_id") @db.Uuid
+  key             String           @db.VarChar(64)
+  name            String           @db.VarChar(120)
+  permissions     Json             @default("[]")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membershipRoles MembershipRole[]
+
+  @@unique([organizationId, key], map: "roles_org_key_unique")
+  @@unique([organizationId, id], map: "roles_org_id_unique")
+  @@map("roles")
+}
+
+model MembershipRole {
+  organizationId String                 @map("organization_id") @db.Uuid
+  membershipId   String                 @map("membership_id") @db.Uuid
+  roleId         String                 @map("role_id") @db.Uuid
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership     OrganizationMembership @relation(fields: [organizationId, membershipId], references: [organizationId, id], onDelete: Cascade)
+  role           Role                   @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: Cascade)
+
+  @@id([membershipId, roleId])
+  @@map("membership_roles")
+}
+
+model LocationAccess {
+  organizationId String                 @map("organization_id") @db.Uuid
+  membershipId   String                 @map("membership_id") @db.Uuid
+  locationId     String                 @map("location_id") @db.Uuid
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership     OrganizationMembership @relation(fields: [organizationId, membershipId], references: [organizationId, id], onDelete: Cascade)
+  location       Location               @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Cascade)
+
+  @@id([membershipId, locationId])
+  @@map("location_access")
+}
+
+model Customer {
+  id                    String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String       @map("organization_id") @db.Uuid
+  kind                  CustomerKind
+  displayName           String       @map("display_name") @db.VarChar(220)
+  organizationReference String?      @map("organization_reference") @db.VarChar(64)
+  primaryEmail          String?      @map("primary_email") @db.VarChar(320)
+  primaryPhone          String?      @map("primary_phone") @db.VarChar(40)
+  internalNotes         String?      @map("internal_notes")
+  customerFacingNotes   String?      @map("customer_facing_notes")
+  archivedAt            DateTime?    @map("archived_at") @db.Timestamptz(6)
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  assets                Asset[]
+  workOrders            WorkOrder[]
+
+  @@unique([organizationId, id], map: "customers_org_id_unique")
+  @@index([organizationId, displayName], map: "customers_org_name_idx")
+  @@map("customers")
+}
+
+model Asset {
+  id                 String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String                   @map("organization_id") @db.Uuid
+  customerId         String                   @map("customer_id") @db.Uuid
+  homeLocationId     String?                  @map("home_location_id") @db.Uuid
+  displayName        String                   @map("display_name") @db.VarChar(220)
+  category           String                   @db.VarChar(80)
+  subtype            String?                  @db.VarChar(80)
+  manufacturer       String?                  @db.VarChar(120)
+  model              String?                  @db.VarChar(120)
+  modelYear          Int?                     @map("model_year")
+  serialNumber       String?                  @map("serial_number") @db.VarChar(160)
+  status             AssetStatus              @default(ACTIVE)
+  usageType          String?                  @map("usage_type") @db.VarChar(48)
+  usageValueMilli    BigInt?                  @map("usage_value_milli")
+  usageUnit          String?                  @map("usage_unit") @db.VarChar(24)
+  description        String?
+  tags               Json                     @default("[]")
+  customAttributes   Json                     @default("{}") @map("custom_attributes")
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization       Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  customer           Customer                 @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
+  homeLocation       Location?                @relation(fields: [organizationId, homeLocationId], references: [organizationId, id], onDelete: Restrict)
+  automotiveProfile  AutomotiveAssetProfile?
+  equipmentProfile   EquipmentAssetProfile?
+  workOrders         WorkOrder[]
+
+  @@unique([organizationId, id], map: "assets_org_id_unique")
+  @@index([organizationId, customerId], map: "assets_org_customer_idx")
+  @@index([organizationId, displayName], map: "assets_org_name_idx")
+  @@map("assets")
+}
+
+model AutomotiveAssetProfile {
+  assetId           String  @id @map("asset_id") @db.Uuid
+  vin               String? @db.VarChar(32)
+  licensePlate      String? @map("license_plate") @db.VarChar(32)
+  plateJurisdiction String? @map("plate_jurisdiction") @db.VarChar(32)
+  trim              String? @db.VarChar(120)
+  engine            String? @db.VarChar(160)
+  transmission      String? @db.VarChar(120)
+  drivetrain        String? @db.VarChar(80)
+  asset             Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("automotive_asset_profiles")
+}
+
+model EquipmentAssetProfile {
+  assetId           String  @id @map("asset_id") @db.Uuid
+  engineModel       String? @map("engine_model") @db.VarChar(160)
+  fuelType          String? @map("fuel_type") @db.VarChar(80)
+  equipmentCategory String? @map("equipment_category") @db.VarChar(120)
+  asset             Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("equipment_asset_profiles")
+}
+
+model WorkOrder {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String             @map("organization_id") @db.Uuid
+  locationId        String             @map("location_id") @db.Uuid
+  customerId        String             @map("customer_id") @db.Uuid
+  assetId           String             @map("asset_id") @db.Uuid
+  number            String             @db.VarChar(40)
+  workType          WorkType           @default(REPAIR) @map("work_type")
+  status            WorkOrderStatus    @default(DRAFT)
+  customerConcern   String             @map("customer_concern")
+  promisedAt        DateTime?          @map("promised_at") @db.Timestamptz(6)
+  completedAt       DateTime?          @map("completed_at") @db.Timestamptz(6)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location          Location           @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  customer          Customer           @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
+  asset             Asset              @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+  estimateRevisions EstimateRevision[]
+  invoice           Invoice?
+  activityEvents    ActivityEvent[]
+
+  @@unique([organizationId, number], map: "work_orders_org_number_unique")
+  @@unique([organizationId, locationId, id], map: "work_orders_org_location_id_unique")
+  @@unique([organizationId, id], map: "work_orders_org_id_unique")
+  @@index([organizationId, locationId, status], map: "work_orders_org_location_status_idx")
+  @@map("work_orders")
+}
+
+model EstimateRevision {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String                 @map("organization_id") @db.Uuid
+  locationId           String                 @map("location_id") @db.Uuid
+  workOrderId          String                 @map("work_order_id") @db.Uuid
+  revisionNumber       Int                    @map("revision_number")
+  status               EstimateRevisionStatus @default(DRAFT)
+  currency             String                 @db.VarChar(3)
+  subtotalMinor        BigInt                 @map("subtotal_minor")
+  discountMinor        BigInt                 @map("discount_minor")
+  taxMinor             BigInt                 @map("tax_minor")
+  totalMinor           BigInt                 @map("total_minor")
+  presentedAt          DateTime?              @map("presented_at") @db.Timestamptz(6)
+  expiresAt            DateTime?              @map("expires_at") @db.Timestamptz(6)
+  supersedesRevisionId String?                @map("supersedes_revision_id") @db.Uuid
+  createdByUserId      String?                @map("created_by_user_id") @db.Uuid
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location             Location               @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  workOrder            WorkOrder              @relation(fields: [organizationId, locationId, workOrderId], references: [organizationId, locationId, id], onDelete: Restrict)
+  createdBy            User?                  @relation("EstimateCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  supersedes           EstimateRevision?      @relation("EstimateSupersession", fields: [supersedesRevisionId], references: [id], onDelete: Restrict)
+  supersededBy         EstimateRevision[]     @relation("EstimateSupersession")
+  lines                EstimateLine[]
+  authorizations       Authorization[]
+
+  @@unique([workOrderId, revisionNumber], map: "estimate_revision_number_unique")
+  @@unique([organizationId, id], map: "estimate_revisions_org_id_unique")
+  @@index([organizationId, workOrderId], map: "estimate_revisions_org_work_order_idx")
+  @@map("estimate_revisions")
+}
+
+model EstimateLine {
+  id                     String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String                  @map("organization_id") @db.Uuid
+  estimateRevisionId     String                  @map("estimate_revision_id") @db.Uuid
+  serviceGroupKey        String                  @map("service_group_key") @db.VarChar(80)
+  kind                   PricedLineKind
+  description            String
+  quantityMilli          Int                     @map("quantity_milli")
+  unitPriceMinor         BigInt                  @map("unit_price_minor")
+  grossMinor             BigInt                  @map("gross_minor")
+  discountMinor          BigInt                  @map("discount_minor")
+  taxable                Boolean
+  taxRateBasisPoints     Int                     @map("tax_rate_basis_points")
+  taxMinor               BigInt                  @map("tax_minor")
+  totalMinor             BigInt                  @map("total_minor")
+  authorizationRequired  Boolean                 @default(true) @map("authorization_required")
+  position               Int
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  revision               EstimateRevision        @relation(fields: [organizationId, estimateRevisionId], references: [organizationId, id], onDelete: Restrict)
+  authorizationDecisions AuthorizationDecision[]
+  invoiceLines           InvoiceLine[]
+
+  @@unique([estimateRevisionId, position], map: "estimate_lines_revision_position_unique")
+  @@unique([organizationId, id], map: "estimate_lines_org_id_unique")
+  @@index([organizationId, estimateRevisionId], map: "estimate_lines_org_revision_idx")
+  @@map("estimate_lines")
+}
+
+model Authorization {
+  id                 String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String                  @map("organization_id") @db.Uuid
+  estimateRevisionId String                  @map("estimate_revision_id") @db.Uuid
+  method             AuthorizationMethod
+  recordedByUserId   String?                 @map("recorded_by_user_id") @db.Uuid
+  providedByName     String                  @map("provided_by_name") @db.VarChar(180)
+  note               String?
+  occurredAt         DateTime                @map("occurred_at") @db.Timestamptz(6)
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  revision           EstimateRevision        @relation(fields: [organizationId, estimateRevisionId], references: [organizationId, id], onDelete: Restrict)
+  recordedBy         User?                   @relation("AuthorizationRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+  decisions          AuthorizationDecision[]
+
+  @@unique([organizationId, id], map: "authorizations_org_id_unique")
+  @@index([organizationId, estimateRevisionId], map: "authorizations_org_revision_idx")
+  @@map("authorizations")
+}
+
+model AuthorizationDecision {
+  organizationId   String                     @map("organization_id") @db.Uuid
+  authorizationId  String                     @map("authorization_id") @db.Uuid
+  estimateLineId   String                     @map("estimate_line_id") @db.Uuid
+  decision         AuthorizationDecisionValue
+  createdAt        DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization     Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  authorization    Authorization              @relation(fields: [organizationId, authorizationId], references: [organizationId, id], onDelete: Restrict)
+  estimateLine     EstimateLine               @relation(fields: [organizationId, estimateLineId], references: [organizationId, id], onDelete: Restrict)
+
+  @@id([authorizationId, estimateLineId])
+  @@map("authorization_decisions")
+}
+
+model Invoice {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  locationId     String        @map("location_id") @db.Uuid
+  workOrderId    String        @map("work_order_id") @db.Uuid
+  number         String        @db.VarChar(40)
+  status         InvoiceStatus @default(DRAFT)
+  currency       String        @db.VarChar(3)
+  subtotalMinor  BigInt        @map("subtotal_minor")
+  discountMinor  BigInt        @map("discount_minor")
+  taxMinor       BigInt        @map("tax_minor")
+  totalMinor     BigInt        @map("total_minor")
+  paidMinor      BigInt        @default(0) @map("paid_minor")
+  issuedAt       DateTime?     @map("issued_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location       Location      @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  workOrder      WorkOrder     @relation(fields: [organizationId, locationId, workOrderId], references: [organizationId, locationId, id], onDelete: Restrict)
+  lines          InvoiceLine[]
+  payments       Payment[]
+
+  @@unique([organizationId, number], map: "invoices_org_number_unique")
+  @@unique([organizationId, locationId, workOrderId], map: "invoices_org_location_work_order_unique")
+  @@unique([organizationId, id], map: "invoices_org_id_unique")
+  @@index([organizationId, locationId, status], map: "invoices_org_location_status_idx")
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id                   String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String          @map("organization_id") @db.Uuid
+  invoiceId            String          @map("invoice_id") @db.Uuid
+  sourceEstimateLineId String?         @map("source_estimate_line_id") @db.Uuid
+  kind                 PricedLineKind
+  description          String
+  quantityMilli        Int             @map("quantity_milli")
+  unitPriceMinor       BigInt          @map("unit_price_minor")
+  grossMinor           BigInt          @map("gross_minor")
+  discountMinor        BigInt          @map("discount_minor")
+  taxable              Boolean
+  taxRateBasisPoints   Int             @map("tax_rate_basis_points")
+  taxMinor             BigInt          @map("tax_minor")
+  totalMinor           BigInt          @map("total_minor")
+  position             Int
+  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization         Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invoice              Invoice         @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+  sourceEstimateLine   EstimateLine?   @relation(fields: [organizationId, sourceEstimateLineId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([invoiceId, position], map: "invoice_lines_invoice_position_unique")
+  @@index([organizationId, invoiceId], map: "invoice_lines_org_invoice_idx")
+  @@map("invoice_lines")
+}
+
+model Payment {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String        @map("organization_id") @db.Uuid
+  locationId       String        @map("location_id") @db.Uuid
+  invoiceId        String        @map("invoice_id") @db.Uuid
+  amountMinor      BigInt        @map("amount_minor")
+  currency         String        @db.VarChar(3)
+  method           PaymentMethod
+  reference        String?       @db.VarChar(160)
+  receivedAt       DateTime      @map("received_at") @db.Timestamptz(6)
+  recordedByUserId String        @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location         Location      @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  invoice          Invoice       @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+  recordedBy       User          @relation("PaymentRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, invoiceId], map: "payments_org_invoice_idx")
+  @@map("payments")
+}
+
+model ActivityEvent {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  locationId     String       @map("location_id") @db.Uuid
+  workOrderId    String       @map("work_order_id") @db.Uuid
+  actorUserId    String?      @map("actor_user_id") @db.Uuid
+  eventType      String       @map("event_type") @db.VarChar(100)
+  summary        String
+  data           Json         @default("{}")
+  occurredAt     DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location       Location     @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  workOrder      WorkOrder    @relation(fields: [organizationId, locationId, workOrderId], references: [organizationId, locationId, id], onDelete: Restrict)
+  actor          User?        @relation("ActivityActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, workOrderId, occurredAt], map: "activity_org_work_order_time_idx")
+  @@map("activity_events")
+}
+
+model AuditEvent {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  locationId     String?       @map("location_id") @db.Uuid
+  actorUserId    String?       @map("actor_user_id") @db.Uuid
+  action         String        @db.VarChar(100)
+  entityType     String        @map("entity_type") @db.VarChar(80)
+  entityId       String        @map("entity_id") @db.Uuid
+  requestId      String?       @map("request_id") @db.VarChar(120)
+  before         Json?
+  after          Json?
+  occurredAt     DateTime      @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location       Location?     @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  actor          User?         @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, entityType, entityId, occurredAt], map: "audit_org_entity_time_idx")
+  @@map("audit_events")
+}

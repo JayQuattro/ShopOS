@@ -1,0 +1,13 @@
+node_modules/
+.pnpm-store/
+src/generated/prisma/
+.next/
+coverage/
+dist/
+.env
+.env.local
+*.log
+*.tsbuildinfo
+.DS_Store
+tmp/
+Open-Source Shop Management Platform Bootstrap.pdf
