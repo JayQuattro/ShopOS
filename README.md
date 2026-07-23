@@ -58,6 +58,8 @@ pnpm build
 - [Tenancy and permissions](docs/tenancy-and-permissions.md)
 - [Integration strategy](docs/integration-strategy.md)
 - [Mobile strategy](docs/mobile-strategy.md)
+- [UI, UX, and design system](docs/ui-ux-design-system.md)
+- [Design system maintenance](docs/design-system-maintenance.md)
 - [Deployment principles](docs/deployment-principles.md)
 - [Roadmap](docs/roadmap.md)
 - [Planning and issue tracking](docs/planning-and-tracking.md)
@@ -65,10 +67,11 @@ pnpm build
 
 ## Current limitations
 
-The authentication architecture is selected, but the Better Auth schema migration, route, and user
-interface are not implemented yet. Persisted application workflows, customer-facing authorization
-links, invoicing, payments, file storage, and background-job execution also remain roadmap work. The
-schema and module boundaries prepare for them but must not be mistaken for implemented behavior.
+The Better Auth schema and guarded server configuration are implemented, but authentication routes,
+recovery delivery, and user interfaces are not implemented yet. Persisted application workflows,
+customer-facing authorization links, invoicing, payments, file storage, and background-job execution
+also remain roadmap work. The schema and module boundaries prepare for them but must not be mistaken
+for implemented behavior.
 
 ## License
 
