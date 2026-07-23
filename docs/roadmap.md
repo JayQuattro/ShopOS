@@ -11,8 +11,8 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [x] Financial calculation and tenant-policy primitives with unit tests
 - [x] Health endpoint and responsive product shell
 - [x] UI/UX principles, customizable theme architecture, and shadcn design-system decision
-- [ ] Tailwind/shadcn foundation, semantic tokens, typography, spacing, motion, and component catalog
-- [ ] Light, Dark, Warm, Dusk, and System presets with automated contrast checks
+- [x] Tailwind/shadcn foundation, semantic tokens, typography, spacing, motion, and component catalog
+- [x] Light, Dark, Warm, Dusk, and System presets with automated contrast checks
 - [ ] Responsive authenticated app shell and standard record/list/form/feedback patterns
 - [ ] CI workflow and container production image
 - [ ] Database-backed integration-test harness
