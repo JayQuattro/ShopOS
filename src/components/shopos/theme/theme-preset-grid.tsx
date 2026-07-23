@@ -12,24 +12,24 @@ const presets: ReadonlyArray<{
   description: string;
 }> = [
   {
-    value: "warm",
-    name: "Warm",
-    description: "ShopOS default · paper, ink, and restrained clay",
-  },
-  {
     value: "light",
     name: "Light",
-    description: "Clean neutral surfaces for bright workspaces",
+    description: "ShopOS default · bright, neutral, and sharply organized",
   },
   {
     value: "dark",
     name: "Dark",
-    description: "High-clarity charcoal for low-light work",
+    description: "Neutral graphite with clear blue interaction cues",
+  },
+  {
+    value: "warm",
+    name: "Warm",
+    description: "A softer ivory and taupe option for long workdays",
   },
   {
     value: "dusk",
     name: "Dusk",
-    description: "A softer aubergine night palette",
+    description: "A quieter slate-indigo option for low-light work",
   },
   {
     value: "system",
@@ -57,8 +57,8 @@ export function ThemePresetGrid() {
             data-theme-preview={preset.value}
             onClick={() => setThemePreference(preset.value)}
             className={cn(
-              "group min-h-36 rounded-xl border bg-card p-4 text-left text-card-foreground shadow-xs transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]",
-              selected ? "border-primary ring-2 ring-primary/20" : "border-border",
+              "group min-h-36 rounded-lg border bg-card p-4 text-left text-card-foreground transition-[border-color,background-color,box-shadow] hover:border-input hover:bg-muted/35",
+              selected ? "border-ring ring-2 ring-ring/20" : "border-border",
             )}
           >
             <span className="mb-4 flex gap-1" aria-hidden="true">
@@ -72,7 +72,7 @@ export function ThemePresetGrid() {
             </span>
             <span className="flex items-center justify-between gap-3 font-semibold">
               {preset.name}
-              {selected ? <Check className="size-4 text-primary" aria-hidden="true" /> : null}
+              {selected ? <Check className="size-4 text-link" aria-hidden="true" /> : null}
             </span>
             <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
               {preset.description}

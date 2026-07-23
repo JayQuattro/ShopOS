@@ -21,11 +21,14 @@ Use shadcn/ui as the primary source-owned component foundation and semantic CSS 
 contract. Foundational primitives are centralized; domain-specific ShopOS compositions build on them.
 Feature modules do not create parallel button, form, dialog, table, status, or feedback systems.
 
-The default design is warm, restrained, editorial, and content-first, inspired by Anthropic's public
-site without copying its identity. Operational clarity, scan speed, financial legibility, and workflow
-state take priority over decoration.
+The default design is bright, neutral, restrained, and content-first. It combines the reduction,
+generous spacing, modern typography, and near-black actions associated with Tesla's public experience
+with the practical hierarchy, crisp borders, blue interaction cues, and operational density of
+GitHub's Primer system, without copying either identity. Operational clarity, scan speed, financial
+legibility, and workflow state take priority over decoration.
 
-Ship Light, Dark, Warm, Dusk, and System presets. Resolve design configuration in these layers:
+Ship Light as the ShopOS default alongside Dark, Warm, Dusk, and System presets. Resolve design
+configuration in these layers:
 
 1. protected ShopOS semantic/accessibility constraints
 2. ShopOS defaults

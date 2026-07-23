@@ -23,6 +23,7 @@ const requiredColorTokens = [
   "popover-foreground",
   "primary",
   "primary-foreground",
+  "link",
   "secondary",
   "secondary-foreground",
   "muted",
@@ -65,6 +66,7 @@ const requiredColorTokens = [
 
 const contrastPairs = [
   ["background", "foreground"],
+  ["background", "link"],
   ["card", "card-foreground"],
   ["popover", "popover-foreground"],
   ["primary", "primary-foreground"],
@@ -86,8 +88,8 @@ const contrastPairs = [
 
 function getThemeBlock(theme: "warm" | "light" | "dark" | "dusk") {
   const selector =
-    theme === "warm"
-      ? String.raw`:root,\s*:root\[data-theme="warm"\]`
+    theme === "light"
+      ? String.raw`:root,\s*:root\[data-theme="light"\]`
       : String.raw`:root\[data-theme="${theme}"\]`;
   const match = styles.match(new RegExp(`${selector}\\s*\\{([\\s\\S]*?)\\n\\}`));
 

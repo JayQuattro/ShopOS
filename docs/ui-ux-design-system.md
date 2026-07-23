@@ -52,19 +52,27 @@ the underlying workflow rules.
 
 ## Default design direction
 
-The default visual language is inspired by the restraint and editorial clarity of
-[Anthropic's public site](https://www.anthropic.com/), not by copying its brand:
+The default visual language combines two useful reference points without copying either brand:
 
-- warm neutral surfaces rather than sterile blue-gray dashboards
-- dark ink, quiet borders, and a restrained clay/coral accent
-- strong typographic hierarchy and generous space
-- confident headings paired with highly legible interface text
-- low visual noise, limited elevation, and purposeful motion
-- content and task state carrying more emphasis than decorative chrome
+- [Tesla's public site](https://www.tesla.com/) informs reduction, generous space, confident modern
+  typography, near-black primary actions, and product-first presentation.
+- [GitHub](https://github.com/) and its
+  [Primer foundations](https://primer.style/product/getting-started/foundations/) inform practical
+  information hierarchy, neutral canvases, crisp borders, familiar blue interaction cues, and
+  scannable operational density.
+
+The result should feel very light, very clean, and quietly capable:
+
+- bright neutral canvas and white working surfaces by default
+- near-black text and primary actions with restrained blue links, focus, and selection
+- modern sans-serif typography throughout, with clear weight and size rather than editorial type
+- compact radii, quiet one-pixel borders, and minimal elevation
+- generous space around decisions while records and tables remain efficiently scannable
+- purposeful motion that confirms state without making the interface feel animated
 
 ShopOS remains an operational application. Dense work lists, forms, status, and financial comparisons
-need more structure than a marketing site. Editorial warmth should make the product approachable
-without reducing scan speed or information clarity.
+need more structure than a marketing site. Visual restraint must improve scan speed and confidence,
+not remove the boundaries, status, or context required to complete work safely.
 
 ## Information architecture and application shell
 
@@ -171,12 +179,12 @@ theme variants. Color is never the only carrier of status or meaning.
 
 ### Initial presets
 
-- **Light**: warm paper and soft white surfaces, dark ink, quiet taupe borders, and restrained
-  clay/coral emphasis
-- **Dark**: charcoal and near-black surfaces, warm off-white text, low-glare borders, and controlled
-  amber/coral emphasis
-- **Warm**: sand, cream, umber, olive-neutral support, and terracotta emphasis
-- **Dusk**: deep slate/indigo and muted plum surfaces with warm rose or amber emphasis
+- **Light**: the ShopOS default; bright neutral canvas, white working surfaces, near-black text and
+  primary actions, crisp gray borders, and restrained blue interaction cues
+- **Dark**: neutral graphite and near-black surfaces, cool off-white text, low-glare borders, and clear
+  blue interaction cues
+- **Warm**: an optional softer ivory and taupe workspace with restrained clay emphasis
+- **Dusk**: an optional deep slate/indigo workspace with muted supporting color
 - **System**: follows the operating-system light/dark preference using the compatible organization
   theme pair
 

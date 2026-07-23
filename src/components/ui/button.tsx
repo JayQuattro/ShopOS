@@ -5,20 +5,17 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex min-h-[var(--control-height)] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-[color,background-color,border-color,box-shadow,transform] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex min-h-[var(--control-height)] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-[color,background-color,border-color,box-shadow] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default:
-          "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:translate-y-px",
-        destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 active:translate-y-px",
+        default: "bg-primary text-primary-foreground hover:bg-primary/88",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/88",
         outline:
-          "border border-border bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground",
-        secondary:
-          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80 active:translate-y-px",
+          "border border-border bg-background text-foreground hover:border-input hover:bg-muted",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/75",
         ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
-        link: "min-h-auto rounded-none p-0 text-primary underline-offset-4 hover:underline",
+        link: "min-h-auto rounded-none p-0 text-link underline-offset-4 hover:underline",
       },
       size: {
         default: "h-[var(--control-height)] px-4 py-2",

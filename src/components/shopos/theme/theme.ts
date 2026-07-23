@@ -4,7 +4,7 @@ export const resolvedThemes = ["light", "dark", "warm", "dusk"] as const;
 export type ThemePreference = (typeof themePreferences)[number];
 export type ResolvedTheme = (typeof resolvedThemes)[number];
 
-export const DEFAULT_THEME_PREFERENCE: ThemePreference = "warm";
+export const DEFAULT_THEME_PREFERENCE: ThemePreference = "light";
 export const THEME_STORAGE_KEY = "shopos-theme";
 
 export function isThemePreference(value: unknown): value is ThemePreference {
@@ -24,7 +24,7 @@ export function resolveThemePreference(
 
 export const themeBootstrapScript = `(() => {
   const allowed = ["system", "light", "dark", "warm", "dusk"];
-  const fallback = "warm";
+  const fallback = "light";
   let preference = fallback;
   try {
     const stored = localStorage.getItem("${THEME_STORAGE_KEY}");

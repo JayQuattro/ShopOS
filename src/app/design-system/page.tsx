@@ -85,14 +85,14 @@ export default function DesignSystemPage() {
       <main id="main-content" className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
         <section aria-labelledby="themes-heading">
           <div className="mb-6 max-w-3xl">
-            <p className="mb-2 text-xs font-bold tracking-[0.14em] text-primary uppercase">
+            <p className="mb-2 text-xs font-bold tracking-[0.14em] text-link uppercase">
               Appearance
             </p>
             <h2
               id="themes-heading"
-              className="font-serif text-4xl font-medium tracking-[-0.035em] sm:text-5xl"
+              className="text-4xl font-semibold tracking-[-0.035em] sm:text-5xl"
             >
-              Comfortable in every kind of workspace.
+              Clean by default. Flexible by design.
             </h2>
             <p className="mt-4 text-base leading-relaxed text-muted-foreground">
               Presets change semantic tokens—not component rules. Organization branding will layer
@@ -109,7 +109,7 @@ export default function DesignSystemPage() {
           aria-labelledby="actions-heading"
         >
           <div>
-            <p className="mb-2 text-xs font-bold tracking-[0.14em] text-primary uppercase">
+            <p className="mb-2 text-xs font-bold tracking-[0.14em] text-link uppercase">
               Actions & status
             </p>
             <h2 id="actions-heading" className="text-2xl font-semibold tracking-tight">
@@ -150,7 +150,7 @@ export default function DesignSystemPage() {
 
         <section className="grid gap-8 lg:grid-cols-2" aria-labelledby="forms-heading">
           <div>
-            <p className="mb-2 text-xs font-bold tracking-[0.14em] text-primary uppercase">
+            <p className="mb-2 text-xs font-bold tracking-[0.14em] text-link uppercase">
               Forms & feedback
             </p>
             <h2 id="forms-heading" className="text-2xl font-semibold tracking-tight">
@@ -242,7 +242,7 @@ export default function DesignSystemPage() {
 
         <section aria-labelledby="data-heading">
           <div className="mb-6 max-w-2xl">
-            <p className="mb-2 text-xs font-bold tracking-[0.14em] text-primary uppercase">
+            <p className="mb-2 text-xs font-bold tracking-[0.14em] text-link uppercase">
               Dense data
             </p>
             <h2 id="data-heading" className="text-2xl font-semibold tracking-tight">
@@ -255,7 +255,7 @@ export default function DesignSystemPage() {
           </div>
           <Card className="overflow-hidden">
             <div
-              className="overflow-x-auto rounded-xl focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:outline-none"
+              className="overflow-x-auto rounded-lg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:outline-none"
               role="region"
               aria-labelledby="data-heading"
               tabIndex={0}
