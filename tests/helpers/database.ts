@@ -47,6 +47,8 @@ export async function resetTestDatabase(
       "automotive_asset_profiles",
       "equipment_asset_profiles",
       "assets",
+      "customer_addresses",
+      "customer_contacts",
       "customers",
       "auth_passkeys",
       "auth_two_factors",
