@@ -134,11 +134,29 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
       controls, retryable delivery, and auditable acknowledgements
 - [ ] Additional vehicle-history and maintenance-network providers through the same replaceable boundary
 
+### Native, desktop, and white-label applications
+
+- [ ] Establish a versioned mobile API, Better Auth native session lifecycle, device records, secure
+      storage, push registration, deep-link boundary, and contract tests
+- [ ] Create shared native localization, semantic token, telemetry, networking, and release-policy
+      packages using React Native and the open-source Expo toolchain
+- [ ] Deliver a technician-first ShopOS Staff alpha with assignments, inspections, time/notes,
+      camera/scanning, resumable uploads, and constrained offline drafts
+- [ ] Deliver the shared ShopOS Customer app with multi-shop isolation, garage/history, service
+      requests, status, messages, estimate authorization, invoices, and payments
+- [ ] Model entitlement-controlled branded-app definitions, publisher ownership, approved assets,
+      store metadata, signing/push references, release manifests, rollout, and retirement
+- [ ] Pilot branded customer apps from the same codebase using qualified shops' organization developer
+      accounts and meaningful shop-specific content/services
+- [ ] Automate deterministic previews, compliance evidence, store submission, isolated update
+      channels, fleet health, certificate renewal, transfer, and retirement
+- [ ] Evaluate a native desktop shell only after the installable PWA is tested against documented
+      printing, scanning, peripheral, offline, accessibility, and enterprise deployment needs
+
 ### Additional platform expansion
 
 Scheduling, inspections, inventory, purchase orders, vendors, messaging, project builds,
-customer/technician mobile applications, plugin permissions, public API clients, and workflow
-automation follow validated core operations.
+plugin permissions, public API clients, and workflow automation follow validated core operations.
 
 ### Translation expansion
 
