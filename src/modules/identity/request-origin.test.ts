@@ -1,6 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { resetAuthConfigCache } from "@/modules/identity/config";
 import { hasTrustedMutationOrigin } from "./request-origin";
+
+// hasTrustedMutationOrigin reads the validated auth config at call time, which
+// requires BETTER_AUTH_SECRET/BETTER_AUTH_URL. Stub them before the module graph
+// loads so the test is deterministic without a local .env file.
+beforeAll(async () => {
+  vi.stubEnv("DATABASE_URL", "postgres://shopos:shopos@127.0.0.1:5432/shopos");
+  vi.stubEnv("BETTER_AUTH_URL", "http://localhost:3000");
+  vi.stubEnv("BETTER_AUTH_SECRET", "test-only-better-auth-secret-at-least-32-characters");
+  vi.stubEnv("NODE_ENV", "test");
+  vi.stubEnv("AUTH_EMAIL_DELIVERY", "console");
+  resetAuthConfigCache();
+});
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+  resetAuthConfigCache();
+});
 
 describe("hasTrustedMutationOrigin", () => {
   it("accepts the configured ShopOS origin", () => {

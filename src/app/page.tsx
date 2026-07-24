@@ -123,6 +123,8 @@ export default function HomePage() {
                   <Link href="/design-system">Explore the design system</Link>
                 </Button>
                 <Button asChild variant="link">
+                  {/* Links to a JSON API endpoint, not a route page; a native anchor is correct here. */}
+                  {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
                   <a href="/api/health">
                     Service health
                     <ExternalLink aria-hidden="true" />
