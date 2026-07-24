@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shopos/page-header";
 import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { ContactForm } from "./contact-form";
+import { AddressForm } from "./address-form";
 
 export default async function CustomerDetailPage({
   params,
@@ -104,8 +106,14 @@ export default async function CustomerDetailPage({
         </Card>
       </div>
 
-      {customer.contacts.length > 0 ? (
+      {customer.contacts.length > 0 || context.permissions.has("customers.write") ? (
         <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Contacts</CardTitle>
+            {context.permissions.has("customers.write") ? (
+              <ContactForm customerId={customer.id} />
+            ) : null}
+          </CardHeader>
           <CardHeader>
             <CardTitle className="text-base">Contacts</CardTitle>
           </CardHeader>
@@ -133,6 +141,40 @@ export default async function CustomerDetailPage({
                 ))}
               </tbody>
             </table>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {customer.addresses.length > 0 || context.permissions.has("customers.write") ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Addresses</CardTitle>
+            {context.permissions.has("customers.write") ? (
+              <AddressForm customerId={customer.id} />
+            ) : null}
+          </CardHeader>
+          <CardContent>
+            {customer.addresses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No addresses yet.</p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {customer.addresses.map((a) => (
+                  <div key={a.id} className="rounded-md border border-border p-3">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {a.isPrimary ? "★ " : ""}
+                      {a.label}
+                    </p>
+                    <p className="text-sm">{a.line1}</p>
+                    {a.line2 ? <p className="text-sm">{a.line2}</p> : null}
+                    <p className="text-sm text-muted-foreground">
+                      {[a.city, a.stateProvince, a.postalCode, a.country]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : null}
