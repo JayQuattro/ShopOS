@@ -28,7 +28,7 @@
       "description": "[Ēñtēř yōûř ēmäīļ äñð wē'ļļ śēñð řēśēt īñśtřûċtīōñś īf tĥē äċċōûñt ēxīśtś⋯]",
       "emailLabel": "[Ēmäīļ⋯]",
       "submit": "[Ŝēñð řēśēt īñśtřûċtīōñś⋯]",
-      "success": "[Īf äñ äċċōûñt ēxīśtś fōř tĥät ēmäīļ, řēśēt īñśtřûċtīōñś ĥävē bēēñ śēñţ⋯]",
+      "success": "[Īf äñ äċċōûñt ēxīśtś fōř tĥät ēmäīļ äððřēśś, řēśēt īñśtřûċtīōñś ĥävē bēēñ śēñt tō yōûř īñƀōx⋯]",
       "backToSignIn": "[Bäċķ tō śīĝñ īñ⋯]"
     },
     "resetPassword": {
@@ -65,10 +65,10 @@
       "signInToAccept": "[Ŝīĝñ īñ tō äċċēþt tĥīś īñvītätīōñ⋯]"
     },
     "errors": {
-      "generic": "[Ŝōmētĥīñĝ wēñt wřōñĝ⋯]",
+      "generic": "[Ŝōmētĥīñĝ wēñt wřōñĝ. Þļēäśē třy äĝäīñ⋯]",
       "invalidCredentials": "[Īñväļīð ēmäīļ ōř ÿäŝŝwōřð⋯]",
       "emailUnverified": "[Þļēäśē vēřīfy yōûř ēmäīļ äððřēśś bēfōřē śīĝñīñĝ īñ⋯]",
-      "rateLimited": "[Tōō mäñy ättēmþtś⋯]"
+      "rateLimited": "[Tōō mäñy ättēmþtś. Þļēäśē wäīt äñð třy äĝäīñ⋯]"
     }
   },
   "memberships": {
@@ -102,7 +102,7 @@
     "noMembers": "[Ñō mēmƀēřś yēt⋯]",
     "backToMembers": "[Bäċķ tō mēmƀēřś⋯]",
     "errors": {
-      "generic": "[Ŝōmētĥīñĝ wēñt wřōñĝ⋯]",
+      "generic": "[Ŝōmētĥīñĝ wēñt wřōñĝ. Þļēäśē třy äĝäīñ⋯]",
       "unauthorized": "[Yōû ðō ñōt ĥävē ÿēřmīśśīōñ tō mäñäĝē mēmƀēřśĥīþś⋯]",
       "lastOwner": "[Tĥē ōřĝäñīzätīōñ mûśt řētäīñ ät ļēäśt ōñē äċtīvēōwñēř⋯]",
       "escalation": "[Yōû ċäññōt äśśīĝñ äřōļē tĥät ēxċēēðś yōûřōwñ ÿēřmīśśīōñś⋯]"
@@ -124,7 +124,7 @@
       "search": "[Ŝēäřċĥ⋯]",
       "open": "[Öþēñ ċōmmäñð ÿäļēttē⋯]",
       "title": "[Çōmmäñð ÿäļēttē⋯]",
-      "description": "[Ŝēäřċĥ fōř ÿäĝēś äñð äċtīōñś⋯]",
+      "description": "[Ŝēäřċĥ fōř ÿäĝēś äñð äċtīōñś. Ūśē äřřōw ķēyś tō ñävīĝätē⋯]",
       "placeholder": "[Tyþē ä ċōmmäñð ōř śēäřċĥ⋯]",
       "noResults": "[Ñō řēśûļtś fōř \"{query}\"⋯]"
     },
@@ -143,7 +143,7 @@
   },
   "marketing": {
     "tagline": "[Öþēñ śĥōþ ōþēřätīōñś⋯]",
-    "headline": "[Bûīļt äřōûñð tĥē wōřķ⋯]",
-    "description": "[Öþēñ śĥōþ ōþēřätīōñś⋯]"
+    "headline": "[Bûīļt äřōûñð tĥē wōřķ. Rēäðy fōř ēvēřy ķīñð ōf ŝĥōþ⋯]",
+    "description": "[Öþēñ śĥōþ ōþēřätīōñś, ƀûīļt äřōûñð tĥē wōřķ⋯]"
   }
 }
