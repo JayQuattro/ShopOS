@@ -157,6 +157,7 @@ model User {
   recordedPayments       Payment[]                         @relation("PaymentRecordedBy")
   activityEvents         ActivityEvent[]                   @relation("ActivityActor")
   auditEvents            AuditEvent[]                      @relation("AuditActor")
+  themePublications      OrganizationThemePublication[]    @relation("ThemePublishedBy")
   platformOperatorGrants PlatformOperatorGrant[]           @relation("PlatformOperatorGrantUser")
   platformGrantsGiven    PlatformOperatorGrant[]           @relation("PlatformOperatorGrantGrantedBy")
   platformGrantsRevoked  PlatformOperatorGrant[]           @relation("PlatformOperatorGrantRevokedBy")
@@ -202,8 +203,28 @@ model Organization {
   provisioningRequest OrganizationProvisioningRequest?
   entitlements        OrganizationEntitlement[]
   outboxEvents        OutboxEvent[]
+  themePublications   OrganizationThemePublication[]
 
   @@map("organizations")
+}
+
+model OrganizationThemePublication {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  version          Int
+  preset           String   @db.VarChar(24)
+  accentHue        Int?     @map("accent_hue")
+  radiusScale      String   @default("standard") @map("radius_scale") @db.VarChar(12)
+  densityDefault   String   @default("comfortable") @map("density_default") @db.VarChar(12)
+  logoUrl          String?  @map("logo_url") @db.VarChar(2048)
+  publishedByUserId String  @map("published_by_user_id") @db.Uuid
+  publishedAt      DateTime @default(now()) @map("published_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  publishedBy      User     @relation("ThemePublishedBy", fields: [publishedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, version], map: "theme_publications_org_version_unique")
+  @@index([organizationId, version], map: "theme_publications_org_version_idx")
+  @@map("organization_theme_publications")
 }
 
 model Location {
@@ -238,6 +259,8 @@ model OrganizationMembership {
   organizationWideLocationAccess Boolean          @default(false) @map("organization_wide_location_access")
   authRole                       String           @default("member") @map("auth_role") @db.VarChar(255)
   active                         Boolean          @default(true)
+  themePreference                String           @default("system") @map("theme_preference") @db.VarChar(12)
+  densityPreference              String           @default("comfortable") @map("density_preference") @db.VarChar(12)
   createdAt                      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
   organization                   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)

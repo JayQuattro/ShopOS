@@ -2,6 +2,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { getCurrentSession } from "@/modules/identity/session";
 import type { TenantContext } from "@/modules/tenancy/policy";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { resolveThemeState, type ResolvedThemeState } from "@/modules/tenancy/theme-resolution";
 
 export type ShellLocation = Readonly<{
   id: string;
@@ -22,6 +23,7 @@ export type ShellContext = Readonly<{
     slug: string;
   }>;
   locations: readonly ShellLocation[];
+  theme: ResolvedThemeState;
 }>;
 
 /**
@@ -44,7 +46,7 @@ export async function resolveShellContext(db: PrismaClient): Promise<ShellContex
     throw new Error("Session disappeared between getRequestContext and resolveShellContext.");
   }
 
-  const [organization, user, locations] = await Promise.all([
+  const [organization, user, locations, theme] = await Promise.all([
     db.organization.findUnique({
       where: { id: tenant.organizationId },
       select: { id: true, name: true, slug: true },
@@ -68,6 +70,10 @@ export async function resolveShellContext(db: PrismaClient): Promise<ShellContex
           select: { id: true, code: true, name: true },
           orderBy: { code: "asc" },
         }),
+    resolveThemeState(db, {
+      organizationId: tenant.organizationId,
+      membershipId: tenant.membershipId,
+    }),
   ]);
 
   if (!organization || !user) {
@@ -79,5 +85,6 @@ export async function resolveShellContext(db: PrismaClient): Promise<ShellContex
     user: { id: user.id, displayName: user.displayName, email: user.email },
     organization: { id: organization.id, name: organization.name, slug: organization.slug },
     locations,
+    theme,
   };
 }
