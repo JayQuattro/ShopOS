@@ -204,6 +204,8 @@ model Organization {
   entitlements        OrganizationEntitlement[]
   outboxEvents        OutboxEvent[]
   themePublications   OrganizationThemePublication[]
+  customerContacts    CustomerContact[]
+  customerAddresses   CustomerAddress[]
 
   @@map("organizations")
 }
@@ -548,10 +550,54 @@ model Customer {
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   assets                Asset[]
   workOrders            WorkOrder[]
+  contacts              CustomerContact[]
+  addresses             CustomerAddress[]
 
   @@unique([organizationId, id], map: "customers_org_id_unique")
   @@index([organizationId, displayName], map: "customers_org_name_idx")
   @@map("customers")
+}
+
+model CustomerContact {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  customerId      String   @map("customer_id") @db.Uuid
+  name            String   @db.VarChar(220)
+  role            String?  @db.VarChar(120)
+  email           String?  @db.VarChar(320)
+  phone           String?  @db.VarChar(40)
+  isPrimary       Boolean  @default(false) @map("is_primary")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer        Customer @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id], map: "customer_contacts_org_id_unique")
+  @@index([organizationId, customerId], map: "customer_contacts_org_customer_idx")
+  @@map("customer_contacts")
+}
+
+model CustomerAddress {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  customerId      String   @map("customer_id") @db.Uuid
+  label           String   @db.VarChar(80)
+  line1           String   @map("line_1") @db.VarChar(220)
+  line2           String?  @map("line_2") @db.VarChar(220)
+  city            String   @db.VarChar(120)
+  stateProvince   String?  @map("state_province") @db.VarChar(120)
+  postalCode      String?  @map("postal_code") @db.VarChar(20)
+  country         String   @default("US") @db.VarChar(80)
+  isPrimary       Boolean  @default(false) @map("is_primary")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer        Customer @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id], map: "customer_addresses_org_id_unique")
+  @@index([organizationId, customerId], map: "customer_addresses_org_customer_idx")
+  @@map("customer_addresses")
 }
 
 model Asset {
