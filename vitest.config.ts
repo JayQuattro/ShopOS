@@ -10,6 +10,7 @@ export default defineConfig({
   test: {
     environment: "node",
     fileParallelism: false,
+    setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}", "tests/**/*.test.{ts,tsx}"],
     coverage: {
       reporter: ["text", "html"],
