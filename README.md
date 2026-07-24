@@ -43,6 +43,27 @@ Open `http://localhost:3000`. The health endpoint is `http://localhost:3000/api/
 The seed is deterministic and intended only for local development. Its credentials and behavior will be
 documented when authentication is implemented.
 
+## Self-hosted deployment
+
+ShopOS runs without any ShopOS-operated service. Build the production container and run it behind a
+TLS-terminating reverse proxy with PostgreSQL and the background worker:
+
+```bash
+# Set required environment variables
+export POSTGRES_PASSWORD=your-secure-password
+export BETTER_AUTH_SECRET=your-at-least-32-char-secret
+export BETTER_AUTH_URL=https://shop.example.com
+
+# Run the full stack (web + worker + postgres)
+docker compose -f compose.production.yaml up -d
+
+# Apply migrations as a release step
+docker compose -f compose.production.yaml exec web pnpm db:migrate
+```
+
+See [Deployment architecture](docs/deployment-architecture.md) for multi-host, HA, and
+cloud-managed deployment guidance, backup/restore strategy, and the IaC boundary.
+
 ## Integration tests
 
 Integration tests run against a dedicated `shopos_test` PostgreSQL database and exercise real
