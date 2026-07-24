@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shopos/page-header";
 import { StatusBadge } from "@/components/shopos/status-badge";
 import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { WorkOrderCreateForm } from "./work-order-create-form";
 
 export default async function WorkOrdersPage({
   params,
@@ -39,12 +40,54 @@ export default async function WorkOrdersPage({
     take: 100,
   });
 
+  // Load customers, assets, and locations for the create form (permission-gated).
+  const canCreate = context.permissions.has("work_orders.write");
+  const [customers, assets, locations] = canCreate
+    ? await Promise.all([
+        db.customer.findMany({
+          where: { organizationId: context.organizationId, archivedAt: null },
+          select: { id: true, displayName: true },
+          take: 100,
+          orderBy: { displayName: "asc" },
+        }),
+        db.asset.findMany({
+          where: { organizationId: context.organizationId, status: "ACTIVE" },
+          select: { id: true, displayName: true },
+          take: 100,
+          orderBy: { displayName: "asc" },
+        }),
+        db.location.findMany({
+          where: {
+            organizationId: context.organizationId,
+            active: true,
+            ...(context.organizationWideLocationAccess
+              ? {}
+              : { id: { in: [...context.allowedLocationIds] } }),
+          },
+          select: { id: true, name: true },
+          orderBy: { code: "asc" },
+        }),
+      ])
+    : [[], [], []];
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Work orders"
         description="Manage repair, maintenance, and project work."
         breadcrumbs={[{ label: "Work orders" }]}
+        actions={
+          canCreate ? (
+            <WorkOrderCreateForm
+              customers={customers as { id: string; displayName: string }[]}
+              assets={assets as { id: string; displayName: string }[]}
+              locations={(locations as { id: string; name: string }[]).map((l) => ({
+                id: l.id,
+                displayName: l.name,
+              }))}
+            />
+          ) : undefined
+        }
       />
 
       <Card>
