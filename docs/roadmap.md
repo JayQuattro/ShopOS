@@ -27,13 +27,17 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [x] Configure secure sessions, email/password recovery, MFA, passkeys, and auth routes
 - [ ] Configure optional platform-wide Microsoft and Google sign-in without membership provisioning
 - [ ] Implement invitation-only organization SSO with verified domain and issuer/tenant checks
-- [ ] Organization and first-location onboarding
+- [x] Separate SaaS control-plane authorization, platform audit, and organization lifecycle foundation
+- [x] Transactional, idempotent organization and first-location onboarding
 - [ ] Membership, role, permission, and location-access management
 - [ ] Organization theme publishing and individual appearance/density preferences
 - [ ] Organization/location enabled and default locales plus user/membership locale preferences
 - [ ] Tenant-scoped translation provider binding, policy, permission, secret-reference, and budget model
 - [x] Tenant-aware request context and repositories
 - [ ] Cross-tenant, cross-location, nested-resource, and mutation-denial integration tests
+- [ ] Platform operator grant-management UI, expiring access, and revocation workflows
+- [ ] Subscription plans, entitlement management, billing-provider reconciliation, and usage limits
+- [ ] Threat-modeled, time-limited, user-visible support access without default impersonation
 
 ## Phase 2 - Customers and assets
 

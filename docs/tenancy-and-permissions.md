@@ -9,6 +9,16 @@ organization-wide location access or requires explicit location grants.
 Platform administration is a separate security plane. A platform operator is not automatically a shop
 member and must use an audited support-access mechanism when that capability is introduced.
 
+Platform access uses a dedicated `PlatformContext` containing the authenticated actor, operator-grant
+identifier, platform role, resolved platform permissions, and request identifier. Operator grants are
+explicit, revocable, optionally expiring, and require an enabled, verified user with two-factor
+authentication. Viewer, Operator, and Admin roles grant only code-owned platform permissions.
+
+The initial platform surface can list organizations, provision a tenant, inspect lifecycle and
+entitlement summaries, and suspend/reactivate an organization with a required reason. It does not
+expose customer, asset, work-order, financial, or file records. `PlatformContext` and `TenantContext`
+are deliberately incompatible.
+
 ## Identity and organization ownership
 
 Better Auth owns global users, credentials, external accounts, sessions, MFA factors, passkeys,
@@ -101,6 +111,10 @@ Translation capabilities use separate permissions such as `translations.request`
 - Background jobs revalidate tenant scope when executed.
 - Translation requests cannot submit or reveal content from another organization or disallowed
   location, including through a guessed translation/job identifier.
+- A platform operator is not made a member of an organization they provision.
+- A platform Viewer cannot provision or suspend an organization.
+- Missing, expired, revoked, disabled, or MFA-incomplete operator access is denied.
+- Reusing an onboarding idempotency key with different input is denied without partial tenant data.
 
 ## Open decisions
 

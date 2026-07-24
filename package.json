@@ -26,6 +26,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:seed": "prisma db seed",
+    "platform:bootstrap-operator": "tsx scripts/bootstrap-platform-operator.ts",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm db:validate && pnpm test"
   },
   "dependencies": {

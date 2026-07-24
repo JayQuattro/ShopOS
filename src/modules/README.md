@@ -10,7 +10,9 @@ HTTP routes and UI code depend on module entry points instead of reaching into a
 | `identity`       | Human identity, sessions, and authentication boundaries        |
 | `organizations`  | Tenant onboarding, settings, and subscription-ready state      |
 | `locations`      | Operational locations and time zones                           |
+| `memberships`    | Built-in role templates and membership workflows               |
 | `tenancy`        | Membership, permissions, location access, and request context  |
+| `platform`       | SaaS operator authorization, lifecycle, entitlement, and audit |
 | `customers`      | Individual/business profiles, contacts, preferences, and notes |
 | `assets`         | General asset record and typed industry profiles               |
 | `work-orders`    | Concerns, requested work, assignment, blockers, and status     |

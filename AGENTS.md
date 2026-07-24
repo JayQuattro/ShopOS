@@ -112,6 +112,25 @@ Every business record must carry `organization_id`. Operational records normally
 Any new tenant-owned repository or mutation requires tests for cross-organization access,
 cross-location access, identifier guessing, and unauthorized mutation.
 
+## Platform control plane
+
+Platform administration is a separate security plane inside the modular monolith. Global operator
+grants and platform audit events are explicit exceptions to the tenant `organization_id` rule.
+
+- Resolve a `PlatformContext` from an explicit, current server-side operator grant.
+- Never accept a `PlatformContext` where a `TenantContext` is required, or infer tenant membership from
+  platform authority.
+- Require verified identity and MFA for platform operators.
+- Revalidate the operator grant before sensitive lifecycle, entitlement, or operator mutations.
+- Record platform mutations in platform audit history and, when they affect a tenant, the tenant audit
+  history.
+- Platform organization management must not expose customer, asset, work-order, financial, or file
+  data.
+- Support access and impersonation require a separate threat model, time-limited grants, a stated
+  reason, user-visible indication, and independent audit before implementation.
+- Do not give the runtime application infrastructure-as-code or cloud-account provisioning
+  credentials.
+
 ## Testing requirements
 
 - Unit-test financial rules and state transitions.

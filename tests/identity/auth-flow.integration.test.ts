@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { assertDedicatedTestDatabase, resetTestDatabase } from "../helpers/database";
+
 /**
  * Integration test exercising real Better Auth flows against a throwaway
  * PostgreSQL database.
@@ -15,6 +17,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const TEST_DATABASE_URL =
   process.env.SHOPOS_TEST_DATABASE_URL ?? "postgres://shopos:shopos@localhost:5432/shopos_test";
+assertDedicatedTestDatabase(TEST_DATABASE_URL);
 
 const TEST_SECRET = "integration-test-secret-at-least-32-characters-long";
 
@@ -74,15 +77,7 @@ afterAll(async () => {
 beforeEach(async () => {
   if (!RUN) return;
   deliveryModule.getConsoleAuthDeliveryProvider().reset();
-  // Wipe auth-owned rows so each test starts from a clean identity graph.
-  await dbModule.db.$transaction([
-    dbModule.db.authSession.deleteMany(),
-    dbModule.db.authAccount.deleteMany(),
-    dbModule.db.authVerification.deleteMany(),
-    dbModule.db.passkey.deleteMany(),
-    dbModule.db.twoFactor.deleteMany(),
-    dbModule.db.user.deleteMany(),
-  ]);
+  await resetTestDatabase(dbModule.db);
 });
 
 const shouldSkip = !RUN;
