@@ -1,0 +1,149 @@
+{
+  "identity": {
+    "brand": "[ŜĥōþÖŜ]",
+    "signIn": {
+      "title": "[Ŝīĝñ īñ⋯]",
+      "description": "[Ŝīĝñ īñ tō yōûř ŜĥōþÖŜ äċċōûñţ⋯]",
+      "emailLabel": "[Ēmäīļ⋯]",
+      "passwordLabel": "[Þäŝŝwōřð⋯]",
+      "submit": "[Ŝīĝñ īñ⋯]",
+      "forgotPassword": "[Fōřĝōt yōûř ÿäŝŝwōřð?⋯]",
+      "needAccount": "[Ñēēð äñ äċċōûñţ?⋯]",
+      "signUp": "[Ŝīĝñ ûþ⋯]",
+      "twoFactorRequired": "[Ŧwō‑fäċtōř äûtĥēñtīċätīōñ īś řēqûīřēð⋯]"
+    },
+    "signUp": {
+      "title": "[Çřēätē yōûř äċċōûñţ⋯]",
+      "description": "[Çřēätē ä ŜĥōþÖŜ äċċōûñţ tō mäñäĝē yōûř ŝĥōþ⋯]",
+      "nameLabel": "[Fûļļ ñämē⋯]",
+      "emailLabel": "[Ēmäīļ⋯]",
+      "passwordLabel": "[Þäŝŝwōřð⋯]",
+      "passwordHint": "[Ät ļēäśt 12 ċĥäřäċtēřś⋯]",
+      "submit": "[Çřēätē äċċōûñţ⋯]",
+      "haveAccount": "[Äļřēäðy ĥävē äñ äċċōûñţ?⋯]",
+      "signIn": "[Ŝīĝñ īñ⋯]"
+    },
+    "forgotPassword": {
+      "title": "[Rēśēt yōûř ÿäŝŝwōřð⋯]",
+      "description": "[Ēñtēř yōûř ēmäīļ äñð wē'ļļ śēñð řēśēt īñśtřûċtīōñś īf tĥē äċċōûñt ēxīśtś⋯]",
+      "emailLabel": "[Ēmäīļ⋯]",
+      "submit": "[Ŝēñð řēśēt īñśtřûċtīōñś⋯]",
+      "success": "[Īf äñ äċċōûñt ēxīśtś fōř tĥät ēmäīļ, řēśēt īñśtřûċtīōñś ĥävē bēēñ śēñţ⋯]",
+      "backToSignIn": "[Bäċķ tō śīĝñ īñ⋯]"
+    },
+    "resetPassword": {
+      "title": "[Ŝēt ä ñēw ÿäŝŝwōřð⋯]",
+      "description": "[Çĥōōśē ä ñēw ÿäŝŝwōřð fōř yōûř äċċōûñţ⋯]",
+      "passwordLabel": "[Ñēw ÿäŝŝwōřð⋯]",
+      "passwordHint": "[Ät ļēäśt 12 ċĥäřäċtēřś⋯]",
+      "submit": "[Rēśēt ÿäŝŝwōřð⋯]",
+      "backToSignIn": "[Bäċķ tō śīĝñ īñ⋯]"
+    },
+    "verifyEmail": {
+      "title": "[Vēřīfy yōûř ēmäīļ⋯]",
+      "description": "[Ēñtēř tĥē vēřīfīċätīōñ ċōðē śēñt tō yōûř ēmäīļ⋯]",
+      "codeLabel": "[Vēřīfīċätīōñ ċōðē⋯]",
+      "submit": "[Vēřīfy ēmäīļ⋯]",
+      "resend": "[Rēśēñð ċōðē⋯]",
+      "backToSignIn": "[Bäċķ tō śīĝñ īñ⋯]",
+      "verified": "[Yōûř ēmäīļ ĥäś bēēñ vēřīfīēð⋯]"
+    },
+    "verifyTwoFactor": {
+      "title": "[Ŧwō‑fäċtōř vēřīfīċätīōñ⋯]",
+      "description": "[Ēñtēř tĥē ċōðē fřōm yōûř äûtĥēñtīċätōř äþþ⋯]",
+      "codeLabel": "[Äûtĥēñtīċätīōñ ċōðē⋯]",
+      "submit": "[Vēřīfy⋯]",
+      "useBackupCode": "[Ūśē ä bäċķûþ ċōðē⋯]",
+      "backupCodeLabel": "[Bäċķûþ ċōðē⋯]",
+      "backToSignIn": "[Bäċķ tō śīĝñ īñ⋯]"
+    },
+    "acceptInvitation": {
+      "title": "[Yōû'vē bēēñ īñvītēð⋯]",
+      "description": "[Äċċēþt tĥīś īñvītätīōñ tō ĵōīñ tĥē ōřĝäñīzätīōñ⋯]",
+      "accept": "[Äċċēþt īñvītätīōñ⋯]",
+      "decline": "[Ðēċļīñē⋯]",
+      "signInToAccept": "[Ŝīĝñ īñ tō äċċēþt tĥīś īñvītätīōñ⋯]"
+    },
+    "errors": {
+      "generic": "[Ŝōmētĥīñĝ wēñt wřōñĝ⋯]",
+      "invalidCredentials": "[Īñväļīð ēmäīļ ōř ÿäŝŝwōřð⋯]",
+      "emailUnverified": "[Þļēäśē vēřīfy yōûř ēmäīļ äððřēśś bēfōřē śīĝñīñĝ īñ⋯]",
+      "rateLimited": "[Tōō mäñy ättēmþtś⋯]"
+    }
+  },
+  "memberships": {
+    "title": "[Mēmƀēřś⋯]",
+    "description": "[Mäñäĝē ōřĝäñīzätīōñ mēmƀēřśĥīþś, řōļēś, äñð ļōċätīōñ äċċēśś⋯]",
+    "invite": "[Īñvītē mēmƀēř⋯]",
+    "invitations": "[Īñvītätīōñś⋯]",
+    "member": "[Mēmƀēř⋯]",
+    "email": "[Ēmäīļ⋯]",
+    "roles": "[Rōļēś⋯]",
+    "locations": "[Lōċätīōñś⋯]",
+    "status": "[Ŝtätûś⋯]",
+    "active": "[Äċtīvē⋯]",
+    "inactive": "[Īñäċtīvē⋯]",
+    "orgWide": "[Äļļ ļōċätīōñś⋯]",
+    "actions": "[Äċtīōñś⋯]",
+    "viewDetail": "[Vīēw⋯]",
+    "deactivate": "[Ðēäċtīvätē⋯]",
+    "reactivate": "[Rēäċtīvätē⋯]",
+    "inviteEmailLabel": "[Ēmäīļ äððřēśś⋯]",
+    "inviteRoleLabel": "[Rōļē⋯]",
+    "inviteSubmit": "[Ŝēñð īñvītätīōñ⋯]",
+    "inviteCancel": "[Çäñċēļ⋯]",
+    "cancelInvitation": "[Çäñċēļ īñvītätīōñ⋯]",
+    "roleAssignment": "[Rōļē äśśīĝñmēñt⋯]",
+    "assignRole": "[Äśśīĝñ řōļē⋯]",
+    "revokeRole": "[Rēvōķē⋯]",
+    "locationGrants": "[Lōċätīōñ äċċēśś⋯]",
+    "grantLocation": "[Gřäñt ļōċätīōñ äċċēśś⋯]",
+    "revokeLocation": "[Rēvōķē⋯]",
+    "noMembers": "[Ñō mēmƀēřś yēt⋯]",
+    "backToMembers": "[Bäċķ tō mēmƀēřś⋯]",
+    "errors": {
+      "generic": "[Ŝōmētĥīñĝ wēñt wřōñĝ⋯]",
+      "unauthorized": "[Yōû ðō ñōt ĥävē ÿēřmīśśīōñ tō mäñäĝē mēmƀēřśĥīþś⋯]",
+      "lastOwner": "[Tĥē ōřĝäñīzätīōñ mûśt řētäīñ ät ļēäśt ōñē äċtīvēōwñēř⋯]",
+      "escalation": "[Yōû ċäññōt äśśīĝñ äřōļē tĥät ēxċēēðś yōûřōwñ ÿēřmīśśīōñś⋯]"
+    }
+  },
+  "shell": {
+    "brand": "[ŜĥōþÖŜ]",
+    "nav": {
+      "organization": "[Öřĝäñīzätīōñ⋯]",
+      "operations": "[Öþēřätīōñś⋯]",
+      "overview": "[Övēřvīēw⋯]",
+      "members": "[Mēmƀēřś⋯]",
+      "customers": "[Çûśtōmēřś⋯]",
+      "assets": "[Äśśētś⋯]",
+      "workOrders": "[Wōřķ ōřðēřś⋯]",
+      "comingSoon": "[Ŝōōñ⋯]"
+    },
+    "command": {
+      "search": "[Ŝēäřċĥ⋯]",
+      "open": "[Öþēñ ċōmmäñð ÿäļēttē⋯]",
+      "title": "[Çōmmäñð ÿäļēttē⋯]",
+      "description": "[Ŝēäřċĥ fōř ÿäĝēś äñð äċtīōñś⋯]",
+      "placeholder": "[Tyþē ä ċōmmäñð ōř śēäřċĥ⋯]",
+      "noResults": "[Ñō řēśûļtś fōř \"{query}\"⋯]"
+    },
+    "user": {
+      "accountSecurity": "[Äċċōûñt & śēċûřīty⋯]",
+      "signOut": "[Ŝīĝñōût⋯]"
+    },
+    "mobileNav": "[Öþēñ ñävīĝätīōñ mēñû⋯]"
+  },
+  "platform": {
+    "brand": "[ŜĥōþÖŜ Þļätfōřm⋯]",
+    "nav": {
+      "organizations": "[Öřĝäñīzätīōñś⋯]"
+    },
+    "badge": "[Çōñtřōļ ÿļäñē⋯]"
+  },
+  "marketing": {
+    "tagline": "[Öþēñ śĥōþ ōþēřätīōñś⋯]",
+    "headline": "[Bûīļt äřōûñð tĥē wōřķ⋯]",
+    "description": "[Öþēñ śĥōþ ōþēřätīōñś⋯]"
+  }
+}

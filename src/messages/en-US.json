@@ -1,0 +1,149 @@
+{
+  "identity": {
+    "brand": "ShopOS",
+    "signIn": {
+      "title": "Sign in",
+      "description": "Sign in to your ShopOS account.",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "submit": "Sign in",
+      "forgotPassword": "Forgot your password?",
+      "needAccount": "Need an account?",
+      "signUp": "Sign up",
+      "twoFactorRequired": "Two-factor authentication is required."
+    },
+    "signUp": {
+      "title": "Create your account",
+      "description": "Create a ShopOS account to manage your shop.",
+      "nameLabel": "Full name",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "passwordHint": "At least 12 characters.",
+      "submit": "Create account",
+      "haveAccount": "Already have an account?",
+      "signIn": "Sign in"
+    },
+    "forgotPassword": {
+      "title": "Reset your password",
+      "description": "Enter your email and we'll send reset instructions if the account exists.",
+      "emailLabel": "Email",
+      "submit": "Send reset instructions",
+      "success": "If an account exists for that email, reset instructions have been sent. Check your inbox.",
+      "backToSignIn": "Back to sign in"
+    },
+    "resetPassword": {
+      "title": "Set a new password",
+      "description": "Choose a new password for your account.",
+      "passwordLabel": "New password",
+      "passwordHint": "At least 12 characters.",
+      "submit": "Reset password",
+      "backToSignIn": "Back to sign in"
+    },
+    "verifyEmail": {
+      "title": "Verify your email",
+      "description": "Enter the verification code sent to your email.",
+      "codeLabel": "Verification code",
+      "submit": "Verify email",
+      "resend": "Resend code",
+      "backToSignIn": "Back to sign in",
+      "verified": "Your email has been verified."
+    },
+    "verifyTwoFactor": {
+      "title": "Two-factor verification",
+      "description": "Enter the code from your authenticator app.",
+      "codeLabel": "Authentication code",
+      "submit": "Verify",
+      "useBackupCode": "Use a backup code",
+      "backupCodeLabel": "Backup code",
+      "backToSignIn": "Back to sign in"
+    },
+    "acceptInvitation": {
+      "title": "You've been invited",
+      "description": "Accept this invitation to join the organization.",
+      "accept": "Accept invitation",
+      "decline": "Decline",
+      "signInToAccept": "Sign in to accept this invitation."
+    },
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "invalidCredentials": "Invalid email or password.",
+      "emailUnverified": "Please verify your email address before signing in.",
+      "rateLimited": "Too many attempts. Please wait and try again."
+    }
+  },
+  "memberships": {
+    "title": "Members",
+    "description": "Manage organization memberships, roles, and location access.",
+    "invite": "Invite member",
+    "invitations": "Invitations",
+    "member": "Member",
+    "email": "Email",
+    "roles": "Roles",
+    "locations": "Locations",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "orgWide": "All locations",
+    "actions": "Actions",
+    "viewDetail": "View",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "inviteEmailLabel": "Email address",
+    "inviteRoleLabel": "Role",
+    "inviteSubmit": "Send invitation",
+    "inviteCancel": "Cancel",
+    "cancelInvitation": "Cancel invitation",
+    "roleAssignment": "Role assignment",
+    "assignRole": "Assign role",
+    "revokeRole": "Revoke",
+    "locationGrants": "Location access",
+    "grantLocation": "Grant location access",
+    "revokeLocation": "Revoke",
+    "noMembers": "No members yet.",
+    "backToMembers": "Back to members",
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "unauthorized": "You do not have permission to manage memberships.",
+      "lastOwner": "The organization must retain at least one active owner.",
+      "escalation": "You cannot assign a role that exceeds your own permissions."
+    }
+  },
+  "shell": {
+    "brand": "ShopOS",
+    "nav": {
+      "organization": "Organization",
+      "operations": "Operations",
+      "overview": "Overview",
+      "members": "Members",
+      "customers": "Customers",
+      "assets": "Assets",
+      "workOrders": "Work orders",
+      "comingSoon": "Soon"
+    },
+    "command": {
+      "search": "Search…",
+      "open": "Open command palette",
+      "title": "Command palette",
+      "description": "Search for pages and actions. Use arrow keys to navigate.",
+      "placeholder": "Type a command or search…",
+      "noResults": "No results for \"{query}\""
+    },
+    "user": {
+      "accountSecurity": "Account & security",
+      "signOut": "Sign out"
+    },
+    "mobileNav": "Open navigation menu"
+  },
+  "platform": {
+    "brand": "ShopOS Platform",
+    "nav": {
+      "organizations": "Organizations"
+    },
+    "badge": "Control plane"
+  },
+  "marketing": {
+    "tagline": "Open shop operations",
+    "headline": "Built around the work. Ready for every kind of shop.",
+    "description": "Open shop operations, built around the work."
+  }
+}
