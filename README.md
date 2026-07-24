@@ -93,8 +93,10 @@ and permission-denial isolation against a real database. Organization and first-
 platform operator authorization, organization lifecycle actions, audit history, and an outbox record
 are implemented. Membership, role, permission, location-access, and invitation management — including
 privilege-escalation prevention and last-owner safety — are implemented with tenant-scoped services,
-API routes, an admin UI, and adversarial integration tests. Outbox dispatch,
-subscription/billing reconciliation, support access, and persisted application workflows beyond
+API routes, an admin UI, and adversarial integration tests. A transactional-outbox dispatcher
+(`pnpm worker`) drains recorded events, revalidates tenant context for every job, and dispatches to
+registered handlers with retry, backoff, and dead-letter handling. Subscription/billing
+reconciliation, support access, and persisted application workflows beyond
 customers remain roadmap work. The schema and module boundaries prepare for them but must not be
 mistaken for implemented behavior.
 
