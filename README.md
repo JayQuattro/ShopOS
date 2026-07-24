@@ -43,6 +43,22 @@ Open `http://localhost:3000`. The health endpoint is `http://localhost:3000/api/
 The seed is deterministic and intended only for local development. Its credentials and behavior will be
 documented when authentication is implemented.
 
+## Integration tests
+
+Integration tests run against a dedicated `shopos_test` PostgreSQL database and exercise real
+migrations, constraints, transactions, and tenant-scoped denial paths. The `docker compose up`
+PostgreSQL service auto-creates `shopos_test` via an init script.
+
+```bash
+docker compose up -d postgres
+DATABASE_URL=postgres://shopos:shopos@localhost:5432/shopos_test pnpm db:migrate
+pnpm test
+```
+
+Tests skip cleanly when PostgreSQL is unreachable (no Docker required for unit tests). The CI
+workflow (`.github/workflows/quality.yml`) provisions the test database in a service container and
+runs the full gate on every push and pull request.
+
 ## Platform administration
 
 The SaaS control plane is available at `/platform` to users with an explicit platform-operator grant.
