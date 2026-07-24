@@ -1,0 +1,79 @@
+name: Quality gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same ref when a new push arrives.
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Format, lint, typecheck, validate, test, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: shopos_test
+          POSTGRES_USER: shopos
+          POSTGRES_PASSWORD: shopos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U shopos -d shopos_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://shopos:shopos@localhost:5432/shopos_test
+      SHOPOS_TEST_DATABASE_URL: postgres://shopos:shopos@localhost:5432/shopos_test
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: ci-test-secret-at-least-32-characters-long
+      NODE_ENV: test
+      AUTH_EMAIL_DELIVERY: console
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Apply migrations to test database
+        run: pnpm db:migrate
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Prisma validate
+        run: pnpm db:validate
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
