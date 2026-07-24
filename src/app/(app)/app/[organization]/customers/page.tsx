@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/shopos/page-header";
 import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { CustomerCreateForm } from "./customer-create-form";
 
 export default async function CustomersPage({
   params,
@@ -40,6 +41,7 @@ export default async function CustomersPage({
         title="Customers"
         description="Individual and business customer records."
         breadcrumbs={[{ label: "Customers" }]}
+        actions={context.permissions.has("customers.write") ? <CustomerCreateForm /> : undefined}
       />
 
       <Card>
