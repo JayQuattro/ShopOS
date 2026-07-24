@@ -3,6 +3,10 @@
 ShopOS must run as a conventional containerized Node.js application with PostgreSQL. A proprietary
 platform runtime, serverless execution model, or paid external service must not be mandatory.
 
+For the full deployment architecture — including IaC tool selection, environment definitions,
+provisioning details, database lifecycle, and secret management — see
+[Deployment architecture](deployment-architecture.md).
+
 ## Configuration
 
 - Environment variables provide deploy-time configuration.

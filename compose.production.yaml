@@ -1,0 +1,90 @@
+# Production-grade single-host deployment for self-hosted ShopOS.
+#
+# This file provides a reproducible deployment for a single host. For multi-host,
+# HA, or cloud-managed deployments, see docs/deployment-architecture.md and
+# use the Terraform modules in the separate infra package/repository.
+#
+# Usage:
+#   docker compose -f compose.production.yaml up -d
+#
+# Required environment variables (set in .env.production or your secret manager):
+#   DATABASE_URL          — PostgreSQL connection string
+#   BETTER_AUTH_SECRET    — ≥32 character secret for session signing
+#   BETTER_AUTH_URL       — The public URL of the application (e.g. https://shop.example.com)
+#
+# Optional:
+#   AUTH_EMAIL_DELIVERY   — "console" (dev) or "none" (prod default)
+#   OUTBOX_POLL_INTERVAL_MS — Worker poll interval (default 3000)
+#   OUTBOX_BATCH_SIZE     — Worker batch size (default 50)
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-shopos}
+      POSTGRES_USER: ${POSTGRES_USER:-shopos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your environment}
+    volumes:
+      - shopos-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shopos} -d ${POSTGRES_DB:-shopos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Do not expose PostgreSQL to the host in production — only internal access.
+    # Remove the "ports" section for a truly isolated deployment.
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-shopos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-shopos}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET (≥32 chars)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL to the public URL}
+      AUTH_EMAIL_DELIVERY: ${AUTH_EMAIL_DELIVERY:-none}
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  worker:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["node", "scripts/run-worker.js"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-shopos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-shopos}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET (≥32 chars)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL to the public URL}
+      AUTH_EMAIL_DELIVERY: ${AUTH_EMAIL_DELIVERY:-none}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-3000}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-50}
+      NODE_ENV: production
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+volumes:
+  shopos-postgres:
