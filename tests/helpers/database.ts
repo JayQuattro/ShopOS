@@ -12,10 +12,49 @@ export function assertDedicatedTestDatabase(databaseUrl: string): void {
 export async function resetTestDatabase(
   db: Pick<PrismaClient, "$executeRawUnsafe">,
 ): Promise<void> {
-  // Static SQL against a database whose name is checked above. Cascading from
-  // the two aggregate roots also clears auth, tenant, platform, audit, and
-  // outbox records without maintaining a fragile hand-ordered delete list.
-  await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "users", "organizations", "auth_verifications" RESTART IDENTITY CASCADE',
-  );
+  // Truncate all tenant-owned, platform, auth, and audit data tables. Listing
+  // them explicitly (rather than cascading from the two aggregate roots) is
+  // required because several tables — outbox_events, audit_events, customers,
+  // assets, work_orders — reference organizations(id) with ON DELETE RESTRICT,
+  // which blocks a CASCADE truncate of organizations. Enum/lookup tables are
+  // excluded (they hold static reference data, not per-test rows). RESTART
+  // IDENTITY resets serial/sequence counters so deterministic UUIDs remain
+  // stable. CASCADE covers any remaining ON DELETE CASCADE FKs.
+  await db.$executeRawUnsafe(`
+    TRUNCATE TABLE
+      "outbox_events",
+      "audit_events",
+      "platform_audit_events",
+      "organization_provisioning_requests",
+      "organization_entitlements",
+      "organization_invitations",
+      "organization_sso_providers",
+      "platform_operator_grants",
+      "location_access",
+      "membership_roles",
+      "roles",
+      "organization_memberships",
+      "locations",
+      "payments",
+      "invoice_lines",
+      "invoices",
+      "authorization_decisions",
+      "authorizations",
+      "estimate_lines",
+      "estimate_revisions",
+      "activity_events",
+      "work_orders",
+      "automotive_asset_profiles",
+      "equipment_asset_profiles",
+      "assets",
+      "customers",
+      "auth_passkeys",
+      "auth_two_factors",
+      "auth_sessions",
+      "auth_accounts",
+      "organizations",
+      "users",
+      "auth_verifications"
+    RESTART IDENTITY CASCADE
+  `);
 }
