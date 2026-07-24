@@ -10,6 +10,12 @@
   details.
 - **Authorization** records decisions against a specific revision and explicit service groups or lines.
 - **Invoice** snapshots billable work and owns payment allocations.
+- **Platform operator grant** authorizes installation-wide control-plane actions without creating an
+  organization membership.
+- **Organization provisioning request** records one idempotent creation of an organization, first
+  location, founding membership, roles, audit history, and outbox event.
+- **Organization entitlement** records an organization-scoped platform capability or limit separately
+  from external billing-provider state.
 
 Transactions should not span aggregates merely for convenience. Application services coordinate them
 inside a database transaction where partial completion would be unsafe.

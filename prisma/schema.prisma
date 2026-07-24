@@ -100,63 +100,108 @@ enum PaymentMethod {
   @@map("payment_method")
 }
 
+enum OrganizationStatus {
+  PROVISIONING @map("provisioning")
+  ACTIVE       @map("active")
+  SUSPENDED    @map("suspended")
+  CLOSED       @map("closed")
+
+  @@map("organization_status")
+}
+
+enum SubscriptionState {
+  UNMANAGED @map("unmanaged")
+  TRIALING  @map("trialing")
+  ACTIVE    @map("active")
+  PAST_DUE  @map("past_due")
+  CANCELED  @map("canceled")
+
+  @@map("subscription_state")
+}
+
+enum PlatformOperatorRole {
+  VIEWER   @map("viewer")
+  OPERATOR @map("operator")
+  ADMIN    @map("admin")
+
+  @@map("platform_operator_role")
+}
+
+enum ProvisioningActorKind {
+  SELF_SERVICE      @map("self_service")
+  PLATFORM_OPERATOR @map("platform_operator")
+  SYSTEM            @map("system")
+
+  @@map("provisioning_actor_kind")
+}
+
 model User {
-  id                     String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email                  String                    @unique(map: "users_email_unique") @db.VarChar(320)
-  displayName            String                    @map("display_name") @db.VarChar(160)
-  emailVerified          Boolean                   @default(false) @map("email_verified")
-  image                  String?                   @db.VarChar(2048)
-  twoFactorEnabled       Boolean                   @default(false) @map("two_factor_enabled")
-  disabledAt             DateTime?                 @map("disabled_at") @db.Timestamptz(6)
-  createdAt              DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                     String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                  String                            @unique(map: "users_email_unique") @db.VarChar(320)
+  displayName            String                            @map("display_name") @db.VarChar(160)
+  emailVerified          Boolean                           @default(false) @map("email_verified")
+  image                  String?                           @db.VarChar(2048)
+  twoFactorEnabled       Boolean                           @default(false) @map("two_factor_enabled")
+  disabledAt             DateTime?                         @map("disabled_at") @db.Timestamptz(6)
+  createdAt              DateTime                          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                          @updatedAt @map("updated_at") @db.Timestamptz(6)
   authSessions           AuthSession[]
   authAccounts           AuthAccount[]
-  organizationInvites    OrganizationInvitation[]  @relation("OrganizationInvitationInviter")
+  organizationInvites    OrganizationInvitation[]          @relation("OrganizationInvitationInviter")
   twoFactors             TwoFactor[]
   passkeys               Passkey[]
-  ssoProviders           OrganizationSsoProvider[] @relation("SsoProviderCreator")
+  ssoProviders           OrganizationSsoProvider[]         @relation("SsoProviderCreator")
   memberships            OrganizationMembership[]
-  createdEstimates       EstimateRevision[]        @relation("EstimateCreatedBy")
-  recordedAuthorizations Authorization[]           @relation("AuthorizationRecordedBy")
-  recordedPayments       Payment[]                 @relation("PaymentRecordedBy")
-  activityEvents         ActivityEvent[]           @relation("ActivityActor")
-  auditEvents            AuditEvent[]              @relation("AuditActor")
+  createdEstimates       EstimateRevision[]                @relation("EstimateCreatedBy")
+  recordedAuthorizations Authorization[]                   @relation("AuthorizationRecordedBy")
+  recordedPayments       Payment[]                         @relation("PaymentRecordedBy")
+  activityEvents         ActivityEvent[]                   @relation("ActivityActor")
+  auditEvents            AuditEvent[]                      @relation("AuditActor")
+  platformOperatorGrants PlatformOperatorGrant[]           @relation("PlatformOperatorGrantUser")
+  platformGrantsGiven    PlatformOperatorGrant[]           @relation("PlatformOperatorGrantGrantedBy")
+  platformGrantsRevoked  PlatformOperatorGrant[]           @relation("PlatformOperatorGrantRevokedBy")
+  platformAuditEvents    PlatformAuditEvent[]              @relation("PlatformAuditActor")
+  provisioningRequests   OrganizationProvisioningRequest[] @relation("ProvisioningActor")
+  entitlementUpdates     OrganizationEntitlement[]         @relation("EntitlementUpdatedBy")
 
   @@map("users")
 }
 
 model Organization {
-  id                String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  slug              String                    @unique @db.VarChar(80)
-  name              String                    @db.VarChar(180)
-  logoUrl           String?                   @map("logo_url") @db.VarChar(2048)
-  authMetadata      String?                   @map("auth_metadata")
-  status            String                    @default("active") @db.VarChar(24)
-  defaultCurrency   String                    @default("USD") @map("default_currency") @db.VarChar(3)
-  subscriptionState String                    @default("unmanaged") @map("subscription_state") @db.VarChar(32)
-  createdAt         DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  locations         Location[]
-  memberships       OrganizationMembership[]
-  invitations       OrganizationInvitation[]
-  activeSessions    AuthSession[]             @relation("ActiveOrganization")
-  ssoProviders      OrganizationSsoProvider[]
-  roles             Role[]
-  membershipRoles   MembershipRole[]
-  locationAccess    LocationAccess[]
-  customers         Customer[]
-  assets            Asset[]
-  workOrders        WorkOrder[]
-  estimateRevisions EstimateRevision[]
-  estimateLines     EstimateLine[]
-  authorizations    Authorization[]
-  authDecisions     AuthorizationDecision[]
-  invoices          Invoice[]
-  invoiceLines      InvoiceLine[]
-  payments          Payment[]
-  activityEvents    ActivityEvent[]
-  auditEvents       AuditEvent[]
+  id                  String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug                String                           @unique @db.VarChar(80)
+  name                String                           @db.VarChar(180)
+  logoUrl             String?                          @map("logo_url") @db.VarChar(2048)
+  authMetadata        String?                          @map("auth_metadata")
+  status              OrganizationStatus               @default(ACTIVE)
+  defaultCurrency     String                           @default("USD") @map("default_currency") @db.VarChar(3)
+  subscriptionState   SubscriptionState                @default(UNMANAGED) @map("subscription_state")
+  createdAt           DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  locations           Location[]
+  memberships         OrganizationMembership[]
+  invitations         OrganizationInvitation[]
+  activeSessions      AuthSession[]                    @relation("ActiveOrganization")
+  ssoProviders        OrganizationSsoProvider[]
+  roles               Role[]
+  membershipRoles     MembershipRole[]
+  locationAccess      LocationAccess[]
+  customers           Customer[]
+  assets              Asset[]
+  workOrders          WorkOrder[]
+  estimateRevisions   EstimateRevision[]
+  estimateLines       EstimateLine[]
+  authorizations      Authorization[]
+  authDecisions       AuthorizationDecision[]
+  invoices            Invoice[]
+  invoiceLines        InvoiceLine[]
+  payments            Payment[]
+  activityEvents      ActivityEvent[]
+  auditEvents         AuditEvent[]
+  platformAuditEvents PlatformAuditEvent[]
+  provisioningRequest OrganizationProvisioningRequest?
+  entitlements        OrganizationEntitlement[]
+  outboxEvents        OutboxEvent[]
 
   @@map("organizations")
 }
@@ -204,6 +249,100 @@ model OrganizationMembership {
   @@unique([organizationId, id], map: "memberships_org_id_unique")
   @@index([userId], map: "memberships_user_idx")
   @@map("organization_memberships")
+}
+
+model PlatformOperatorGrant {
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String               @map("user_id") @db.Uuid
+  role             PlatformOperatorRole
+  reason           String               @db.VarChar(500)
+  grantedByUserId  String?              @map("granted_by_user_id") @db.Uuid
+  expiresAt        DateTime?            @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime?            @map("revoked_at") @db.Timestamptz(6)
+  revokedByUserId  String?              @map("revoked_by_user_id") @db.Uuid
+  revocationReason String?              @map("revocation_reason") @db.VarChar(500)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User                 @relation("PlatformOperatorGrantUser", fields: [userId], references: [id], onDelete: Restrict)
+  grantedBy        User?                @relation("PlatformOperatorGrantGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Restrict)
+  revokedBy        User?                @relation("PlatformOperatorGrantRevokedBy", fields: [revokedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([userId, revokedAt, expiresAt], map: "platform_operator_grants_active_idx")
+  @@map("platform_operator_grants")
+}
+
+model PlatformAuditEvent {
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorUserId          String?       @map("actor_user_id") @db.Uuid
+  targetOrganizationId String?       @map("target_organization_id") @db.Uuid
+  action               String        @db.VarChar(120)
+  targetType           String        @map("target_type") @db.VarChar(80)
+  targetId             String        @map("target_id") @db.VarChar(160)
+  requestId            String?       @map("request_id") @db.VarChar(120)
+  reason               String?       @db.VarChar(500)
+  metadata             Json?
+  occurredAt           DateTime      @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  actor                User?         @relation("PlatformAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  targetOrganization   Organization? @relation(fields: [targetOrganizationId], references: [id], onDelete: Restrict)
+
+  @@index([targetOrganizationId, occurredAt], map: "platform_audit_org_time_idx")
+  @@index([actorUserId, occurredAt], map: "platform_audit_actor_time_idx")
+  @@map("platform_audit_events")
+}
+
+model OrganizationProvisioningRequest {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorUserId    String                @map("actor_user_id") @db.Uuid
+  actorKind      ProvisioningActorKind @map("actor_kind")
+  idempotencyKey String                @map("idempotency_key") @db.VarChar(160)
+  inputHash      String                @map("input_hash") @db.Char(64)
+  organizationId String                @unique(map: "provisioning_requests_org_unique") @map("organization_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt    DateTime              @default(now()) @map("completed_at") @db.Timestamptz(6)
+  actor          User                  @relation("ProvisioningActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([actorUserId, idempotencyKey], map: "provisioning_requests_actor_key_unique")
+  @@map("organization_provisioning_requests")
+}
+
+model OrganizationEntitlement {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  key             String       @db.VarChar(120)
+  enabled         Boolean      @default(true)
+  limitValue      BigInt?      @map("limit_value")
+  configuration   Json?
+  source          String       @default("platform") @db.VarChar(80)
+  effectiveAt     DateTime     @default(now()) @map("effective_at") @db.Timestamptz(6)
+  expiresAt       DateTime?    @map("expires_at") @db.Timestamptz(6)
+  updatedByUserId String?      @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedBy       User?        @relation("EntitlementUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, key], map: "organization_entitlements_org_key_unique")
+  @@index([organizationId, enabled], map: "organization_entitlements_org_enabled_idx")
+  @@map("organization_entitlements")
+}
+
+model OutboxEvent {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  eventType      String       @map("event_type") @db.VarChar(120)
+  aggregateType  String       @map("aggregate_type") @db.VarChar(80)
+  aggregateId    String       @map("aggregate_id") @db.Uuid
+  payload        Json
+  occurredAt     DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  availableAt    DateTime     @default(now()) @map("available_at") @db.Timestamptz(6)
+  publishedAt    DateTime?    @map("published_at") @db.Timestamptz(6)
+  attempts       Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([publishedAt, availableAt], map: "outbox_unpublished_available_idx")
+  @@index([organizationId, occurredAt], map: "outbox_org_time_idx")
+  @@map("outbox_events")
 }
 
 model AuthSession {

@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { assertDedicatedTestDatabase, resetTestDatabase } from "../helpers/database";
+
 /**
  * Integration test exercising the tenant-aware request context and the first
  * tenant-scoped repository against a throwaway PostgreSQL database.
@@ -18,6 +20,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const TEST_DATABASE_URL =
   process.env.SHOPOS_TEST_DATABASE_URL ?? "postgres://shopos:shopos@localhost:5432/shopos_test";
+assertDedicatedTestDatabase(TEST_DATABASE_URL);
 
 const env = process.env as Record<string, string | undefined>;
 env.DATABASE_URL = TEST_DATABASE_URL;
@@ -124,16 +127,7 @@ async function seedTwoOrganizations(): Promise<{
 
 beforeEach(async () => {
   if (!RUN) return;
-  await dbModule.db.$transaction([
-    dbModule.db.customer.deleteMany(),
-    dbModule.db.locationAccess.deleteMany(),
-    dbModule.db.membershipRole.deleteMany(),
-    dbModule.db.role.deleteMany(),
-    dbModule.db.organizationMembership.deleteMany(),
-    dbModule.db.location.deleteMany(),
-    dbModule.db.organization.deleteMany(),
-    dbModule.db.user.deleteMany(),
-  ]);
+  await resetTestDatabase(dbModule.db);
 });
 
 describe("resolveTenantContext against a real database", { skip: shouldSkip }, () => {

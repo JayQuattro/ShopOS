@@ -21,6 +21,9 @@ ShopOS is one deployable TypeScript modular monolith:
 - A dedicated integrations module registers replaceable adapters and resolves database-backed,
   tenant-scoped connector instances for communication, storage, mapping, scheduling, payments,
   accounting, translation, and data services.
+- A platform module provides the SaaS control plane through a security context that is distinct from
+  organization membership. It shares the deployable monolith initially but can move to a dedicated
+  hostname or deployment without changing tenant-domain contracts.
 
 The browser is not a security boundary. Server application services authorize tenant context and perform
 mutations. Route handlers translate HTTP concerns and call those services.
@@ -49,6 +52,7 @@ Initial modules:
 - localization
 - translation
 - integrations
+- platform
 
 Planned boundaries include scheduling, inspections, inventory, purchasing, vendors, projects,
 messaging, reporting, accounting, catalogs, and workflow automation.
@@ -74,6 +78,11 @@ its domain module.
 6. An application service revalidates resource scope, applies domain rules, and commits a transaction.
 7. The transaction records domain/activity/audit events and an outbox message when needed.
 8. The response exposes a stable locale-aware view model, not raw database rows.
+
+Platform requests use a different path: authentication resolves the user, the server resolves a
+current platform-operator grant and platform permissions, and platform application services operate
+only on control-plane records. Platform authority never substitutes for membership when accessing
+tenant-owned records.
 
 ## Data and consistency
 
@@ -107,10 +116,12 @@ logging source or translated content.
 ## Current implementation status
 
 The repository currently implements the scaffolding, initial schema, pure financial, tenant, and
-federated-provider isolation policies, Better Auth's reviewed schema and guarded server configuration,
-the Tailwind/shadcn design-system foundation, the demonstration application shell, health response, and
-tests. Authentication routes, recovery delivery, sign-in and enrollment UI, the authenticated
-application shell, persisted organization/user appearance settings, workflow services, the job runner,
+federated-provider isolation policies, Better Auth's reviewed schema, authentication routes, recovery,
+sign-in and enrollment UI, tenant request-context rebuilding, the transactional
+organization/first-location provisioning workflow, control-plane authorization, organization
+directory, lifecycle actions, audit history, the outbox record, the Tailwind/shadcn design-system
+foundation, the demonstration application shell, health response, and tests. The authenticated tenant
+application shell, persisted organization/user appearance settings, business workflow services,
 outbox dispatcher, storage providers, and a stable public API remain planned. The configurable adapter
 model is accepted, but its registry, connector persistence, administration UI, secret lifecycle, jobs,
 and provider implementations are not yet implemented. The localization model is accepted, but

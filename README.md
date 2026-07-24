@@ -5,8 +5,9 @@ customer-asset service businesses.
 
 The project is in its bootstrap phase. The current repository establishes the product and architecture
 contracts, database foundation, tenant authorization primitives, financial calculation kernel,
-demonstration shell, and automated tests. The complete customer-to-payment workflow described in the
-roadmap is not yet implemented.
+demonstration shell, transactional organization onboarding, an initial SaaS control plane, and
+automated tests. The complete customer-to-payment workflow described in the roadmap is not yet
+implemented.
 
 ## Principles
 
@@ -42,6 +43,19 @@ Open `http://localhost:3000`. The health endpoint is `http://localhost:3000/api/
 The seed is deterministic and intended only for local development. Its credentials and behavior will be
 documented when authentication is implemented.
 
+## Platform administration
+
+The SaaS control plane is available at `/platform` to users with an explicit platform-operator grant.
+It is separate from organization membership and requires verified email plus two-factor
+authentication. Bootstrap the first operator from a trusted console after that user enrolls MFA:
+
+```bash
+pnpm platform:bootstrap-operator --email operator@example.com --role admin
+```
+
+The command is intentionally one-time and audited. Do not use an environment-variable email allowlist
+or make platform operators members of customer organizations.
+
 ## Quality checks
 
 ```bash
@@ -75,11 +89,11 @@ adapter is the production default until a real email provider is registered behi
 interface. Tenant-aware request context is implemented: every protected request rebuilds an
 immutable authorization context from server-side membership, role/permission, and location-access
 records, and the first tenant-scoped repository (customers) proves cross-organization, cross-location,
-and permission-denial isolation against a real database. Organization and first-location onboarding
-and membership, role, permission, and location-access management remain the next implementation
-slice. Persisted application workflows beyond customers, customer-facing authorization links,
-invoicing, payments, file storage, and background-job execution also remain roadmap work. The schema
-and module boundaries prepare for them but must not be mistaken for implemented behavior.
+and permission-denial isolation against a real database. Organization and first-location onboarding,
+platform operator authorization, organization lifecycle actions, audit history, and an outbox record
+are implemented. Membership management, outbox dispatch, subscription/billing reconciliation, support
+access, and persisted application workflows beyond customers remain roadmap work. The schema and
+module boundaries prepare for them but must not be mistaken for implemented behavior.
 
 ## License
 

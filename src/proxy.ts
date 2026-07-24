@@ -5,14 +5,15 @@ import { NextResponse, type NextRequest } from "next/server";
  * Next.js 16 proxy (formerly middleware).
  *
  * Performs an optimistic, cookie-existence-only redirect for the authenticated
- * application segment. This is intentionally NOT an authorization check: the
+ * application, onboarding, and platform-administration segments. This is
+ * intentionally NOT an authorization check: the
  * session cookie is not cryptographically validated here, and an attacker can
  * forge its presence. Every protected page, route handler, and server action
  * must still call `getCurrentSession()` (and, once implemented, rebuild the
  * tenant context) to authorize access server-side.
  *
- * The matcher is narrow until authenticated application routes exist; it avoids
- * matching the auth pages, API, and static assets.
+ * The matcher avoids auth pages, API routes, and static assets. Platform routes
+ * additionally resolve a dedicated PlatformContext on the server.
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const sessionCookie = getSessionCookie(request);
@@ -27,5 +28,5 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  matcher: ["/app/:path*"],
+  matcher: ["/app/:path*", "/onboarding/:path*", "/platform/:path*"],
 };
