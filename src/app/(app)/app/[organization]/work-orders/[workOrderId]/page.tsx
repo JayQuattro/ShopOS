@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/shopos/page-header";
 import { db } from "@/db/client";
 import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { EstimatePanel } from "./estimate-panel";
+import { InvoicePanel } from "./invoice-panel";
 
 export default async function WorkOrderDetailPage({
   params,
@@ -47,6 +49,16 @@ export default async function WorkOrderDetailPage({
         orderBy: { occurredAt: "desc" },
         take: 20,
         select: { id: true, eventType: true, summary: true, occurredAt: true },
+      },
+      invoice: {
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          totalMinor: true,
+          paidMinor: true,
+          currency: true,
+        },
       },
     },
   });
@@ -162,6 +174,54 @@ export default async function WorkOrderDetailPage({
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Estimate</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EstimatePanel
+            workOrderId={wo.id}
+            revisions={wo.estimateRevisions.map((rev) => ({
+              id: rev.id,
+              revisionNumber: rev.revisionNumber,
+              status: rev.status,
+              currency: rev.currency,
+              totalMinor: rev.totalMinor.toString(),
+            }))}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Invoice</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <InvoicePanel
+            workOrderId={wo.id}
+            invoice={
+              wo.invoice
+                ? {
+                    id: wo.invoice.id,
+                    number: wo.invoice.number,
+                    status: wo.invoice.status,
+                    totalMinor: wo.invoice.totalMinor.toString(),
+                    paidMinor: wo.invoice.paidMinor.toString(),
+                    currency: wo.invoice.currency,
+                  }
+                : {
+                    id: null,
+                    number: null,
+                    status: null,
+                    totalMinor: null,
+                    paidMinor: null,
+                    currency: "USD",
+                  }
+            }
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
