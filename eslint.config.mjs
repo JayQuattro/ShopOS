@@ -5,5 +5,11 @@ import nextTypeScript from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextCoreWebVitals,
   ...nextTypeScript,
-  globalIgnores([".next/**", "coverage/**", "dist/**", "tmp/**"]),
+  globalIgnores([
+    ".next/**",
+    "coverage/**",
+    "dist/**",
+    "tmp/**",
+    "tests/identity/_probe-postgres.cjs",
+  ]),
 ]);
