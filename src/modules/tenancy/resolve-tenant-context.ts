@@ -8,6 +8,7 @@ export type TenantContextNotResolvedReason =
   | "organization_not_selected"
   | "membership_not_found"
   | "membership_inactive"
+  | "organization_suspended"
   | "location_not_allowed";
 
 export type ResolveTenantContextInput = Readonly<{
@@ -80,6 +81,7 @@ export async function resolveTenantContext(input: ResolveTenantContextInput): Pr
       userId: input.actorId,
     },
     include: {
+      organization: { select: { status: true } },
       roles: { include: { role: { select: { permissions: true } } } },
       locationAccess: { select: { locationId: true } },
     },
@@ -91,6 +93,13 @@ export async function resolveTenantContext(input: ResolveTenantContextInput): Pr
 
   if (!membership.active) {
     throw new TenantContextNotResolved("membership_inactive");
+  }
+
+  // A suspended organization must not serve member requests through the request
+  // path, even for valid memberships. Platform operators can still manage the
+  // org through the separate PlatformContext plane.
+  if (membership.organization.status !== "ACTIVE") {
+    throw new TenantContextNotResolved("organization_suspended");
   }
 
   const permissions = collectPermissions(membership.roles);

@@ -26,6 +26,7 @@ const activeMembership = {
   userId: "user-1",
   active: true,
   organizationWideLocationAccess: true,
+  organization: { status: "ACTIVE" },
   roles: [
     {
       role: {
@@ -149,5 +150,16 @@ describe("resolveTenantContext", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(TenantContextNotResolved);
     }
+  });
+
+  it("rejects a membership whose organization is suspended", async () => {
+    await expect(
+      resolveTenantContext({
+        db: makeDb({ ...activeMembership, organization: { status: "SUSPENDED" } }),
+        actorId: "user-1",
+        organizationId: "org-a",
+        requestId: "req-1",
+      }),
+    ).rejects.toMatchObject({ name: "TenantContextNotResolved", reason: "organization_suspended" });
   });
 });
