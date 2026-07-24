@@ -72,11 +72,14 @@ Authentication routes, session handling, email verification, password reset, mag
 sign-in, two-factor and passkey enrollment, and the auth UI are implemented behind a platform-level
 delivery boundary. The deterministic console adapter is used in development and tests; a safe null
 adapter is the production default until a real email provider is registered behind the same
-interface. Tenant-aware request context, organization and first-location onboarding, and membership,
-role, permission, and location-access management remain the next implementation slice. Persisted
-application workflows, customer-facing authorization links, invoicing, payments, file storage, and
-background-job execution also remain roadmap work. The schema and module boundaries prepare for them
-but must not be mistaken for implemented behavior.
+interface. Tenant-aware request context is implemented: every protected request rebuilds an
+immutable authorization context from server-side membership, role/permission, and location-access
+records, and the first tenant-scoped repository (customers) proves cross-organization, cross-location,
+and permission-denial isolation against a real database. Organization and first-location onboarding
+and membership, role, permission, and location-access management remain the next implementation
+slice. Persisted application workflows beyond customers, customer-facing authorization links,
+invoicing, payments, file storage, and background-job execution also remain roadmap work. The schema
+and module boundaries prepare for them but must not be mistaken for implemented behavior.
 
 ## License
 

@@ -9,6 +9,8 @@ import {
 const context: TenantContext = {
   actorId: "user-a",
   organizationId: "org-a",
+  membershipId: "membership-a",
+  requestId: "request-1",
   organizationWideLocationAccess: false,
   allowedLocationIds: new Set(["location-a"]),
   permissions: new Set(["work_orders.read"]),

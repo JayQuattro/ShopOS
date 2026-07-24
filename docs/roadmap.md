@@ -32,7 +32,7 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [ ] Organization theme publishing and individual appearance/density preferences
 - [ ] Organization/location enabled and default locales plus user/membership locale preferences
 - [ ] Tenant-scoped translation provider binding, policy, permission, secret-reference, and budget model
-- [ ] Tenant-aware request context and repositories
+- [x] Tenant-aware request context and repositories
 - [ ] Cross-tenant, cross-location, nested-resource, and mutation-denial integration tests
 
 ## Phase 2 - Customers and assets

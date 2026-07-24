@@ -15,6 +15,8 @@ export type Permission =
 export type TenantContext = Readonly<{
   actorId: string;
   organizationId: string;
+  membershipId: string;
+  requestId: string;
   selectedLocationId?: string;
   organizationWideLocationAccess: boolean;
   allowedLocationIds: ReadonlySet<string>;
