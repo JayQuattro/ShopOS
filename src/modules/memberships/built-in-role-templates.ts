@@ -6,7 +6,7 @@ export type BuiltInRoleTemplate = Readonly<{
   permissions: readonly Permission[];
 }>;
 
-const ALL_TENANT_PERMISSIONS: readonly Permission[] = [
+export const ALL_TENANT_PERMISSIONS: readonly Permission[] = [
   "organizations.manage",
   "memberships.manage",
   "customers.read",

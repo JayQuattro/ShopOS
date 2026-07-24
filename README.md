@@ -91,9 +91,12 @@ immutable authorization context from server-side membership, role/permission, an
 records, and the first tenant-scoped repository (customers) proves cross-organization, cross-location,
 and permission-denial isolation against a real database. Organization and first-location onboarding,
 platform operator authorization, organization lifecycle actions, audit history, and an outbox record
-are implemented. Membership management, outbox dispatch, subscription/billing reconciliation, support
-access, and persisted application workflows beyond customers remain roadmap work. The schema and
-module boundaries prepare for them but must not be mistaken for implemented behavior.
+are implemented. Membership, role, permission, location-access, and invitation management — including
+privilege-escalation prevention and last-owner safety — are implemented with tenant-scoped services,
+API routes, an admin UI, and adversarial integration tests. Outbox dispatch,
+subscription/billing reconciliation, support access, and persisted application workflows beyond
+customers remain roadmap work. The schema and module boundaries prepare for them but must not be
+mistaken for implemented behavior.
 
 ## License
 

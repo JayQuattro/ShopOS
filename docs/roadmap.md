@@ -29,7 +29,7 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [ ] Implement invitation-only organization SSO with verified domain and issuer/tenant checks
 - [x] Separate SaaS control-plane authorization, platform audit, and organization lifecycle foundation
 - [x] Transactional, idempotent organization and first-location onboarding
-- [ ] Membership, role, permission, and location-access management
+- [x] Membership, role, permission, and location-access management
 - [ ] Organization theme publishing and individual appearance/density preferences
 - [ ] Organization/location enabled and default locales plus user/membership locale preferences
 - [ ] Tenant-scoped translation provider binding, policy, permission, secret-reference, and budget model
