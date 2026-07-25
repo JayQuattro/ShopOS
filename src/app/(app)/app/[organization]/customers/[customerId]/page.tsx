@@ -7,6 +7,8 @@ import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { ContactForm } from "./contact-form";
 import { AddressForm } from "./address-form";
+import { CustomerEditForm } from "./customer-edit-form";
+import { RemoveButton } from "./remove-button";
 
 export default async function CustomerDetailPage({
   params,
@@ -83,7 +85,37 @@ export default async function CustomerDetailPage({
           { label: "Customers", href: `/app/${context.organizationId}/customers` },
           { label: customer.displayName },
         ]}
+        actions={
+          context.permissions.has("customers.write") ? (
+            <CustomerEditForm
+              customerId={customer.id}
+              initialDisplayName={customer.displayName}
+              initialEmail={customer.primaryEmail ?? ""}
+              initialPhone={customer.primaryPhone ?? ""}
+              initialReference={customer.organizationReference ?? ""}
+              initialInternalNotes={customer.internalNotes ?? ""}
+              canWrite
+            />
+          ) : undefined
+        }
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CustomerEditForm
+            customerId={customer.id}
+            initialDisplayName={customer.displayName}
+            initialEmail={customer.primaryEmail ?? ""}
+            initialPhone={customer.primaryPhone ?? ""}
+            initialReference={customer.organizationReference ?? ""}
+            initialInternalNotes={customer.internalNotes ?? ""}
+            canWrite={context.permissions.has("customers.write")}
+          />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
@@ -125,6 +157,7 @@ export default async function CustomerDetailPage({
                   <th className="py-2 pr-4 font-medium">Role</th>
                   <th className="py-2 pr-4 font-medium">Email</th>
                   <th className="py-2 pr-4 font-medium">Phone</th>
+                  {context.permissions.has("customers.write") ? <th></th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -137,6 +170,14 @@ export default async function CustomerDetailPage({
                     <td className="py-3 pr-4 text-muted-foreground">{c.role ?? "—"}</td>
                     <td className="py-3 pr-4">{c.email ?? "—"}</td>
                     <td className="py-3 pr-4">{c.phone ?? "—"}</td>
+                    {context.permissions.has("customers.write") ? (
+                      <td className="py-2 pr-2">
+                        <RemoveButton
+                          apiPath={`/api/customers/${customer.id}/contacts/${c.id}`}
+                          label={c.name}
+                        />
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
