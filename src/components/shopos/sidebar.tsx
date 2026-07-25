@@ -86,7 +86,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
             </h2>
             {visibleItems.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              // Overview (the base href) should only be active on an exact match.
+              // Other items are active on exact match or when the path is a child.
+              const isBase = item.href === baseHref;
+              const active = isBase
+                ? pathname === item.href
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <Link
                   key={item.href}
