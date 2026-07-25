@@ -30,6 +30,7 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 - [x] Separate SaaS control-plane authorization, platform audit, and organization lifecycle foundation
 - [x] Transactional, idempotent organization and first-location onboarding
 - [ ] Onboarding form includes currency, time zone, and locale dropdowns with sensible defaults
+- [ ] Explore org-scoped routing: redirect `/app` to the user's active org, use org slug instead of UUID in URLs
 - [x] Membership, role, permission, and location-access management
 - [ ] Organization theme publishing and individual appearance/density preferences
 - [ ] Organization/location enabled and default locales plus user/membership locale preferences
