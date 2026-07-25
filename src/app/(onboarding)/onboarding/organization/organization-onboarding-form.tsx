@@ -70,7 +70,13 @@ export function OrganizationOnboardingForm() {
       setSubmitting(false);
       return;
     }
-    router.push("/");
+    const data = (await response.json()) as { organizationId?: string };
+    const orgId = data.organizationId;
+    if (orgId) {
+      router.push(`/app/${orgId}`);
+    } else {
+      router.push("/");
+    }
     router.refresh();
   }
 
