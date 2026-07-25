@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { DensityToggle } from "@/components/shopos/density-toggle";
-import { ThemeSwitcher } from "@/components/shopos/theme/theme-switcher";
 import { db } from "@/db/client";
 import { resolveShellContext, type ShellLocation } from "@/modules/tenancy/shell-context";
 
@@ -74,7 +73,6 @@ export async function AppShell({ children }: AppShellProps) {
           <div className="ml-auto flex items-center gap-2">
             <CommandPalette actions={commandActions} />
             <DensityToggle />
-            <ThemeSwitcher compact />
             <UserMenu displayName={shell.user.displayName} email={shell.user.email} />
           </div>
         </header>
