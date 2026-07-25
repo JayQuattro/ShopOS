@@ -7,6 +7,33 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+const COMMON_CURRENCIES = ["USD", "CAD", "EUR", "GBP", "AUD", "JPY", "MXN", "BRL", "INR", "CNY"];
+
+const COMMON_TIME_ZONES = [
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Phoenix",
+  "America/Anchorage",
+  "America/Toronto",
+  "America/Vancouver",
+  "America/Mexico_City",
+  "America/Sao_Paulo",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Europe/Madrid",
+  "Europe/Amsterdam",
+  "Asia/Tokyo",
+  "Asia/Singapore",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Australia/Sydney",
+  "Pacific/Auckland",
+  "UTC",
+];
+
 export function OrganizationOnboardingForm() {
   const router = useRouter();
   const [idempotencyKey] = useState(() => crypto.randomUUID());
@@ -63,8 +90,18 @@ export function OrganizationOnboardingForm() {
         <Field label="Location code" name="locationCode" placeholder="MAIN" />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="IANA time zone" name="timeZone" defaultValue="America/New_York" />
-        <Field label="Currency" name="defaultCurrency" defaultValue="USD" />
+        <SelectField
+          label="Currency"
+          name="defaultCurrency"
+          defaultValue="USD"
+          options={COMMON_CURRENCIES.map((c) => ({ value: c, label: c }))}
+        />
+        <SelectField
+          label="Time zone"
+          name="timeZone"
+          defaultValue="America/New_York"
+          options={COMMON_TIME_ZONES.map((tz) => ({ value: tz, label: tz.replace(/_/g, " ") }))}
+        />
       </div>
       <Button disabled={submitting} type="submit">
         {submitting ? "Creating organization…" : "Create organization"}
@@ -88,6 +125,31 @@ function Field(props: {
         placeholder={props.placeholder}
         defaultValue={props.defaultValue}
       />
+    </label>
+  );
+}
+
+function SelectField(props: {
+  label: string;
+  name: string;
+  defaultValue: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+}) {
+  return (
+    <label className="grid gap-2 text-sm font-medium">
+      {props.label}
+      <select
+        required
+        name={props.name}
+        defaultValue={props.defaultValue}
+        className="flex h-[var(--control-height)] w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+      >
+        {props.options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
