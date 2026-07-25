@@ -11,11 +11,11 @@ const createSchema = z.object({ currency: z.string().regex(/^[A-Z]{3}$/) });
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ workOrderId: string }> },
+  context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   try {
     const tenantContext = await getRequestContext();
-    const { workOrderId } = await context.params;
+    const { id: workOrderId } = await context.params;
     const revisions = await db.estimateRevision.findMany({
       where: { workOrderId, organizationId: tenantContext.organizationId },
       orderBy: { revisionNumber: "desc" },
@@ -51,7 +51,7 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ workOrderId: string }> },
+  context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   let body: unknown;
   try {
@@ -67,7 +67,7 @@ export async function POST(
 
   try {
     const tenantContext = await getRequestContext();
-    const { workOrderId } = await context.params;
+    const { id: workOrderId } = await context.params;
     const result = await createDraftRevision({
       db,
       context: tenantContext,
