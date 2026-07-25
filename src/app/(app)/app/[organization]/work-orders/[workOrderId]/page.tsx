@@ -9,6 +9,7 @@ import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { EstimatePanel } from "./estimate-panel";
 import { InvoicePanel } from "./invoice-panel";
+import { WorkOrderEditForm } from "./work-order-edit-form";
 
 export default async function WorkOrderDetailPage({
   params,
@@ -83,7 +84,6 @@ export default async function WorkOrderDetailPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title={wo.number}
-        description={wo.customerConcern}
         breadcrumbs={[
           { label: "Work orders", href: `/app/${context.organizationId}/work-orders` },
           { label: wo.number },
@@ -136,6 +136,19 @@ export default async function WorkOrderDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Customer concern</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WorkOrderEditForm
+            workOrderId={wo.id}
+            initialConcern={wo.customerConcern}
+            canWrite={context.permissions.has("work_orders.write")}
+          />
+        </CardContent>
+      </Card>
 
       {wo.estimateRevisions.length > 0 ? (
         <Card>
