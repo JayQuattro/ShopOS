@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 const createSchema = z.object({
   customerId: z.string().uuid(),
-  assetId: z.string().uuid(),
+  assetId: z.string().uuid().optional(),
   locationId: z.string().uuid(),
   workType: z.enum(["REPAIR", "MAINTENANCE", "PROJECT"]).optional(),
   customerConcern: z.string().trim().min(1).max(2000),

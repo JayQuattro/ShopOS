@@ -113,7 +113,9 @@ export default async function WorkOrdersPage({
                   <tr key={wo.id} className="border-b border-border/60 hover:bg-muted/30">
                     <td className="px-4 py-3 font-mono font-medium">{wo.number}</td>
                     <td className="px-4 py-3">{wo.customer.displayName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{wo.asset.displayName}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {wo.asset?.displayName ?? "—"}
+                    </td>
                     <td className="px-4 py-3">
                       <StatusBadge
                         tone={

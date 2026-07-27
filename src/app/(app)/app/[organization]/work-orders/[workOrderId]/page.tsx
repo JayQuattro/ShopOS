@@ -120,7 +120,7 @@ export default async function WorkOrderDetailPage({
         <Card>
           <CardContent className="py-4">
             <p className="text-xs text-muted-foreground">Asset</p>
-            <p className="font-medium">{wo.asset.displayName}</p>
+            <p className="font-medium">{wo.asset?.displayName ?? "No asset assigned"}</p>
           </CardContent>
         </Card>
         <Card>

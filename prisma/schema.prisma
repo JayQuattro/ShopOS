@@ -206,6 +206,7 @@ model Organization {
   themePublications   OrganizationThemePublication[]
   customerContacts    CustomerContact[]
   customerAddresses   CustomerAddress[]
+  workOrderAssets     WorkOrderAsset[]
 
   @@map("organizations")
 }
@@ -627,6 +628,7 @@ model Asset {
   automotiveProfile AutomotiveAssetProfile?
   equipmentProfile  EquipmentAssetProfile?
   workOrders        WorkOrder[]
+  workOrderAssets   WorkOrderAsset[]
 
   @@unique([organizationId, id], map: "assets_org_id_unique")
   @@index([organizationId, customerId], map: "assets_org_customer_idx")
@@ -663,7 +665,7 @@ model WorkOrder {
   organizationId    String             @map("organization_id") @db.Uuid
   locationId        String             @map("location_id") @db.Uuid
   customerId        String             @map("customer_id") @db.Uuid
-  assetId           String             @map("asset_id") @db.Uuid
+  assetId           String?            @map("asset_id") @db.Uuid
   number            String             @db.VarChar(40)
   workType          WorkType           @default(REPAIR) @map("work_type")
   status            WorkOrderStatus    @default(DRAFT)
@@ -675,7 +677,8 @@ model WorkOrder {
   organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   location          Location           @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
   customer          Customer           @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
-  asset             Asset              @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+  asset             Asset?             @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+  workOrderAssets   WorkOrderAsset[]
   estimateRevisions EstimateRevision[]
   invoice           Invoice?
   activityEvents    ActivityEvent[]
@@ -685,6 +688,23 @@ model WorkOrder {
   @@unique([organizationId, id], map: "work_orders_org_id_unique")
   @@index([organizationId, locationId, status], map: "work_orders_org_location_status_idx")
   @@map("work_orders")
+}
+
+model WorkOrderAsset {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  workOrderId     String   @map("work_order_id") @db.Uuid
+  assetId         String   @map("asset_id") @db.Uuid
+  role            String   @default("primary") @db.VarChar(32)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workOrder       WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  asset           Asset @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, workOrderId, assetId], map: "work_order_assets_org_wo_asset_unique")
+  @@unique([organizationId, id], map: "work_order_assets_org_id_unique")
+  @@index([organizationId, workOrderId], map: "work_order_assets_org_wo_idx")
+  @@map("work_order_assets")
 }
 
 model EstimateRevision {
