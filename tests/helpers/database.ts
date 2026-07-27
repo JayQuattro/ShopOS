@@ -43,6 +43,7 @@ export async function resetTestDatabase(
       "estimate_lines",
       "estimate_revisions",
       "activity_events",
+      "work_order_assets",
       "work_orders",
       "automotive_asset_profiles",
       "equipment_asset_profiles",

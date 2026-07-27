@@ -27,7 +27,7 @@ export function WorkOrderCreateForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!customerId || !assetId || !locationId || !concern.trim()) return;
+    if (!customerId || !locationId || !concern.trim()) return;
     setPending(true);
     setError(null);
     try {
@@ -36,10 +36,10 @@ export function WorkOrderCreateForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerId,
-          assetId,
           locationId,
           workType,
           customerConcern: concern,
+          ...(assetId ? { assetId } : {}),
         }),
       });
       if (!res.ok) {
@@ -80,14 +80,13 @@ export function WorkOrderCreateForm({
           </option>
         ))}
       </select>
-      <label className="text-sm font-medium">Asset</label>
+      <label className="text-sm font-medium">Asset (optional)</label>
       <select
         value={assetId}
         onChange={(e) => setAssetId(e.target.value)}
-        required
-        className="h-[var(--control-height)] rounded-md border border-input bg-background px-3 text-sm"
+        className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
       >
-        <option value="">Select asset…</option>
+        <option value="">No asset — customer-level work</option>
         {assets.map((a) => (
           <option key={a.id} value={a.id}>
             {a.displayName}

@@ -10,7 +10,7 @@ export type WorkOrderSummary = Readonly<{
   status: string;
   customerConcern: string;
   customerId: string;
-  assetId: string;
+  assetId: string | null;
   locationId: string;
   promisedAt: Date | null;
   completedAt: Date | null;
@@ -29,7 +29,7 @@ export type WorkOrderDetail = WorkOrderSummary &
 
 export type CreateWorkOrderInput = Readonly<{
   customerId: string;
-  assetId: string;
+  assetId?: string;
   locationId: string;
   workType?: WorkType;
   customerConcern: string;
@@ -150,14 +150,10 @@ export class WorkOrderRepository {
 
     const ctx = this.deps.context;
 
-    // Verify customer, asset, and location all exist in the same org.
-    const [customer, asset, location] = await Promise.all([
+    // Verify customer and location exist in the same org. Asset is optional.
+    const [customer, location] = await Promise.all([
       this.deps.db.customer.findFirst({
         where: { id: input.customerId, organizationId: ctx.organizationId },
-        select: { id: true },
-      }),
-      this.deps.db.asset.findFirst({
-        where: { id: input.assetId, organizationId: ctx.organizationId },
         select: { id: true },
       }),
       this.deps.db.location.findFirst({
@@ -167,8 +163,16 @@ export class WorkOrderRepository {
     ]);
 
     if (!customer) throw new WorkOrderCreateFailed("customer_not_found");
-    if (!asset) throw new WorkOrderCreateFailed("asset_not_found");
     if (!location) throw new WorkOrderCreateFailed("location_not_found");
+
+    // Verify asset exists in same org if provided.
+    if (input.assetId) {
+      const asset = await this.deps.db.asset.findFirst({
+        where: { id: input.assetId, organizationId: ctx.organizationId },
+        select: { id: true },
+      });
+      if (!asset) throw new WorkOrderCreateFailed("asset_not_found");
+    }
 
     // Generate a sequential work-order number.
     const number = await generateWorkOrderNumber(this.deps.db, ctx.organizationId);
@@ -178,7 +182,7 @@ export class WorkOrderRepository {
         organizationId: ctx.organizationId,
         locationId: input.locationId,
         customerId: input.customerId,
-        assetId: input.assetId,
+        ...(input.assetId ? { assetId: input.assetId } : {}),
         number,
         workType: input.workType ?? "REPAIR",
         customerConcern: input.customerConcern,
