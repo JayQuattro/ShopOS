@@ -224,63 +224,82 @@ export async function recordPayment(
     "payments.record",
   );
 
-  return input.db.$transaction(async (transaction) => {
-    const invoice = await transaction.invoice.findFirst({
-      where: { id: input.invoiceId, organizationId: input.context.organizationId },
-      select: { id: true, totalMinor: true, paidMinor: true, status: true, locationId: true },
-    });
-    if (!invoice) throw new InvoiceFailed("invoice_not_found");
-    if (invoice.status === "DRAFT") throw new InvoiceFailed("invoice_not_issued");
-    if (invoice.status === "VOID") throw new InvoiceFailed("invoice_voided");
+  return input.db
+    .$transaction(async (transaction) => {
+      const invoice = await transaction.invoice.findFirst({
+        where: { id: input.invoiceId, organizationId: input.context.organizationId },
+        select: { id: true, totalMinor: true, paidMinor: true, status: true, locationId: true },
+      });
+      if (!invoice) throw new InvoiceFailed("invoice_not_found");
+      if (invoice.status === "DRAFT") throw new InvoiceFailed("invoice_not_issued");
+      if (invoice.status === "VOID") throw new InvoiceFailed("invoice_voided");
 
-    const balance = invoice.totalMinor - invoice.paidMinor;
-    if (BigInt(input.amountMinor) > balance) {
-      throw new InvoiceFailed("payment_exceeds_balance");
-    }
+      const balance = invoice.totalMinor - invoice.paidMinor;
+      if (BigInt(input.amountMinor) > balance) {
+        throw new InvoiceFailed("payment_exceeds_balance");
+      }
 
-    const payment = await transaction.payment.create({
-      data: {
-        id: randomUUID(),
-        organizationId: input.context.organizationId,
-        locationId: invoice.locationId,
-        invoiceId: invoice.id,
-        amountMinor: BigInt(input.amountMinor),
-        currency: (await transaction.invoice.findUnique({
-          where: { id: invoice.id },
-          select: { currency: true },
-        }))!.currency,
-        method: input.method,
-        reference: input.reference ?? null,
-        receivedAt: input.receivedAt ?? new Date(),
-        recordedByUserId: input.context.actorId,
-      },
-    });
+      const payment = await transaction.payment.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          locationId: invoice.locationId,
+          invoiceId: invoice.id,
+          amountMinor: BigInt(input.amountMinor),
+          currency: (await transaction.invoice.findUnique({
+            where: { id: invoice.id },
+            select: { currency: true },
+          }))!.currency,
+          method: input.method,
+          reference: input.reference ?? null,
+          receivedAt: input.receivedAt ?? new Date(),
+          recordedByUserId: input.context.actorId,
+        },
+      });
 
-    const newPaid = invoice.paidMinor + BigInt(input.amountMinor);
-    const newStatus = newPaid >= invoice.totalMinor ? "PAID" : "PARTIALLY_PAID";
-    await transaction.invoice.update({
-      where: { id: invoice.id },
-      data: { paidMinor: newPaid, status: newStatus },
-    });
+      const newPaid = invoice.paidMinor + BigInt(input.amountMinor);
+      const newStatus = newPaid >= invoice.totalMinor ? "PAID" : "PARTIALLY_PAID";
+      await transaction.invoice.update({
+        where: { id: invoice.id },
+        data: { paidMinor: newPaid, status: newStatus },
+      });
 
-    // Activity event.
-    await transaction.activityEvent.create({
-      data: {
-        id: randomUUID(),
-        organizationId: input.context.organizationId,
-        locationId: invoice.locationId,
-        workOrderId: (await transaction.invoice.findUnique({
-          where: { id: invoice.id },
+      // Activity event.
+      await transaction.activityEvent.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          locationId: invoice.locationId,
+          workOrderId: (await transaction.invoice.findUnique({
+            where: { id: invoice.id },
+            select: { workOrderId: true },
+          }))!.workOrderId,
+          actorUserId: input.context.actorId,
+          eventType: "payment.recorded",
+          summary: `Payment of ${input.amountMinor} minor units recorded via ${input.method}.`,
+        },
+      });
+
+      return { paymentId: payment.id, invoiceStatus: newStatus };
+    })
+    .then(async (result) => {
+      // If the invoice is now fully paid, transition the work order to CLOSED.
+      if (result.invoiceStatus === "PAID") {
+        const invoice = await input.db.invoice.findUnique({
+          where: { id: input.invoiceId },
           select: { workOrderId: true },
-        }))!.workOrderId,
-        actorUserId: input.context.actorId,
-        eventType: "payment.recorded",
-        summary: `Payment of ${input.amountMinor} minor units recorded via ${input.method}.`,
-      },
+        });
+        if (invoice) {
+          await transitionStatus({
+            db: input.db,
+            context: input.context,
+            workOrderId: invoice.workOrderId,
+            targetStatus: "CLOSED",
+          }).catch(() => undefined);
+        }
+      }
+      return result;
     });
-
-    return { paymentId: payment.id, invoiceStatus: newStatus };
-  });
 }
 
 async function generateInvoiceNumber(

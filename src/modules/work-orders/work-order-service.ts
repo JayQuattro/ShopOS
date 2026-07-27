@@ -17,7 +17,12 @@ export type WorkOrderServiceInput = Readonly<{ db: PrismaClient; context: Tenant
 
 export class WorkOrderTransitionFailed extends Error {
   constructor(
-    public readonly reason: "work_order_not_found" | "invalid_transition" | "concurrent_change",
+    public readonly reason:
+      | "work_order_not_found"
+      | "invalid_transition"
+      | "concurrent_change"
+      | "authorization_required"
+      | "estimate_required",
   ) {
     super("The work-order transition could not be completed.");
     this.name = "WorkOrderTransitionFailed";
@@ -25,8 +30,59 @@ export class WorkOrderTransitionFailed extends Error {
 }
 
 /**
+ * Checks whether a work order has the prerequisites for a given target status.
+ * Throws WorkOrderTransitionFailed with a specific reason if not met.
+ *
+ * Business rules:
+ * - ESTIMATING: no prerequisites (can always start estimating).
+ * - AWAITING_AUTHORIZATION: requires at least one PRESENTED estimate revision.
+ * - AUTHORIZED: requires at least one APPROVED authorization decision.
+ * - IN_PROGRESS: only reachable from AUTHORIZED or BLOCKED (state machine handles this).
+ * - COMPLETED: no additional check beyond the state machine.
+ */
+async function assertTransitionPrerequisites(
+  transaction: TransactionalClient,
+  organizationId: string,
+  workOrderId: string,
+  targetStatus: WorkOrderStatus,
+): Promise<void> {
+  if (targetStatus === "AWAITING_AUTHORIZATION") {
+    const hasPresentedRevision = await transaction.estimateRevision.findFirst({
+      where: { workOrderId, organizationId, status: "PRESENTED" },
+      select: { id: true },
+    });
+    if (!hasPresentedRevision) {
+      throw new WorkOrderTransitionFailed("estimate_required");
+    }
+  }
+
+  if (targetStatus === "AUTHORIZED") {
+    // Check that at least one line has been approved via an authorization decision.
+    const hasApproval = await transaction.authorizationDecision.findFirst({
+      where: {
+        decision: "APPROVED",
+        organizationId,
+        estimateLine: {
+          revision: { workOrderId },
+        },
+      },
+      select: { authorizationId: true },
+    });
+    if (!hasApproval) {
+      throw new WorkOrderTransitionFailed("authorization_required");
+    }
+  }
+}
+
+/**
  * Transitions a work order to a new status, enforcing the documented state
- * machine. Writes an activity event and audit event in the same transaction.
+ * machine and business prerequisites. Writes an activity event and audit event
+ * in the same transaction.
+ *
+ * Safety enforcement (AGENTS.md):
+ * - Cannot move to AWAITING_AUTHORIZATION without a presented estimate.
+ * - Cannot move to AUTHORIZED without at least one approved authorization.
+ * - Cannot bypass the state machine (e.g. DRAFT directly to IN_PROGRESS).
  */
 export async function transitionStatus(
   input: WorkOrderServiceInput & {
@@ -51,6 +107,14 @@ export async function transitionStatus(
     if (!canTransition(currentStatus, input.targetStatus)) {
       throw new InvalidStatusTransition(currentStatus, input.targetStatus);
     }
+
+    // Enforce business prerequisites for sensitive transitions.
+    await assertTransitionPrerequisites(
+      transaction,
+      input.context.organizationId,
+      wo.id,
+      input.targetStatus,
+    );
 
     const update = await transaction.workOrder.updateMany({
       where: { id: wo.id, status: currentStatus },
