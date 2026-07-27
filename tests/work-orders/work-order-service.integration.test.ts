@@ -289,16 +289,88 @@ describe("work-order status transitions", { skip: shouldSkip }, () => {
       customerConcern: "Test",
     });
 
-    // Walk forward to CLOSED.
-    for (const status of [
-      "ESTIMATING",
-      "AWAITING_AUTHORIZATION",
-      "AUTHORIZED",
-      "IN_PROGRESS",
-      "COMPLETED",
-      "INVOICED",
-      "CLOSED",
-    ] as const) {
+    // Walk forward to CLOSED. Need to seed estimate + authorization for
+    // the prerequisite checks on AWAITING_AUTHORIZATION and AUTHORIZED.
+    await transitionStatus({
+      db: dbModule.db,
+      context,
+      workOrderId: wo.id,
+      targetStatus: "ESTIMATING",
+    });
+
+    // Create a presented estimate revision with a line.
+    const revision = await dbModule.db.estimateRevision.create({
+      data: {
+        organizationId: seed.orgId,
+        locationId: seed.locationId,
+        workOrderId: wo.id,
+        revisionNumber: 1,
+        status: "PRESENTED",
+        currency: "USD",
+        subtotalMinor: 10000n,
+        discountMinor: 0n,
+        taxMinor: 720n,
+        totalMinor: 10720n,
+        presentedAt: new Date(),
+        createdByUserId: context.actorId,
+      },
+    });
+    const line = await dbModule.db.estimateLine.create({
+      data: {
+        organizationId: seed.orgId,
+        estimateRevisionId: revision.id,
+        serviceGroupKey: "test",
+        kind: "LABOR",
+        description: "Test labor",
+        quantityMilli: 1000,
+        unitPriceMinor: 10000n,
+        grossMinor: 10000n,
+        discountMinor: 0n,
+        taxable: true,
+        taxRateBasisPoints: 720,
+        taxMinor: 720n,
+        totalMinor: 10720n,
+        position: 1,
+      },
+    });
+
+    // Now AWAITING_AUTHORIZATION (has a presented revision).
+    await transitionStatus({
+      db: dbModule.db,
+      context,
+      workOrderId: wo.id,
+      targetStatus: "AWAITING_AUTHORIZATION",
+    });
+
+    // Record an authorization decision (approved).
+    const auth = await dbModule.db.authorization.create({
+      data: {
+        organizationId: seed.orgId,
+        estimateRevisionId: revision.id,
+        method: "IN_PERSON",
+        providedByName: "Test Customer",
+        occurredAt: new Date(),
+      },
+    });
+    await dbModule.db.authorizationDecision.create({
+      data: {
+        organizationId: seed.orgId,
+        authorizationId: auth.id,
+        estimateLineId: line.id,
+        decision: "APPROVED",
+      },
+    });
+
+    // Now AUTHORIZED (has an approved decision).
+    await transitionStatus({
+      db: dbModule.db,
+      context,
+      workOrderId: wo.id,
+      targetStatus: "AUTHORIZED",
+    });
+
+    // Continue the walk.
+    for (const status of ["IN_PROGRESS", "COMPLETED", "INVOICED", "CLOSED"] as const) {
       await transitionStatus({
         db: dbModule.db,
         context,

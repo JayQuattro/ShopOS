@@ -61,7 +61,13 @@ export async function POST(
     }
     if (error instanceof WorkOrderTransitionFailed) {
       const status = error.reason === "work_order_not_found" ? 404 : 409;
-      return Response.json({ error: error.reason }, { status });
+      const messages: Record<string, string> = {
+        authorization_required:
+          "This work order requires customer authorization before it can be marked as authorized.",
+        estimate_required:
+          "This work order requires a presented estimate revision before awaiting authorization.",
+      };
+      return Response.json({ error: error.reason, message: messages[error.reason] }, { status });
     }
     return mapTenantError(error);
   }
