@@ -10,6 +10,7 @@ import { getRequestContext } from "@/modules/tenancy/request-context";
 import { EstimatePanel } from "./estimate-panel";
 import { InvoicePanel } from "./invoice-panel";
 import { WorkOrderEditForm } from "./work-order-edit-form";
+import { StatusTransitionPanel } from "./status-transition-panel";
 
 export default async function WorkOrderDetailPage({
   params,
@@ -136,6 +137,19 @@ export default async function WorkOrderDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Status actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <StatusTransitionPanel
+            workOrderId={wo.id}
+            currentStatus={wo.status}
+            canWrite={context.permissions.has("work_orders.write")}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
