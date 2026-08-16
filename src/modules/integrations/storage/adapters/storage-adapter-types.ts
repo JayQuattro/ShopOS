@@ -206,6 +206,44 @@ export const STORAGE_ADAPTER_DEFINITIONS: ReadonlyArray<StorageAdapterDefinition
     ],
   },
   {
+    key: "azure-blob",
+    displayName: "Azure Blob Storage",
+    description:
+      "Native Azure Blob Storage adapter using the official Azure SDK with shared-key auth. No S3 gateway required; recommended over S3 presets when your files live in Azure.",
+    configFields: [
+      {
+        name: "accountName",
+        label: "Storage Account Name",
+        type: "text",
+        required: true,
+        placeholder: "myshoposstorage",
+      },
+      {
+        name: "container",
+        label: "Container Name",
+        type: "text",
+        required: true,
+        placeholder: "shopos-files",
+      },
+      {
+        name: "endpointSuffix",
+        label: "Endpoint Suffix (optional)",
+        type: "text",
+        required: false,
+        placeholder: "core.windows.net",
+      },
+    ],
+    secretFields: [
+      {
+        name: "accountKey",
+        label: "Account Key",
+        type: "password",
+        required: true,
+        placeholder: "Base64 key from Access keys in the Azure portal",
+      },
+    ],
+  },
+  {
     key: "local",
     displayName: "Local Filesystem",
     description:
