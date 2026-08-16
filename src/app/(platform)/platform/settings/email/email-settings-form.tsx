@@ -18,6 +18,7 @@ type AdapterDefinition = {
     type: string;
     required: boolean;
     placeholder?: string;
+    options?: Array<{ value: string; label: string }>;
   }>;
   secretFields: Array<{
     name: string;
@@ -221,23 +222,126 @@ export function EmailSettingsForm() {
               />
 
               <h4 className="text-sm font-semibold">Connection settings</h4>
-              {activeAdapter.configFields.map((field) => (
-                <label key={field.name} className="grid gap-1 text-sm font-medium">
-                  {field.label}
-                  {field.required ? " *" : ""}
-                  <Input
-                    type={
-                      field.type === "number" ? "number" : field.type === "email" ? "email" : "text"
-                    }
-                    value={config[field.name] ?? ""}
-                    onChange={(e) =>
-                      setConfig((prev) => ({ ...prev, [field.name]: e.target.value }))
-                    }
-                    placeholder={field.placeholder}
-                    disabled={pending}
-                  />
-                </label>
-              ))}
+              {activeAdapter.configFields.map((field) => {
+                if (field.type === "select" && field.options) {
+                  return (
+                    <label key={field.name} className="grid gap-1 text-sm font-medium">
+                      {field.label}
+                      <select
+                        value={config[field.name] ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setConfig((prev) => {
+                            const next = { ...prev, [field.name]: value };
+                            // SMTP preset: auto-fill host/port/secure.
+                            if (field.name === "preset" && selectedAdapter === "smtp") {
+                              const presetMap: Record<
+                                string,
+                                { host: string; port: string; secure: boolean }
+                              > = {
+                                gmail: { host: "smtp.gmail.com", port: "587", secure: false },
+                                outlook: { host: "smtp.office365.com", port: "587", secure: false },
+                                zoho: { host: "smtp.zoho.com", port: "587", secure: false },
+                                "sendgrid-smtp": {
+                                  host: "smtp.sendgrid.net",
+                                  port: "587",
+                                  secure: false,
+                                },
+                                "mailgun-smtp": {
+                                  host: "smtp.mailgun.org",
+                                  port: "587",
+                                  secure: false,
+                                },
+                                "postmark-smtp": {
+                                  host: "smtp.postmarkapp.com",
+                                  port: "587",
+                                  secure: false,
+                                },
+                                "mailjet-smtp": {
+                                  host: "in-v3.mailjet.com",
+                                  port: "587",
+                                  secure: false,
+                                },
+                                "brevo-smtp": {
+                                  host: "smtp-relay.brevo.com",
+                                  port: "587",
+                                  secure: false,
+                                },
+                                smtp2go: { host: "mail.smtp2go.com", port: "587", secure: false },
+                                elastic: {
+                                  host: "smtp.elasticemail.com",
+                                  port: "2525",
+                                  secure: false,
+                                },
+                                smtpcom: { host: "send.smtp.com", port: "587", secure: false },
+                                "ses-smtp": {
+                                  host: "email-smtp.us-east-1.amazonaws.com",
+                                  port: "587",
+                                  secure: false,
+                                },
+                              };
+                              const preset = presetMap[value];
+                              if (preset) {
+                                next.host = preset.host;
+                                next.port = preset.port;
+                                next.secure = String(preset.secure);
+                              }
+                            }
+                            return next;
+                          });
+                        }}
+                        className="h-[var(--control-height)] rounded-md border border-input bg-background px-3 text-sm"
+                        disabled={pending}
+                      >
+                        <option value="">{field.placeholder ?? "Select…"}</option>
+                        {field.options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                }
+
+                if (field.type === "boolean") {
+                  return (
+                    <label key={field.name} className="flex items-center gap-2 text-sm font-medium">
+                      <input
+                        type="checkbox"
+                        checked={config[field.name] === "true"}
+                        onChange={(e) =>
+                          setConfig((prev) => ({ ...prev, [field.name]: String(e.target.checked) }))
+                        }
+                        disabled={pending}
+                      />
+                      {field.label}
+                    </label>
+                  );
+                }
+
+                return (
+                  <label key={field.name} className="grid gap-1 text-sm font-medium">
+                    {field.label}
+                    {field.required ? " *" : ""}
+                    <Input
+                      type={
+                        field.type === "number"
+                          ? "number"
+                          : field.type === "email"
+                            ? "email"
+                            : "text"
+                      }
+                      value={config[field.name] ?? ""}
+                      onChange={(e) =>
+                        setConfig((prev) => ({ ...prev, [field.name]: e.target.value }))
+                      }
+                      placeholder={field.placeholder}
+                      disabled={pending}
+                    />
+                  </label>
+                );
+              })}
 
               <h4 className="text-sm font-semibold">Credentials (write-only)</h4>
               {activeAdapter.secretFields.map((field) => (
