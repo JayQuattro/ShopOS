@@ -4,20 +4,12 @@ import {
   DeleteObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-blob";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { FileStorageProvider, ProviderHealth } from "@/modules/integrations/contracts";
-
-/**
- * Builds a tenant-scoped object key: <organizationId>/<objectKey>.
- * This enforces tenant isolation at the storage level regardless of adapter.
- */
-function scopedKey(organizationId: string, objectKey: string): string {
-  // Prevent path traversal and key injection.
-  const safeKey = objectKey.replace(/\.\./g, "").replace(/^\/+/, "");
-  return `${organizationId}/${safeKey}`;
-}
+import { scopedObjectKey } from "@/modules/integrations/storage/adapters/object-key";
 
 // ─── S3-Compatible ──────────────────────────────────────────────────────────
 
@@ -57,7 +49,7 @@ export class S3StorageProvider implements FileStorageProvider {
     contentType: string;
     body: Uint8Array;
   }): Promise<{ objectKey: string; size: number }> {
-    const key = scopedKey(input.organizationId, input.objectKey);
+    const key = scopedObjectKey(input.organizationId, input.objectKey);
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
@@ -70,7 +62,7 @@ export class S3StorageProvider implements FileStorageProvider {
   }
 
   async get(input: { organizationId: string; objectKey: string }): Promise<Uint8Array> {
-    const key = scopedKey(input.organizationId, input.objectKey);
+    const key = scopedObjectKey(input.organizationId, input.objectKey);
     const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
     const bytes = await result.Body?.transformToByteArray();
     if (!bytes) throw new Error("Object not found or empty.");
@@ -78,7 +70,7 @@ export class S3StorageProvider implements FileStorageProvider {
   }
 
   async delete(input: { organizationId: string; objectKey: string }): Promise<void> {
-    const key = scopedKey(input.organizationId, input.objectKey);
+    const key = scopedObjectKey(input.organizationId, input.objectKey);
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
@@ -87,6 +79,72 @@ export class S3StorageProvider implements FileStorageProvider {
       // Simple check: list objects with max 1 to verify credentials and bucket access.
       const { ListObjectsV2Command } = await import("@aws-sdk/client-s3");
       await this.client.send(new ListObjectsV2Command({ Bucket: this.bucket, MaxKeys: 1 }));
+      return { status: "available" };
+    } catch (error) {
+      return {
+        status: "unavailable",
+        detail: error instanceof Error ? error.message : "Connection failed.",
+      };
+    }
+  }
+}
+
+// ─── Azure Blob Storage (native) ────────────────────────────────────────────
+
+export type AzureBlobStorageConfig = Readonly<{
+  accountName: string;
+  container: string;
+  /** Defaults to core.windows.net; override for sovereign clouds. */
+  endpointSuffix?: string;
+}>;
+
+export type AzureBlobStorageSecret = Readonly<{
+  accountKey: string;
+}>;
+
+export class AzureBlobStorageProvider implements FileStorageProvider {
+  readonly key = "azure-blob";
+  private readonly containerClient: ReturnType<BlobServiceClient["getContainerClient"]>;
+
+  constructor(config: AzureBlobStorageConfig, secret: AzureBlobStorageSecret) {
+    const credential = new StorageSharedKeyCredential(config.accountName, secret.accountKey);
+    const serviceClient = new BlobServiceClient(
+      `https://${config.accountName}.blob.${config.endpointSuffix ?? "core.windows.net"}`,
+      credential,
+    );
+    this.containerClient = serviceClient.getContainerClient(config.container);
+  }
+
+  async put(input: {
+    organizationId: string;
+    objectKey: string;
+    contentType: string;
+    body: Uint8Array;
+  }): Promise<{ objectKey: string; size: number }> {
+    const key = scopedObjectKey(input.organizationId, input.objectKey);
+    await this.containerClient.getBlockBlobClient(key).upload(input.body, input.body.byteLength, {
+      blobHTTPHeaders: { blobContentType: input.contentType },
+    });
+    return { objectKey: input.objectKey, size: input.body.byteLength };
+  }
+
+  async get(input: { organizationId: string; objectKey: string }): Promise<Uint8Array> {
+    const key = scopedObjectKey(input.organizationId, input.objectKey);
+    const buffer = await this.containerClient.getBlobClient(key).downloadToBuffer();
+    return new Uint8Array(buffer);
+  }
+
+  async delete(input: { organizationId: string; objectKey: string }): Promise<void> {
+    const key = scopedObjectKey(input.organizationId, input.objectKey);
+    await this.containerClient.getBlobClient(key).deleteIfExists();
+  }
+
+  async health(): Promise<ProviderHealth> {
+    try {
+      const exists = await this.containerClient.exists();
+      if (!exists) {
+        return { status: "unavailable", detail: "Container not found or not accessible." };
+      }
       return { status: "available" };
     } catch (error) {
       return {
@@ -109,7 +167,7 @@ export class LocalStorageProvider implements FileStorageProvider {
   constructor(private readonly config: LocalStorageConfig) {}
 
   private path(organizationId: string, objectKey: string): string {
-    return join(this.config.basePath, scopedKey(organizationId, objectKey));
+    return join(this.config.basePath, scopedObjectKey(organizationId, objectKey));
   }
 
   async put(input: {

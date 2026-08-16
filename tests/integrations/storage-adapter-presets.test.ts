@@ -81,8 +81,9 @@ describe("storage adapter definitions", () => {
     }
   });
 
-  it("does not offer an Azure S3 preset (no stable S3-compatible endpoint)", () => {
+  it("does not offer an Azure S3 preset (a native adapter exists instead)", () => {
     expect(S3_STORAGE_PRESETS.find((p) => p.value === "azure")).toBeUndefined();
+    expect(STORAGE_ADAPTER_DEFINITIONS.find((a) => a.key === "azure-blob")).toBeDefined();
   });
 
   it("keeps required fields required and the local adapter preset-free", () => {
@@ -91,6 +92,6 @@ describe("storage adapter definitions", () => {
 
     const local = getStorageAdapterDefinition("local");
     expect(local?.configFields.find((f) => f.name === "preset")).toBeUndefined();
-    expect(STORAGE_ADAPTER_DEFINITIONS.map((a) => a.key)).toEqual(["s3", "local"]);
+    expect(STORAGE_ADAPTER_DEFINITIONS.map((a) => a.key)).toEqual(["s3", "azure-blob", "local"]);
   });
 });

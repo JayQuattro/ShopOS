@@ -9,6 +9,7 @@ import {
 } from "@/modules/integrations/crypto/secret-cipher";
 import { getStorageAdapterDefinition } from "@/modules/integrations/storage/adapters/storage-adapter-types";
 import {
+  AzureBlobStorageProvider,
   LocalStorageProvider,
   S3StorageProvider,
 } from "@/modules/integrations/storage/adapters/storage-providers";
@@ -218,6 +219,29 @@ function instantiateStorageAdapter(
           forcePathStyle: config.forcePathStyle === true || config.forcePathStyle === "true",
         },
         { accessKeyId: secret.accessKeyId, secretAccessKey: secret.secretAccessKey ?? "" },
+      );
+    }
+
+    case "azure-blob": {
+      const masterKey = getMasterKeyFromEnv();
+      if (!masterKey || !encryptedSecret) return null;
+      let secret: { accountKey: string };
+      try {
+        secret = JSON.parse(decryptSecret(encryptedSecret, masterKey));
+      } catch {
+        return null;
+      }
+      const accountName = String(config.accountName ?? "");
+      const container = String(config.container ?? "");
+      if (!accountName || !container || !secret.accountKey) return null;
+      const endpointSuffix = config.endpointSuffix ? String(config.endpointSuffix) : undefined;
+      return new AzureBlobStorageProvider(
+        {
+          accountName,
+          container,
+          ...(endpointSuffix ? { endpointSuffix } : {}),
+        },
+        { accountKey: secret.accountKey },
       );
     }
 
