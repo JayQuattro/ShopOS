@@ -31,6 +31,7 @@
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm db:validate && pnpm test"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1111.0",
     "@better-auth/passkey": "^1.6.0",
     "@better-auth/prisma-adapter": "^1.6.0",
     "@better-auth/sso": "^1.6.0",
