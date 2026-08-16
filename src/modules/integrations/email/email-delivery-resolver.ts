@@ -67,27 +67,48 @@ export function getCachedEmailDeliveryProvider(): AuthDeliveryProvider {
 /**
  * Refreshes the email delivery cache from the database.
  * Call this at the start of a request cycle (or after config changes).
+ * If organizationId is provided, resolves org-scoped first then falls back
+ * to platform-scoped (ADR 0008 resolution order).
  */
-export async function refreshEmailDeliveryCache(db: PrismaClient): Promise<AuthDeliveryProvider> {
+export async function refreshEmailDeliveryCache(
+  db: PrismaClient,
+  organizationId?: string,
+): Promise<AuthDeliveryProvider> {
   // In test mode, skip the DB query — tests use the console adapter.
   if (process.env.NODE_ENV === "test") {
     return getCachedEmailDeliveryProvider();
   }
 
-  const connector = await db.connectorInstance.findFirst({
-    where: {
-      scope: "platform",
-      capability: "email_delivery",
-      status: "active",
-    },
-    select: {
-      id: true,
-      adapterKey: true,
-      configuration: true,
-      encryptedSecret: true,
-      updatedAt: true,
-    },
-  });
+  // Resolution order: org-scoped → platform-scoped (ADR 0008).
+  let connector;
+  if (organizationId) {
+    connector = await db.connectorInstance.findFirst({
+      where: { organizationId, capability: "email_delivery", status: "active" },
+      select: {
+        id: true,
+        adapterKey: true,
+        configuration: true,
+        encryptedSecret: true,
+        updatedAt: true,
+      },
+    });
+  }
+  if (!connector) {
+    connector = await db.connectorInstance.findFirst({
+      where: {
+        scope: "platform",
+        capability: "email_delivery",
+        status: "active",
+      },
+      select: {
+        id: true,
+        adapterKey: true,
+        configuration: true,
+        encryptedSecret: true,
+        updatedAt: true,
+      },
+    });
+  }
 
   // No connector configured → fallback chain.
   if (!connector) {
