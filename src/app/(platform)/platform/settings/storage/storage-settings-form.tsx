@@ -8,17 +8,28 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+type ConfigField = {
+  name: string;
+  label: string;
+  type: string;
+  required: boolean;
+  placeholder?: string;
+  options?: Array<{
+    value: string;
+    label: string;
+    endpoint?: string;
+    regionHint?: string;
+    regionDefault?: string;
+    forcePathStyle?: boolean;
+    note?: string;
+  }>;
+};
+
 type AdapterDefinition = {
   key: string;
   displayName: string;
   description: string;
-  configFields: Array<{
-    name: string;
-    label: string;
-    type: string;
-    required: boolean;
-    placeholder?: string;
-  }>;
+  configFields: ConfigField[];
   secretFields: Array<{
     name: string;
     label: string;
@@ -75,6 +86,8 @@ export function StorageSettingsForm() {
   }, []);
 
   const activeAdapter = adapters.find((a) => a.key === selectedAdapter);
+  const presetField = activeAdapter?.configFields.find((f) => f.name === "preset");
+  const activePreset = presetField?.options?.find((o) => o.value === config.preset);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -82,6 +95,11 @@ export function StorageSettingsForm() {
     setError(null);
     setSuccess(null);
     try {
+      if (config.endpoint && /[<>]/.test(config.endpoint)) {
+        throw new Error(
+          "The endpoint still contains placeholder values. Replace <REGION> or <ACCOUNT_ID> with your provider's details.",
+        );
+      }
       const res = await fetch("/api/platform/settings/storage", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -185,21 +203,88 @@ export function StorageSettingsForm() {
                 disabled={pending}
               />
               <h4 className="text-sm font-semibold">Connection settings</h4>
-              {activeAdapter.configFields.map((field) => (
-                <label key={field.name} className="grid gap-1 text-sm font-medium">
-                  {field.label}
-                  {field.required ? " *" : ""}
-                  <Input
-                    type="text"
-                    value={config[field.name] ?? ""}
-                    onChange={(e) =>
-                      setConfig((prev) => ({ ...prev, [field.name]: e.target.value }))
-                    }
-                    placeholder={field.placeholder}
-                    disabled={pending}
-                  />
-                </label>
-              ))}
+              {activeAdapter.configFields.map((field) => {
+                if (field.type === "select" && field.options) {
+                  return (
+                    <div key={field.name} className="grid gap-1">
+                      <label className="text-sm font-medium">
+                        {field.label}
+                        {field.required ? " *" : ""}
+                      </label>
+                      <select
+                        value={config[field.name] ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const option = field.options?.find((o) => o.value === value);
+                          setConfig((prev) => {
+                            const next = { ...prev, [field.name]: value };
+                            if (field.name === "preset" && option) {
+                              if (option.endpoint !== undefined) next.endpoint = option.endpoint;
+                              if (option.forcePathStyle !== undefined) {
+                                next.forcePathStyle = String(option.forcePathStyle);
+                              }
+                              if (option.regionDefault !== undefined) {
+                                next.region = option.regionDefault;
+                              }
+                            }
+                            return next;
+                          });
+                        }}
+                        className="h-[var(--control-height)] rounded-md border border-input bg-background px-3 text-sm"
+                        disabled={pending}
+                      >
+                        <option value="">{field.placeholder ?? "Select…"}</option>
+                        {field.options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      {field.name === "preset" && activePreset?.note ? (
+                        <p className="text-xs text-muted-foreground">{activePreset.note}</p>
+                      ) : null}
+                    </div>
+                  );
+                }
+
+                if (field.type === "boolean") {
+                  return (
+                    <label key={field.name} className="flex items-center gap-2 text-sm font-medium">
+                      <input
+                        type="checkbox"
+                        checked={config[field.name] === "true"}
+                        onChange={(e) =>
+                          setConfig((prev) => ({ ...prev, [field.name]: String(e.target.checked) }))
+                        }
+                        disabled={pending}
+                        className="size-4 rounded border-input"
+                      />
+                      {field.label}
+                      {field.required ? " *" : ""}
+                    </label>
+                  );
+                }
+
+                const placeholder =
+                  field.name === "region" && activePreset?.regionHint
+                    ? activePreset.regionHint
+                    : field.placeholder;
+                return (
+                  <label key={field.name} className="grid gap-1 text-sm font-medium">
+                    {field.label}
+                    {field.required ? " *" : ""}
+                    <Input
+                      type={field.type === "number" ? "number" : "text"}
+                      value={config[field.name] ?? ""}
+                      onChange={(e) =>
+                        setConfig((prev) => ({ ...prev, [field.name]: e.target.value }))
+                      }
+                      placeholder={placeholder}
+                      disabled={pending}
+                    />
+                  </label>
+                );
+              })}
               {activeAdapter.secretFields.length > 0 ? (
                 <>
                   <h4 className="text-sm font-semibold">Credentials (write-only)</h4>

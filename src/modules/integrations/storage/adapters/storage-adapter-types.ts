@@ -6,6 +6,26 @@
  * namespaced by organizationId to enforce tenant isolation.
  */
 
+/**
+ * A select option that can also auto-fill related config fields when chosen.
+ * Used by the "preset" field on the S3 adapter: picking Cloudflare R2 fills in
+ * the endpoint template, the region, and forcePathStyle.
+ */
+export type StorageConfigFieldOption = Readonly<{
+  value: string;
+  label: string;
+  /** Endpoint template placed in the endpoint field. Empty = clear it. */
+  endpoint?: string;
+  /** Example region shown as the placeholder for the region field. */
+  regionHint?: string;
+  /** Region value filled in when the provider has a fixed/global region. */
+  regionDefault?: string;
+  /** Value applied to the forcePathStyle boolean. */
+  forcePathStyle?: boolean;
+  /** Extra guidance rendered under the select. */
+  note?: string;
+}>;
+
 export type StorageAdapterDefinition = Readonly<{
   key: string;
   displayName: string;
@@ -13,9 +33,10 @@ export type StorageAdapterDefinition = Readonly<{
   configFields: ReadonlyArray<{
     name: string;
     label: string;
-    type: "text" | "number" | "boolean";
+    type: "text" | "number" | "boolean" | "select";
     required: boolean;
     placeholder?: string;
+    options?: ReadonlyArray<StorageConfigFieldOption>;
   }>;
   secretFields: ReadonlyArray<{
     name: string;
@@ -26,13 +47,137 @@ export type StorageAdapterDefinition = Readonly<{
   }>;
 }>;
 
+/**
+ * Presets for popular S3-compatible object storage providers. Endpoint
+ * templates may contain <PLACEHOLDER> segments the operator replaces with
+ * their account or region values. Azure Blob Storage is intentionally absent:
+ * it has no stable S3-compatible endpoint and needs a native adapter instead.
+ */
+export const S3_STORAGE_PRESETS: ReadonlyArray<StorageConfigFieldOption> = [
+  {
+    value: "aws",
+    label: "Amazon S3",
+    endpoint: "",
+    regionHint: "us-east-1",
+    forcePathStyle: false,
+    note: "Leave the endpoint empty to use Amazon's default regional endpoints.",
+  },
+  {
+    value: "r2",
+    label: "Cloudflare R2",
+    endpoint: "https://<ACCOUNT_ID>.r2.cloudflarestorage.com",
+    regionHint: "auto",
+    regionDefault: "auto",
+    forcePathStyle: true,
+    note: "Replace <ACCOUNT_ID> with your Cloudflare account ID from the R2 dashboard.",
+  },
+  {
+    value: "b2",
+    label: "Backblaze B2",
+    endpoint: "https://s3.<REGION>.backblazeb2.com",
+    regionHint: "us-west-004",
+    forcePathStyle: true,
+    note: "Replace <REGION> with your bucket's region as shown on its B2 bucket page.",
+  },
+  {
+    value: "wasabi",
+    label: "Wasabi",
+    endpoint: "https://s3.<REGION>.wasabisys.com",
+    regionHint: "us-east-1",
+    forcePathStyle: true,
+    note: "Replace <REGION> with your Wasabi region, e.g. us-east-1, eu-central-2, ap-northeast-1.",
+  },
+  {
+    value: "spaces",
+    label: "DigitalOcean Spaces",
+    endpoint: "https://<REGION>.digitaloceanspaces.com",
+    regionHint: "nyc3",
+    forcePathStyle: true,
+    note: "Replace <REGION> with your Space's region, e.g. nyc3, ams3, sgp1, fra1.",
+  },
+  {
+    value: "oss",
+    label: "Alibaba Cloud OSS",
+    endpoint: "https://oss-<REGION>.aliyuncs.com",
+    regionHint: "cn-hangzhou",
+    forcePathStyle: true,
+    note: "Replace <REGION> with your OSS region, e.g. cn-hangzhou, us-west-1, ap-southeast-1.",
+  },
+  {
+    value: "gcs",
+    label: "Google Cloud Storage",
+    endpoint: "https://storage.googleapis.com",
+    regionHint: "auto",
+    regionDefault: "auto",
+    forcePathStyle: true,
+    note: "Uses the GCS S3-compatible XML API. Create HMAC access keys in the GCS console.",
+  },
+  {
+    value: "linode",
+    label: "Akamai (Linode) Object Storage",
+    endpoint: "https://<REGION>.linodeobjects.com",
+    regionHint: "us-east-1",
+    forcePathStyle: true,
+    note: "Replace <REGION> with your cluster, e.g. us-east-1, eu-central-1, ap-south-1.",
+  },
+  {
+    value: "scaleway",
+    label: "Scaleway Object Storage",
+    endpoint: "https://s3.<REGION>.scw.cloud",
+    regionHint: "fr-par",
+    forcePathStyle: true,
+    note: "Replace <REGION> with your Scaleway zone, e.g. fr-par, nl-ams, pl-waw.",
+  },
+  {
+    value: "vultr",
+    label: "Vultr Object Storage",
+    endpoint: "https://<REGION>.vultrobjects.com",
+    regionHint: "ewr1",
+    forcePathStyle: true,
+    note: "Replace <REGION> with your Vultr location, e.g. ewr1, sjc1, ams1.",
+  },
+  {
+    value: "storj",
+    label: "Storj",
+    endpoint: "https://gateway.storjshare.io",
+    regionHint: "us-east-1",
+    regionDefault: "us-east-1",
+    forcePathStyle: true,
+    note: "Uses Storj's hosted S3-compatible gateway with your access grant credentials.",
+  },
+  {
+    value: "minio",
+    label: "MinIO (self-hosted)",
+    endpoint: "http://localhost:9000",
+    regionHint: "us-east-1",
+    regionDefault: "us-east-1",
+    forcePathStyle: true,
+    note: "Point the endpoint at your MinIO deployment; use https in production.",
+  },
+  {
+    value: "custom",
+    label: "Custom / Other S3-Compatible",
+    endpoint: "",
+    forcePathStyle: true,
+    note: "Enter the endpoint, region, and bucket details from your provider.",
+  },
+];
+
 export const STORAGE_ADAPTER_DEFINITIONS: ReadonlyArray<StorageAdapterDefinition> = [
   {
     key: "s3",
     displayName: "S3-Compatible",
     description:
-      "Amazon S3, Cloudflare R2, MinIO, Backblaze B2, DigitalOcean Spaces, Wasabi, or any S3-compatible object storage.",
+      "Amazon S3, Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces, Alibaba OSS, Google Cloud Storage, MinIO, and any other S3-compatible object storage. Pick a preset to auto-fill the endpoint.",
     configFields: [
+      {
+        name: "preset",
+        label: "Provider Preset",
+        type: "select",
+        required: false,
+        placeholder: "Choose your storage provider…",
+        options: S3_STORAGE_PRESETS,
+      },
       {
         name: "bucket",
         label: "Bucket Name",
@@ -50,7 +195,7 @@ export const STORAGE_ADAPTER_DEFINITIONS: ReadonlyArray<StorageAdapterDefinition
       },
       {
         name: "forcePathStyle",
-        label: "Force Path Style (MinIO/R2)",
+        label: "Force Path Style",
         type: "boolean",
         required: false,
       },
