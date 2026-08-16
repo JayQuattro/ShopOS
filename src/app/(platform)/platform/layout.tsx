@@ -43,12 +43,20 @@ export default async function PlatformLayout({ children }: { children: ReactNode
                 </Link>
               ) : null}
               {canManageConnectors ? (
-                <Link
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                  href="/platform/settings/email"
-                >
-                  Email
-                </Link>
+                <>
+                  <Link
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                    href="/platform/settings/email"
+                  >
+                    Email
+                  </Link>
+                  <Link
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                    href="/platform/settings/storage"
+                  >
+                    Storage
+                  </Link>
+                </>
               ) : null}
             </nav>
           </div>
