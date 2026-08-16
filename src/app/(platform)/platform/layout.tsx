@@ -17,6 +17,7 @@ export default async function PlatformLayout({ children }: { children: ReactNode
   }
 
   const canManageOperators = context.permissions.has("platform.operators.manage");
+  const canManageConnectors = context.permissions.has("platform.connectors.manage");
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -39,6 +40,14 @@ export default async function PlatformLayout({ children }: { children: ReactNode
                   href="/platform/operators"
                 >
                   Operators
+                </Link>
+              ) : null}
+              {canManageConnectors ? (
+                <Link
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                  href="/platform/settings/email"
+                >
+                  Email
                 </Link>
               ) : null}
             </nav>

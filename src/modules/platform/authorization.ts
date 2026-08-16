@@ -6,6 +6,7 @@ export type PlatformPermission =
   | "platform.organizations.suspend"
   | "platform.entitlements.manage"
   | "platform.operators.manage"
+  | "platform.connectors.manage"
   | "platform.audit.read";
 
 export type PlatformContext = Readonly<{
@@ -30,6 +31,7 @@ const ROLE_PERMISSIONS: Readonly<Record<PlatformOperatorRole, ReadonlySet<Platfo
     "platform.organizations.suspend",
     "platform.entitlements.manage",
     "platform.operators.manage",
+    "platform.connectors.manage",
     "platform.audit.read",
   ]),
 };

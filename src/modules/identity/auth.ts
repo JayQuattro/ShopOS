@@ -11,20 +11,28 @@ import type {
   AuthDeliveryMessage,
   AuthDeliveryProvider,
 } from "@/modules/identity/delivery/auth-delivery-provider";
-import { resolveAuthDeliveryProvider } from "@/modules/identity/delivery/resolve-auth-delivery-provider";
+import {
+  getCachedEmailDeliveryProvider,
+  refreshEmailDeliveryCache,
+} from "@/modules/integrations/email/email-delivery-resolver";
 
 const config = getAuthConfig();
 
-const deliveryProvider: AuthDeliveryProvider = resolveAuthDeliveryProvider(
-  config.deliveryProviderKey,
-);
+// Lazily resolve the delivery provider from the database-backed connector
+// configuration. The synchronous getCachedEmailDeliveryProvider returns the
+// cached adapter (or the dev/test fallback) so Better Auth's construction-time
+// callbacks never block on a DB query.
+const deliveryProvider: AuthDeliveryProvider = getCachedEmailDeliveryProvider();
+
+// Refresh the cache asynchronously so the first send picks up the DB config.
+void refreshEmailDeliveryCache(db);
 
 export const authDeliveryProvider = deliveryProvider;
 
 function deliver(message: AuthDeliveryMessage): void {
-  // Fire-and-forget per Better Auth's timing-attack guidance; provider resolves
-  // synchronously and must never throw on a real send failure.
-  deliveryProvider.send(message);
+  // Fire-and-forget per Better Auth's timing-attack guidance. Uses the
+  // cached provider — refreshEmailDeliveryCache keeps it current.
+  getCachedEmailDeliveryProvider().send(message);
 }
 
 export const auth = betterAuth({

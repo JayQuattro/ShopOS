@@ -158,6 +158,7 @@ model User {
   activityEvents         ActivityEvent[]                   @relation("ActivityActor")
   auditEvents            AuditEvent[]                      @relation("AuditActor")
   themePublications      OrganizationThemePublication[]    @relation("ThemePublishedBy")
+  connectorInstances     ConnectorInstance[]               @relation("ConnectorCreatedBy")
   platformOperatorGrants PlatformOperatorGrant[]           @relation("PlatformOperatorGrantUser")
   platformGrantsGiven    PlatformOperatorGrant[]           @relation("PlatformOperatorGrantGrantedBy")
   platformGrantsRevoked  PlatformOperatorGrant[]           @relation("PlatformOperatorGrantRevokedBy")
@@ -208,6 +209,7 @@ model Organization {
   customerAddresses   CustomerAddress[]
   workOrderAssets     WorkOrderAsset[]
   authorizationLinks  AuthorizationLink[]
+  connectorInstances  ConnectorInstance[]
 
   @@map("organizations")
 }
@@ -352,6 +354,30 @@ model OrganizationEntitlement {
   @@unique([organizationId, key], map: "organization_entitlements_org_key_unique")
   @@index([organizationId, enabled], map: "organization_entitlements_org_enabled_idx")
   @@map("organization_entitlements")
+}
+
+model ConnectorInstance {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String?   @map("organization_id") @db.Uuid
+  scope              String    @db.VarChar(32)
+  capability         String    @db.VarChar(64)
+  adapterKey         String    @map("adapter_key") @db.VarChar(64)
+  displayName        String    @map("display_name") @db.VarChar(180)
+  configuration      Json      @default("{}")
+  encryptedSecret    String?   @map("encrypted_secret")
+  status             String    @default("active") @db.VarChar(32)
+  lastHealthCheckAt  DateTime? @map("last_health_check_at") @db.Timestamptz(6)
+  lastHealthStatus   String?   @map("last_health_status") @db.VarChar(64)
+  lastHealthDetail   String?   @map("last_health_detail") @db.VarChar(500)
+  createdByUserId    String?   @map("created_by_user_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy          User?     @relation("ConnectorCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([scope, capability, status], map: "connector_scope_capability_status_idx")
+  @@index([organizationId, capability], map: "connector_org_capability_idx")
+  @@map("connector_instances")
 }
 
 model OutboxEvent {
