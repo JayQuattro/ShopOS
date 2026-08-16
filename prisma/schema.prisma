@@ -207,6 +207,7 @@ model Organization {
   customerContacts    CustomerContact[]
   customerAddresses   CustomerAddress[]
   workOrderAssets     WorkOrderAsset[]
+  authorizationLinks  AuthorizationLink[]
 
   @@map("organizations")
 }
@@ -733,6 +734,7 @@ model EstimateRevision {
   supersededBy         EstimateRevision[]     @relation("EstimateSupersession")
   lines                EstimateLine[]
   authorizations       Authorization[]
+  authorizationLinks   AuthorizationLink[]
 
   @@unique([workOrderId, revisionNumber], map: "estimate_revision_number_unique")
   @@unique([organizationId, id], map: "estimate_revisions_org_id_unique")
@@ -802,6 +804,23 @@ model AuthorizationDecision {
 
   @@id([authorizationId, estimateLineId])
   @@map("authorization_decisions")
+}
+
+model AuthorizationLink {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  estimateRevisionId   String   @map("estimate_revision_id") @db.Uuid
+  token                String   @unique @db.VarChar(128)
+  expiresAt            DateTime @map("expires_at") @db.Timestamptz(6)
+  revokedAt            DateTime? @map("revoked_at") @db.Timestamptz(6)
+  usedAt               DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  estimateRevision     EstimateRevision @relation(fields: [organizationId, estimateRevisionId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, estimateRevisionId], map: "auth_links_org_revision_idx")
+  @@index([token, expiresAt], map: "auth_links_token_expiry_idx")
+  @@map("authorization_links")
 }
 
 model Invoice {
