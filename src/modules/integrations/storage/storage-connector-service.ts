@@ -89,6 +89,13 @@ export async function upsertPlatformStorageConnector(
     }
   }
 
+  // Preset endpoint templates use <PLACEHOLDER> segments; reject unresolved ones
+  // rather than storing an endpoint that can never connect.
+  const endpoint = input.configuration.endpoint ? String(input.configuration.endpoint) : "";
+  if (/[<>]/.test(endpoint)) {
+    throw new StorageConnectorOperationFailed("invalid_configuration");
+  }
+
   const masterKey = getMasterKeyFromEnv();
   const encryptedSecret =
     adapter.secretFields.length > 0
@@ -208,7 +215,7 @@ function instantiateStorageAdapter(
           bucket,
           ...(region ? { region } : {}),
           ...(endpoint ? { endpoint } : {}),
-          forcePathStyle: Boolean(config.forcePathStyle),
+          forcePathStyle: config.forcePathStyle === true || config.forcePathStyle === "true",
         },
         { accessKeyId: secret.accessKeyId, secretAccessKey: secret.secretAccessKey ?? "" },
       );
