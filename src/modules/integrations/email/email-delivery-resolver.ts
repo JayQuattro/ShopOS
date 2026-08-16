@@ -2,19 +2,19 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import type { AuthDeliveryProvider } from "@/modules/identity/delivery/auth-delivery-provider";
 import { getConsoleAuthDeliveryProvider } from "@/modules/identity/delivery/console-auth-delivery-provider";
 import { getNullAuthDeliveryProvider } from "@/modules/identity/delivery/null-auth-delivery-provider";
+import { decryptSecret, getMasterKeyFromEnv } from "@/modules/integrations/crypto/secret-cipher";
 import {
-  decryptSecret,
-  getMasterKeyFromEnv,
-  SecretCipherError,
-} from "@/modules/integrations/crypto/secret-cipher";
+  AzureAcsAdapter,
+  BrevoAdapter,
+  MailgunAdapter,
+  MailjetAdapter,
+  PostmarkAdapter,
+  SendGridAdapter,
+  SesAdapter,
+  ZohoZeptoAdapter,
+} from "@/modules/integrations/email/adapters/api-adapters";
 import { ResendAuthDeliveryProvider } from "@/modules/integrations/email/adapters/resend-auth-delivery";
 import { SmtpAuthDeliveryProvider } from "@/modules/integrations/email/adapters/smtp-auth-delivery";
-import type {
-  ResendConfiguration,
-  SmtpConfiguration,
-  SmtpSecret,
-  ResendSecret,
-} from "@/modules/integrations/email/adapters/adapter-types";
 
 /**
  * Resolves the active email delivery adapter from the database.
@@ -132,35 +132,89 @@ function instantiateAdapter(
   let secretJson: string;
   try {
     secretJson = decryptSecret(encryptedSecret, masterKey);
-  } catch (error) {
-    if (error instanceof SecretCipherError) return null;
+  } catch {
     return null;
   }
 
   const config = (configuration ?? {}) as Record<string, unknown>;
+  const secret = JSON.parse(secretJson) as Record<string, string>;
+  const fromAddress = String(config.fromAddress ?? "");
+  const fromName = config.fromName ? String(config.fromName) : undefined;
+
+  if (!fromAddress) return null;
+
+  const from = fromName ? { fromAddress, fromName } : { fromAddress: fromAddress as string };
 
   switch (adapterKey) {
     case "smtp": {
-      const smtpConfig: SmtpConfiguration = {
-        host: String(config.host ?? ""),
-        port: Number(config.port ?? 587),
-        secure: Boolean(config.secure ?? false),
-        fromAddress: String(config.fromAddress ?? ""),
-        ...(config.fromName ? { fromName: String(config.fromName) } : {}),
-      };
-      const smtpSecret = JSON.parse(secretJson) as SmtpSecret;
-      if (!smtpConfig.host || !smtpConfig.fromAddress || !smtpSecret.username) return null;
-      return new SmtpAuthDeliveryProvider(smtpConfig, smtpSecret);
+      const host = String(config.host ?? "");
+      const username = secret.username ?? "";
+      if (!host || !username) return null;
+      return new SmtpAuthDeliveryProvider(
+        {
+          host,
+          port: Number(config.port ?? 587),
+          secure: Boolean(config.secure ?? false),
+          ...from,
+        },
+        { username, password: secret.password ?? "" },
+      );
     }
 
     case "resend": {
-      const resendConfig: ResendConfiguration = {
-        fromAddress: String(config.fromAddress ?? ""),
-        ...(config.fromName ? { fromName: String(config.fromName) } : {}),
-      };
-      const resendSecret = JSON.parse(secretJson) as ResendSecret;
-      if (!resendConfig.fromAddress || !resendSecret.apiKey) return null;
-      return new ResendAuthDeliveryProvider(resendConfig, resendSecret);
+      if (!secret.apiKey) return null;
+      return new ResendAuthDeliveryProvider(from, { apiKey: secret.apiKey });
+    }
+
+    case "sendgrid": {
+      if (!secret.apiKey) return null;
+      return new SendGridAdapter(from, { apiKey: secret.apiKey });
+    }
+
+    case "postmark": {
+      if (!secret.serverToken) return null;
+      return new PostmarkAdapter(from, { serverToken: secret.serverToken });
+    }
+
+    case "mailgun": {
+      const domain = String(config.domain ?? "");
+      if (!domain || !secret.apiKey) return null;
+      return new MailgunAdapter(
+        { domain, region: (config.region === "eu" ? "eu" : "us") as "us" | "eu", ...from },
+        { apiKey: secret.apiKey },
+      );
+    }
+
+    case "mailjet": {
+      if (!secret.apiKey || !secret.apiSecret) return null;
+      return new MailjetAdapter(from, { apiKey: secret.apiKey, apiSecret: secret.apiSecret });
+    }
+
+    case "brevo": {
+      if (!secret.apiKey) return null;
+      return new BrevoAdapter(from, { apiKey: secret.apiKey });
+    }
+
+    case "zoho-zepto": {
+      if (!secret.sendMailToken) return null;
+      return new ZohoZeptoAdapter(from, { sendMailToken: secret.sendMailToken });
+    }
+
+    case "ses": {
+      const region = String(config.region ?? "us-east-1");
+      if (!secret.accessKeyId || !secret.secretAccessKey) return null;
+      return new SesAdapter(
+        { region, ...from },
+        { accessKeyId: secret.accessKeyId, secretAccessKey: secret.secretAccessKey },
+      );
+    }
+
+    case "azure-acs": {
+      if (!secret.connectionString) return null;
+      return new AzureAcsAdapter(
+        { connectionString: secret.connectionString, ...from },
+        { connectionString: secret.connectionString },
+      );
     }
 
     default:
