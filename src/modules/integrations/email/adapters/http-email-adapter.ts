@@ -2,16 +2,21 @@ import type {
   AuthDeliveryMessage,
   AuthDeliveryProvider,
 } from "@/modules/identity/delivery/auth-delivery-provider";
+import type { GenericEmailSender } from "@/modules/integrations/email/generic-email-sender";
 
 /**
  * Shared HTTP-based email adapter base class.
  *
  * Most email APIs follow the same pattern: POST to an endpoint with an auth
  * header and a JSON body containing from/to/subject/content. This base class
- * handles the fire-and-forget send and error swallowing, letting each adapter
- * only define its endpoint, auth, and body format.
+ * handles the send and lets each adapter only define its endpoint, auth, and
+ * body format.
+ *
+ * Two send paths share the transport: `send` (fire-and-forget, for pre-tenant
+ * auth messages per ADR 0011) and `sendRaw` (awaited, rejects on failure, for
+ * tenant-facing transactional email with retry semantics).
  */
-export abstract class HttpEmailAdapter implements AuthDeliveryProvider {
+export abstract class HttpEmailAdapter implements AuthDeliveryProvider, GenericEmailSender {
   abstract readonly key: string;
 
   protected abstract readonly endpoint: string;
@@ -43,18 +48,25 @@ export abstract class HttpEmailAdapter implements AuthDeliveryProvider {
   send(message: AuthDeliveryMessage): void {
     const subject = buildSubject(message);
     const text = buildTextBody(message);
-    const from = this.buildFrom(this.getFromAddress(), this.getFromName());
+    void this.sendRaw({ organizationId: "", to: message.to, subject, text }).catch(() => undefined);
+  }
 
-    void fetch(this.endpoint, {
+  async sendRaw(
+    input: Readonly<{ organizationId: string; to: string; subject: string; text: string }>,
+  ): Promise<void> {
+    // organizationId is attribution metadata; transports ignore it.
+    const from = this.buildFrom(this.getFromAddress(), this.getFromName());
+    const res = await fetch(this.endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...this.buildHeaders(),
       },
-      body: JSON.stringify(this.buildBody(from, message.to, subject, text)),
-    })
-      .then(() => undefined)
-      .catch(() => undefined);
+      body: JSON.stringify(this.buildBody(from, input.to, input.subject, input.text)),
+    });
+    if (!res.ok) {
+      throw new Error(`email adapter ${this.key} failed with status ${res.status}`);
+    }
   }
 
   async verify(): Promise<boolean> {

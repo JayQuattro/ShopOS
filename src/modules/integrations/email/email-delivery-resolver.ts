@@ -142,7 +142,13 @@ export async function refreshEmailDeliveryCache(
   return getCachedEmailDeliveryProvider();
 }
 
-function instantiateAdapter(
+/**
+ * Instantiates an email adapter from connector configuration. Exported for the
+ * tenant-scoped transactional email service, which resolves org → platform
+ * connectors per send (ADR 0008 resolution order) rather than using the
+ * process-wide auth cache.
+ */
+export function instantiateAdapter(
   adapterKey: string,
   configuration: unknown,
   encryptedSecret: string | null,

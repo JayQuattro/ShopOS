@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import { db } from "../src/db/client";
+import { EstimatePresentedEmailHandler } from "../src/modules/estimates/estimate-email-handler";
 import { EventHandlerRegistry } from "../src/modules/outbox/event-handler";
 import { OutboxDispatcher } from "../src/modules/outbox/outbox-dispatcher";
 
@@ -21,9 +22,7 @@ async function main(): Promise<void> {
   const batchSize = Number(process.env.OUTBOX_BATCH_SIZE ?? 50);
 
   const handlers = new EventHandlerRegistry();
-  // Register concrete handlers here as they are built. The NoOp fallback
-  // handles any event type without a registered handler so the queue never
-  // blocks on an unregistered event.
+  handlers.register(new EstimatePresentedEmailHandler(db));
 
   const dispatcher = new OutboxDispatcher({
     db,
