@@ -43,43 +43,46 @@ Roadmap state is deliberately explicit: complete means implemented and verified,
 
 ## Phase 2 - Customers and assets
 
-- [ ] Individual and business customers
-- [ ] Contacts, addresses, locale/communication preferences, notes, and organization references
-- [ ] General assets with automotive and equipment typed profiles
-- [ ] Fast tenant-scoped customer and asset search
+- [x] Individual and business customers
+- [x] Contacts, addresses, notes, and organization references
+- [x] General assets with automotive and equipment typed profiles
+- [x] Fast tenant-scoped customer and asset search
+- [ ] Locale/communication preferences
 - [ ] Provider-neutral on-demand translation for allowlisted low-risk user content
 
 ## Phase 3 - Repair work orders
 
-- [ ] Concerns, requested services, assignments, blockers, and controlled statuses
-- [ ] Labor, parts, fees, discounts, taxes, and clear totals
-- [ ] Activity history and audit trail
+- [x] Concerns, requested services, blockers, and controlled statuses
+- [x] Labor, parts, fees, discounts, taxes, and clear totals
+- [x] Activity history and audit trail
+- [ ] Assignments (technician assignment)
+- [x] Optional asset (customer-level work) and multi-asset join table
 
 ## Phase 4 - Estimates and authorization
 
-- [ ] Immutable presented estimate revisions
-- [ ] Line or service-group approval and decline
-- [ ] Expiring, revocable customer authorization links
-- [ ] Enforcement preventing unauthorized work from becoming approved or complete
+- [x] Immutable presented estimate revisions
+- [x] Line or service-group approval and decline
+- [x] Expiring, revocable customer authorization links
+- [x] Enforcement preventing unauthorized work from becoming approved or complete
 - [ ] Immutable locale and reviewed-translation provenance for presented estimates and authorizations
 
 ## Phase 5 - Invoices and payments
 
-- [ ] Invoice snapshot from completed authorized work
-- [ ] Partial and full manual payment recording
-- [ ] Remaining balance and closeout rules
+- [x] Invoice snapshot from completed authorized work
+- [x] Partial and full manual payment recording
+- [x] Remaining balance and closeout rules
 
 ## Phase 6 - Demonstration and hardening
 
-- [ ] Deterministic automotive, motorcycle, and lawn-equipment examples
-- [ ] Disabled future custom-build example without fake project functionality
-- [ ] Full workflow integration tests
+- [x] Deterministic automotive, motorcycle, and lawn-equipment examples
+- [x] Disabled future custom-build example without fake project functionality
+- [x] Full workflow integration tests
 - [ ] Representative-role usability testing and accessibility, responsive, keyboard, zoom, and
       screen-reader review
-- [ ] Automated accessibility checks, interaction tests, and visual regression for supported themes
-- [ ] Catalog completeness, pseudo-locale, RTL, formatting, mixed-direction, and multilingual workflow
+- [x] Automated accessibility checks, interaction tests, and visual regression for supported themes
+- [x] Catalog completeness, pseudo-locale, RTL, formatting, mixed-direction, and multilingual workflow
       tests
-- [ ] Lint, format, types, tests, migrations, seed, and production build in CI
+- [x] Lint, format, types, tests, migrations, seed, and production build in CI
 
 ## Later
 
