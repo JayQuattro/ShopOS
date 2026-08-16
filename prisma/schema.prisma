@@ -159,6 +159,7 @@ model User {
   auditEvents            AuditEvent[]                      @relation("AuditActor")
   themePublications      OrganizationThemePublication[]    @relation("ThemePublishedBy")
   connectorInstances     ConnectorInstance[]               @relation("ConnectorCreatedBy")
+  uploadedAttachments   WorkOrderAttachment[]             @relation("AttachmentUploadedBy")
   platformOperatorGrants PlatformOperatorGrant[]           @relation("PlatformOperatorGrantUser")
   platformGrantsGiven    PlatformOperatorGrant[]           @relation("PlatformOperatorGrantGrantedBy")
   platformGrantsRevoked  PlatformOperatorGrant[]           @relation("PlatformOperatorGrantRevokedBy")
@@ -208,6 +209,7 @@ model Organization {
   customerContacts    CustomerContact[]
   customerAddresses   CustomerAddress[]
   workOrderAssets     WorkOrderAsset[]
+  workOrderAttachments WorkOrderAttachment[]
   authorizationLinks  AuthorizationLink[]
   connectorInstances  ConnectorInstance[]
 
@@ -706,6 +708,7 @@ model WorkOrder {
   customer          Customer           @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
   asset             Asset?             @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
   workOrderAssets   WorkOrderAsset[]
+  attachments       WorkOrderAttachment[]
   estimateRevisions EstimateRevision[]
   invoice           Invoice?
   activityEvents    ActivityEvent[]
@@ -732,6 +735,25 @@ model WorkOrderAsset {
   @@unique([organizationId, id], map: "work_order_assets_org_id_unique")
   @@index([organizationId, workOrderId], map: "work_order_assets_org_wo_idx")
   @@map("work_order_assets")
+}
+
+model WorkOrderAttachment {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  workOrderId      String   @map("work_order_id") @db.Uuid
+  objectKey        String   @map("object_key") @db.VarChar(512)
+  fileName         String   @map("file_name") @db.VarChar(255)
+  contentType      String   @map("content_type") @db.VarChar(127)
+  sizeBytes        Int      @map("size_bytes")
+  uploadedByUserId String?  @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workOrder        WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  uploadedBy       User?     @relation("AttachmentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "work_order_attachments_org_id_unique")
+  @@index([organizationId, workOrderId], map: "work_order_attachments_org_wo_idx")
+  @@map("work_order_attachments")
 }
 
 model EstimateRevision {
