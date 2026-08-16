@@ -1,9 +1,10 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import type { PrismaClient, PricedLineKind } from "@/generated/prisma/client";
 import { calculateLine, currencyCode, type PricedLineInput } from "@/modules/shared/money";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import { transitionStatus } from "@/modules/work-orders/work-order-service";
+import { AUTHORIZATION_LINK_TTL_HOURS } from "@/modules/estimates/estimate-email-handler";
 
 type TransactionalClient = Omit<
   PrismaClient,
@@ -238,6 +239,49 @@ export async function presentRevision(
         after: { revisionNumber: revision.revisionNumber, totalMinor: totals.totalMinor },
       },
     });
+
+    // Revoke outstanding links from earlier revisions of this work order so the
+    // customer can only act on the newest presented estimate.
+    await transaction.authorizationLink.updateMany({
+      where: {
+        organizationId: input.context.organizationId,
+        revokedAt: null,
+        usedAt: null,
+        estimateRevision: {
+          workOrderId: revision.workOrderId,
+          id: { not: revision.id },
+        },
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    // Auto-issue the customer authorization link for this revision.
+    const token = randomBytes(32).toString("base64url");
+    await transaction.authorizationLink.create({
+      data: {
+        id: randomUUID(),
+        organizationId: input.context.organizationId,
+        estimateRevisionId: revision.id,
+        token,
+        expiresAt: new Date(Date.now() + AUTHORIZATION_LINK_TTL_HOURS * 60 * 60 * 1000),
+      },
+    });
+
+    // Enqueue the customer notification through the transactional outbox.
+    await transaction.outboxEvent.create({
+      data: {
+        id: randomUUID(),
+        organizationId: input.context.organizationId,
+        eventType: "estimate.presented",
+        aggregateType: "estimate_revision",
+        aggregateId: revision.id,
+        payload: {
+          revisionId: revision.id,
+          workOrderId: revision.workOrderId,
+          locationId: revision.locationId,
+        },
+      },
+    });
   });
 
   // Transition the work order toward AWAITING_AUTHORIZATION. If the work order
@@ -260,12 +304,16 @@ export async function presentRevision(
         targetStatus: "ESTIMATING",
       }).catch(() => undefined);
     }
-    await transitionStatus({
-      db: input.db,
-      context: input.context,
-      workOrderId: revision.workOrderId,
-      targetStatus: "AWAITING_AUTHORIZATION",
-    });
+    // Re-presenting after a supersede leaves the work order already in
+    // AWAITING_AUTHORIZATION; the state machine forbids self-transitions.
+    if (wo && wo.status !== "AWAITING_AUTHORIZATION") {
+      await transitionStatus({
+        db: input.db,
+        context: input.context,
+        workOrderId: revision.workOrderId,
+        targetStatus: "AWAITING_AUTHORIZATION",
+      });
+    }
   }
 }
 

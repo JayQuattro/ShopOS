@@ -4,16 +4,18 @@ import type {
   AuthDeliveryMessage,
   AuthDeliveryProvider,
 } from "@/modules/identity/delivery/auth-delivery-provider";
+import type { GenericEmailSender } from "@/modules/integrations/email/generic-email-sender";
 import type { SmtpConfiguration, SmtpSecret } from "./adapter-types";
 
 /**
  * SMTP adapter implementing the pre-tenant AuthDeliveryProvider interface.
  *
  * Sends auth emails (verification, password reset, magic link, OTPs) through
- * any SMTP server. The send is fire-and-forget per the interface contract —
- * errors are caught internally so recovery endpoints never crash.
+ * any SMTP server. The auth send is fire-and-forget per the interface
+ * contract; `sendRaw` is awaited and rejects on failure for transactional
+ * email with retry semantics.
  */
-export class SmtpAuthDeliveryProvider implements AuthDeliveryProvider {
+export class SmtpAuthDeliveryProvider implements AuthDeliveryProvider, GenericEmailSender {
   readonly key = "smtp";
   private readonly transporter: nodemailer.Transporter;
 
@@ -33,20 +35,28 @@ export class SmtpAuthDeliveryProvider implements AuthDeliveryProvider {
   }
 
   send(message: AuthDeliveryMessage): void {
-    const subject = buildSubject(message);
-    const text = buildTextBody(message);
+    void this.sendRaw({
+      organizationId: "",
+      to: message.to,
+      subject: buildSubject(message),
+      text: buildTextBody(message),
+    }).catch(() => undefined);
+  }
+
+  async sendRaw(
+    input: Readonly<{ organizationId: string; to: string; subject: string; text: string }>,
+  ): Promise<void> {
+    // organizationId is attribution metadata; transports ignore it.
     const from = this.config.fromName
       ? `${this.config.fromName} <${this.config.fromAddress}>`
       : this.config.fromAddress;
 
-    void this.transporter
-      .sendMail({
-        from,
-        to: message.to,
-        subject,
-        text,
-      })
-      .catch(() => undefined);
+    await this.transporter.sendMail({
+      from,
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+    });
   }
 
   async verify(): Promise<boolean> {

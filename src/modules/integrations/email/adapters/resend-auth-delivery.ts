@@ -2,15 +2,17 @@ import type {
   AuthDeliveryMessage,
   AuthDeliveryProvider,
 } from "@/modules/identity/delivery/auth-delivery-provider";
+import type { GenericEmailSender } from "@/modules/integrations/email/generic-email-sender";
 import type { ResendConfiguration, ResendSecret } from "./adapter-types";
 
 /**
  * Resend adapter implementing the pre-tenant AuthDeliveryProvider interface.
  *
- * Uses the Resend REST API via fetch (no SDK dependency). Fire-and-forget
- * per the interface contract.
+ * Uses the Resend REST API via fetch (no SDK dependency). The auth send is
+ * fire-and-forget per the interface contract; `sendRaw` is awaited and
+ * rejects on failure for transactional email with retry semantics.
  */
-export class ResendAuthDeliveryProvider implements AuthDeliveryProvider {
+export class ResendAuthDeliveryProvider implements AuthDeliveryProvider, GenericEmailSender {
   readonly key = "resend";
 
   constructor(
@@ -19,13 +21,23 @@ export class ResendAuthDeliveryProvider implements AuthDeliveryProvider {
   ) {}
 
   send(message: AuthDeliveryMessage): void {
-    const subject = buildSubject(message);
-    const text = buildTextBody(message);
+    void this.sendRaw({
+      organizationId: "",
+      to: message.to,
+      subject: buildSubject(message),
+      text: buildTextBody(message),
+    }).catch(() => undefined);
+  }
+
+  async sendRaw(
+    input: Readonly<{ organizationId: string; to: string; subject: string; text: string }>,
+  ): Promise<void> {
+    // organizationId is attribution metadata; transports ignore it.
     const from = this.config.fromName
       ? `${this.config.fromName} <${this.config.fromAddress}>`
       : this.config.fromAddress;
 
-    void fetch("https://api.resend.com/emails", {
+    const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.secret.apiKey}`,
@@ -33,13 +45,14 @@ export class ResendAuthDeliveryProvider implements AuthDeliveryProvider {
       },
       body: JSON.stringify({
         from,
-        to: [message.to],
-        subject,
-        text,
+        to: [input.to],
+        subject: input.subject,
+        text: input.text,
       }),
-    })
-      .then(() => undefined)
-      .catch(() => undefined);
+    });
+    if (!res.ok) {
+      throw new Error(`email adapter resend failed with status ${res.status}`);
+    }
   }
 
   async verify(): Promise<boolean> {
