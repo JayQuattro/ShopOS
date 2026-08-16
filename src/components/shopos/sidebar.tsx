@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Users, Wrench, Package, ClipboardList } from "lucide-react";
+import { Building2, Users, Wrench, Package, ClipboardList, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -66,6 +66,17 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           href: `${baseHref}/work-orders`,
           icon: Package,
           permission: "work_orders.read",
+        },
+      ],
+    },
+    {
+      heading: "Settings",
+      items: [
+        {
+          label: "Email",
+          href: `${baseHref}/settings/email`,
+          icon: Settings,
+          permission: "organizations.manage",
         },
       ],
     },
