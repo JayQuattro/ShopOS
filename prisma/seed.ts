@@ -21,6 +21,11 @@ const ids = {
   estimateLabor: "00000000-0000-4000-8000-000000000411",
   estimatePart: "00000000-0000-4000-8000-000000000412",
   estimateActivity: "00000000-0000-4000-8000-000000000421",
+  authorization: "00000000-0000-4000-8000-000000000501",
+  motorcycleInvoice: "00000000-0000-4000-8000-000000000601",
+  motorcyclePayment: "00000000-0000-4000-8000-000000000701",
+  oaklineContact: "00000000-0000-4000-8000-000000000801",
+  oaklineAddress: "00000000-0000-4000-8000-000000000802",
 } as const;
 
 async function seed(): Promise<void> {
@@ -362,6 +367,140 @@ async function seed(): Promise<void> {
         eventType: "estimate.presented",
         summary: "Estimate revision 1 presented for $643.20.",
         occurredAt: new Date("2026-07-23T14:00:00Z"),
+      },
+    });
+
+    // --- Full workflow: authorization, invoice, payment on the Subaru work order ---
+
+    await transaction.authorization.upsert({
+      where: { id: ids.authorization },
+      update: {},
+      create: {
+        id: ids.authorization,
+        organizationId: ids.organization,
+        estimateRevisionId: ids.estimateRevision,
+        method: "IN_PERSON",
+        recordedByUserId: ids.owner,
+        providedByName: "Alex Rivera",
+        note: "Customer approved brake service in person.",
+        occurredAt: new Date("2026-07-23T15:00:00Z"),
+      },
+    });
+
+    await transaction.authorizationDecision.upsert({
+      where: {
+        authorizationId_estimateLineId: {
+          authorizationId: ids.authorization,
+          estimateLineId: ids.estimateLabor,
+        },
+      },
+      update: {},
+      create: {
+        organizationId: ids.organization,
+        authorizationId: ids.authorization,
+        estimateLineId: ids.estimateLabor,
+        decision: "APPROVED",
+      },
+    });
+
+    await transaction.authorizationDecision.upsert({
+      where: {
+        authorizationId_estimateLineId: {
+          authorizationId: ids.authorization,
+          estimateLineId: ids.estimatePart,
+        },
+      },
+      update: {},
+      create: {
+        organizationId: ids.organization,
+        authorizationId: ids.authorization,
+        estimateLineId: ids.estimatePart,
+        decision: "APPROVED",
+      },
+    });
+
+    // Update work order status to AUTHORIZED (estimate was presented + approved).
+    await transaction.workOrder.update({
+      where: { id: ids.subaruWorkOrder },
+      data: { status: "AUTHORIZED" },
+    });
+
+    // --- Invoice + payment for the motorcycle work order (full flow to CLOSED) ---
+
+    await transaction.invoice.upsert({
+      where: { id: ids.motorcycleInvoice },
+      update: {},
+      create: {
+        id: ids.motorcycleInvoice,
+        organizationId: ids.organization,
+        locationId: ids.durham,
+        workOrderId: ids.motorcycleWorkOrder,
+        number: "INV-1001",
+        status: "PAID",
+        currency: "USD",
+        subtotalMinor: 32_000n,
+        discountMinor: 0n,
+        taxMinor: 2_304n,
+        totalMinor: 34_304n,
+        paidMinor: 34_304n,
+        issuedAt: new Date("2026-07-23T10:00:00Z"),
+      },
+    });
+
+    await transaction.payment.upsert({
+      where: { id: ids.motorcyclePayment },
+      update: {},
+      create: {
+        id: ids.motorcyclePayment,
+        organizationId: ids.organization,
+        locationId: ids.durham,
+        invoiceId: ids.motorcycleInvoice,
+        amountMinor: 34_304n,
+        currency: "USD",
+        method: "CARD_EXTERNAL",
+        reference: "SEED-DEMO-001",
+        receivedAt: new Date("2026-07-23T11:00:00Z"),
+        recordedByUserId: ids.owner,
+      },
+    });
+
+    // Update motorcycle work order to CLOSED (invoice fully paid).
+    await transaction.workOrder.update({
+      where: { id: ids.motorcycleWorkOrder },
+      data: { status: "CLOSED", completedAt: new Date("2026-07-23T10:00:00Z") },
+    });
+
+    // --- Customer contact and address for the business customer ---
+
+    await transaction.customerContact.upsert({
+      where: { id: ids.oaklineContact },
+      update: {},
+      create: {
+        id: ids.oaklineContact,
+        organizationId: ids.organization,
+        customerId: ids.oakline,
+        name: "Sam Grounds",
+        role: "Operations Manager",
+        email: "sam@oakline.example.test",
+        phone: "555-0199",
+        isPrimary: true,
+      },
+    });
+
+    await transaction.customerAddress.upsert({
+      where: { id: ids.oaklineAddress },
+      update: {},
+      create: {
+        id: ids.oaklineAddress,
+        organizationId: ids.organization,
+        customerId: ids.oakline,
+        label: "Main Office",
+        line1: "4200 Greenway Blvd",
+        city: "Raleigh",
+        stateProvince: "NC",
+        postalCode: "27607",
+        country: "US",
+        isPrimary: true,
       },
     });
   });
