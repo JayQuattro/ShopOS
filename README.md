@@ -119,22 +119,26 @@ pnpm build
 
 ## Current limitations
 
-Authentication routes, session handling, email verification, password reset, magic-link and email-OTP
-sign-in, two-factor and passkey enrollment, and the auth UI are implemented behind a platform-level
-delivery boundary. The deterministic console adapter is used in development and tests; a safe null
-adapter is the production default until a real email provider is registered behind the same
-interface. Tenant-aware request context is implemented: every protected request rebuilds an
-immutable authorization context from server-side membership, role/permission, and location-access
-records, and the first tenant-scoped repository (customers) proves cross-organization, cross-location,
-and permission-denial isolation against a real database. Organization and first-location onboarding,
-platform operator authorization, organization lifecycle actions, audit history, and an outbox record
-are implemented. Membership, role, permission, location-access, and invitation management — including
-privilege-escalation prevention and last-owner safety — are implemented with tenant-scoped services,
-API routes, an admin UI, and adversarial integration tests. A transactional-outbox dispatcher
-(`pnpm worker`) drains recorded events, revalidates tenant context for every job, and dispatches to
-registered handlers with retry, backoff, and dead-letter handling. Subscription/billing
-reconciliation, support access, and persisted application workflows beyond
-customers remain roadmap work. The schema and module boundaries prepare for them but must not be
+The complete customer-to-payment operational workflow is implemented: customers (with contacts and
+addresses), assets (with automotive and equipment typed profiles), work orders (with optional/multi
+assets, a 10-state state machine with enforcement, and activity feed), estimate revisions (immutable
+once presented, with supersession), authorizations (line-level approval/decline with enforcement,
+plus expiring revocable customer authorization links), invoices (immutable snapshots from completed
+work), and payments (partial and full, with auto-closeout). The operational UI covers the full
+lifecycle with dashboard metrics, list/detail pages, create/edit forms, and status transition
+actions.
+
+Authentication (sign-in, sign-up, verification, recovery, magic link, email OTP, MFA, passkeys) is
+implemented behind a platform-level delivery boundary with the console adapter in development and
+a safe null adapter in production. Tenant-aware request context rebuilds permissions from
+server-side records on every protected request. Organization onboarding, the SaaS control plane
+(platform operators, entitlements, plans, organization lifecycle), and membership/role/location
+management are implemented with adversarial integration tests. A transactional-outbox dispatcher
+(`pnpm worker`) drains recorded events with tenant-context revalidation.
+
+Not yet implemented: billing webhook reconciliation, real email provider adapters, SSO
+(SAML/OIDC/Microsoft/Google), support access/impersonation, native mobile apps, full locale-prefixed
+routing, and file storage. The schema and module boundaries prepare for these but must not be
 mistaken for implemented behavior.
 
 ## License
