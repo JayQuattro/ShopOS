@@ -45,6 +45,7 @@ export async function resetTestDatabase(
       "activity_events",
       "connector_instances",
       "work_order_assets",
+      "work_order_attachments",
       "work_orders",
       "automotive_asset_profiles",
       "equipment_asset_profiles",

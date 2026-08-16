@@ -11,6 +11,7 @@ import { EstimatePanel } from "./estimate-panel";
 import { InvoicePanel } from "./invoice-panel";
 import { WorkOrderEditForm } from "./work-order-edit-form";
 import { StatusTransitionPanel } from "./status-transition-panel";
+import { AttachmentPanel } from "./attachment-panel";
 
 export default async function WorkOrderDetailPage({
   params,
@@ -249,6 +250,11 @@ export default async function WorkOrderDetailPage({
           />
         </CardContent>
       </Card>
+
+      <AttachmentPanel
+        workOrderId={wo.id}
+        canWrite={context.permissions.has("work_orders.write")}
+      />
 
       <Card>
         <CardHeader>
