@@ -134,10 +134,11 @@ function SignInForm() {
  */
 function sanitizeRedirect(raw: string | null): string {
   if (!raw) {
-    return "/";
+    // Signed-in users belong in their workspace, not on the marketing page.
+    return "/app";
   }
   if (raw.startsWith("/") && !raw.startsWith("//")) {
     return raw;
   }
-  return "/";
+  return "/app";
 }

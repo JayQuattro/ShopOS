@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { db } from "@/db/client";
+import { getCurrentSession } from "@/modules/identity/session";
 import { StatusBadge } from "@/components/shopos/status-badge";
 import { ThemeSwitcher } from "@/components/shopos/theme/theme-switcher";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +54,19 @@ const workflow = [
   "Payment",
 ] as const;
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Signed-in visitors belong in their workspace; surface a direct path in.
+  const session = await getCurrentSession();
+  let workspaceHref: string | null = null;
+  if (session) {
+    const membership = await db.organizationMembership.findFirst({
+      where: { userId: session.user.id, active: true },
+      orderBy: { createdAt: "asc" },
+      select: { organization: { select: { id: true } } },
+    });
+    workspaceHref = membership ? `/app/${membership.organization.id}` : "/onboarding/organization";
+  }
+
   return (
     <div className="min-h-svh overflow-hidden bg-background">
       <a
@@ -83,6 +97,14 @@ export default function HomePage() {
               Bootstrap environment
             </Badge>
             <ThemeSwitcher compact />
+            {workspaceHref ? (
+              <Button asChild size="sm">
+                <Link href={workspaceHref}>
+                  Open your workspace
+                  <ArrowRight aria-hidden className="size-4" />
+                </Link>
+              </Button>
+            ) : null}
           </div>
         </div>
       </header>
