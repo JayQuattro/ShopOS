@@ -35,6 +35,7 @@ export default async function WorkOrdersPage({
       customerConcern: true,
       customer: { select: { displayName: true } },
       asset: { select: { displayName: true } },
+      assignedTechnician: { select: { displayName: true } },
       createdAt: true,
     },
     take: 100,
@@ -103,6 +104,7 @@ export default async function WorkOrdersPage({
                   <th className="px-4 py-3 font-medium">RO #</th>
                   <th className="px-4 py-3 font-medium">Customer</th>
                   <th className="px-4 py-3 font-medium">Asset</th>
+                  <th className="px-4 py-3 font-medium">Technician</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Type</th>
                   <th className="px-4 py-3 font-medium">Actions</th>
@@ -115,6 +117,11 @@ export default async function WorkOrdersPage({
                     <td className="px-4 py-3">{wo.customer.displayName}</td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {wo.asset?.displayName ?? "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {wo.assignedTechnician?.displayName ?? (
+                        <span className="text-muted-foreground">Unassigned</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge
