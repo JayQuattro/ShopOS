@@ -193,6 +193,7 @@ model User {
   assignedWorkOrders    WorkOrder[]                       @relation("WorkOrderTechnician")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   timeEntries            TimeEntry[]                       @relation("TimeEntryWorker")
+  createdTasks           WorkOrderTask[]                @relation("TaskCreatedBy")
   auditEvents            AuditEvent[]                      @relation("AuditActor")
   themePublications      OrganizationThemePublication[]    @relation("ThemePublishedBy")
   connectorInstances     ConnectorInstance[]               @relation("ConnectorCreatedBy")
@@ -233,6 +234,7 @@ model Organization {
   workOrders          WorkOrder[]
   appointments        Appointment[]
   timeEntries          TimeEntry[]
+  workOrderTasks     WorkOrderTask[]
   estimateRevisions   EstimateRevision[]
   estimateLines       EstimateLine[]
   authorizations      Authorization[]
@@ -787,6 +789,7 @@ model WorkOrder {
   invoice           Invoice?
   appointments      Appointment[]
   timeEntries        TimeEntry[]
+  tasks              WorkOrderTask[]
   activityEvents    ActivityEvent[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
@@ -794,6 +797,36 @@ model WorkOrder {
   @@unique([organizationId, id], map: "work_orders_org_id_unique")
   @@index([organizationId, locationId, status], map: "work_orders_org_location_status_idx")
   @@map("work_orders")
+}
+
+enum WorkOrderTaskStatus {
+  OPEN             @map("open")
+  DONE             @map("done")
+  NEEDS_ATTENTION  @map("needs_attention")
+  SKIPPED          @map("skipped")
+
+  @@map("work_order_task_status")
+}
+
+model WorkOrderTask {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String             @map("organization_id") @db.Uuid
+  locationId      String             @map("location_id") @db.Uuid
+  workOrderId     String             @map("work_order_id") @db.Uuid
+  position        Int
+  title           String             @db.VarChar(200)
+  status          WorkOrderTaskStatus @default(OPEN)
+  outcomeNote     String?            @map("outcome_note") @db.VarChar(500)
+  createdByUserId String?            @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workOrder       WorkOrder          @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  createdBy       User?              @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "work_order_tasks_org_id_unique")
+  @@index([organizationId, workOrderId, position], map: "work_order_tasks_org_wo_position_idx")
+  @@map("work_order_tasks")
 }
 
 model WorkOrderAsset {
