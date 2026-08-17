@@ -110,6 +110,8 @@ export async function validateAuthorizationLink(
     linkId: string;
     organizationId: string;
     revisionId: string;
+    workOrderId: string;
+    locationId: string;
     revisionNumber: number;
     documentKind: "BASELINE" | "CHANGE_ORDER";
     changeOrderNumber: number | null;
@@ -138,6 +140,7 @@ export async function validateAuthorizationLink(
         select: {
           id: true,
           workOrderId: true,
+          locationId: true,
           revisionNumber: true,
           documentKind: true,
           changeOrderNumber: true,
@@ -197,6 +200,8 @@ export async function validateAuthorizationLink(
     linkId: link.id,
     organizationId: link.organizationId,
     revisionId: rev.id,
+    workOrderId: rev.workOrderId,
+    locationId: rev.locationId,
     revisionNumber: rev.revisionNumber,
     documentKind: rev.documentKind,
     changeOrderNumber: rev.changeOrderNumber,

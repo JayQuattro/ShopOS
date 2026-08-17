@@ -265,6 +265,11 @@ export async function issueInvoice(
       throw new InvoiceFailed("invoice_not_issued");
     }
 
+    const issued = await transaction.invoice.findUnique({
+      where: { id: input.invoiceId },
+      select: { workOrderId: true, locationId: true },
+    });
+
     // Audit.
     await transaction.auditEvent.create({
       data: {
@@ -277,6 +282,24 @@ export async function issueInvoice(
         requestId: input.context.requestId,
       },
     });
+
+    // Customer notification via the outbox.
+    if (issued) {
+      await transaction.outboxEvent.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          eventType: "invoice.issued",
+          aggregateType: "invoice",
+          aggregateId: input.invoiceId,
+          payload: {
+            invoiceId: input.invoiceId,
+            workOrderId: issued.workOrderId,
+            locationId: issued.locationId,
+          },
+        },
+      });
+    }
   });
 
   // Transition work order to INVOICED.
@@ -354,19 +377,37 @@ export async function recordPayment(
         data: { paidMinor: newPaid, status: newStatus },
       });
 
+      const workOrderRef = await transaction.invoice.findUnique({
+        where: { id: invoice.id },
+        select: { workOrderId: true },
+      });
+
       // Activity event.
       await transaction.activityEvent.create({
         data: {
           id: randomUUID(),
           organizationId: input.context.organizationId,
           locationId: invoice.locationId,
-          workOrderId: (await transaction.invoice.findUnique({
-            where: { id: invoice.id },
-            select: { workOrderId: true },
-          }))!.workOrderId,
+          workOrderId: workOrderRef!.workOrderId,
           actorUserId: input.context.actorId,
           eventType: "payment.recorded",
           summary: `Payment of ${input.amountMinor} minor units recorded via ${input.method}.`,
+        },
+      });
+
+      // Customer receipt via the outbox.
+      await transaction.outboxEvent.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          eventType: "payment.recorded",
+          aggregateType: "payment",
+          aggregateId: payment.id,
+          payload: {
+            invoiceId: invoice.id,
+            workOrderId: workOrderRef!.workOrderId,
+            locationId: invoice.locationId,
+          },
         },
       });
 

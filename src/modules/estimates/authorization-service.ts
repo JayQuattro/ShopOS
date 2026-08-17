@@ -155,6 +155,22 @@ export async function recordAuthorization(
         },
       });
 
+      // Customer receipt email via the outbox.
+      await transaction.outboxEvent.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          eventType: "authorization.recorded",
+          aggregateType: "authorization",
+          aggregateId: authorization.id,
+          payload: {
+            revisionId: revision.id,
+            workOrderId: revision.workOrderId,
+            locationId: revision.locationId,
+          },
+        },
+      });
+
       return { authorizationId: authorization.id };
     })
     .then(async (result) => {
