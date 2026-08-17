@@ -20,37 +20,44 @@ const REQUEST_ID_HEADER = "x-request-id";
  * server-side membership and location-access records — never from browser
  * authority (ADR 0002, ADR 0005).
  *
- * The client-supplied organization is read from the Better Auth session's
+ * The organization comes from the Better Auth session's
  * `activeOrganizationId`, which is explicitly a selection hint and is
- * re-verified against stored membership here. Throws `TenantContextNotResolved`
- * when there is no session, no selected organization, or no active membership.
+ * re-verified against stored membership here. Organization-scoped pages pass
+ * the org id from their URL via `forOrganizationId` — the URL is then the
+ * hint, with the same membership re-verification — so a freshly signed-in
+ * user (no selection yet) and deep links into another member organization
+ * resolve correctly. Throws `TenantContextNotResolved`
+ * when there is no session, no organization to resolve, or no active
+ * membership.
  *
  * Repositories and background jobs must take the resolved `TenantContext` as an
  * explicit argument rather than calling this function: jobs run outside the
  * request lifecycle where `headers()` and `cache()` are unavailable, and they
  * must carry and revalidate their own organization context.
  */
-export const getRequestContext = cache(async (): Promise<TenantContext> => {
-  const session = await getCurrentSession();
+export const getRequestContext = cache(
+  async (forOrganizationId?: string): Promise<TenantContext> => {
+    const session = await getCurrentSession();
 
-  if (!session) {
-    throw new TenantContextNotResolved("unauthenticated");
-  }
+    if (!session) {
+      throw new TenantContextNotResolved("unauthenticated");
+    }
 
-  const organizationId = session.session.activeOrganizationId;
-  if (!organizationId) {
-    throw new TenantContextNotResolved("organization_not_selected");
-  }
+    const organizationId = forOrganizationId ?? session.session.activeOrganizationId;
+    if (!organizationId) {
+      throw new TenantContextNotResolved("organization_not_selected");
+    }
 
-  const requestId = (await readRequestId()) ?? globalRequestId();
+    const requestId = (await readRequestId()) ?? globalRequestId();
 
-  return resolveTenantContext({
-    db,
-    actorId: session.user.id,
-    organizationId,
-    requestId,
-  });
-});
+    return resolveTenantContext({
+      db,
+      actorId: session.user.id,
+      organizationId,
+      requestId,
+    });
+  },
+);
 
 async function readRequestId(): Promise<string | undefined> {
   const requestHeaders = await headers();

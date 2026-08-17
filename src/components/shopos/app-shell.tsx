@@ -12,6 +12,8 @@ import { UserMenu } from "./user-menu";
 
 export type AppShellProps = Readonly<{
   children: ReactNode;
+  /** The organization from the URL — the selection hint for the tenant context. */
+  organizationId?: string;
 }>;
 
 /**
@@ -20,8 +22,11 @@ export type AppShellProps = Readonly<{
  * the full shell context (authorization + display data) server-side; interactive
  * pieces (switcher, drawer, user menu) are client islands.
  */
-export async function AppShell({ children }: AppShellProps) {
-  const shell = await resolveShellContext(db);
+export async function AppShell({ children, organizationId }: AppShellProps) {
+  const shell = await resolveShellContext(
+    db,
+    organizationId && organizationId.length > 0 ? organizationId : undefined,
+  );
 
   // Fetch other organizations the user belongs to (for the switcher).
   const otherMemberships = await db.organizationMembership.findMany({

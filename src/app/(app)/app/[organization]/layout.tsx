@@ -22,14 +22,16 @@ export default async function AppLayout({
     organization,
   );
 
+  let orgId = organization;
   if (!isUuid) {
-    const orgId = await resolveOrgIdentifier(db, organization);
-    if (orgId) {
-      redirect(`/app/${orgId}`);
+    const resolved = await resolveOrgIdentifier(db, organization);
+    if (resolved) {
+      redirect(`/app/${resolved}`);
     }
     // If the slug doesn't resolve, fall through to the shell which will show
     // a context mismatch error (the resolved context won't match).
+    orgId = "";
   }
 
-  return <AppShell>{children}</AppShell>;
+  return <AppShell organizationId={orgId}>{children}</AppShell>;
 }

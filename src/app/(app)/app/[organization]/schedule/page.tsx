@@ -56,8 +56,8 @@ export default async function SchedulePage({
   params: Promise<{ organization: string }>;
   searchParams: Promise<{ date?: string }>;
 }) {
-  const context = await getRequestContext();
   const { organization } = await params;
+  const context = await getRequestContext(organization);
   const { date: dateParam } = await searchParams;
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;

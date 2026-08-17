@@ -2,7 +2,7 @@
 
 import { Building2, Check, ChevronDown, MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +42,26 @@ export function OrgLocationSwitcher({
 }: OrgLocationSwitcherProps) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+
+  // Repair the session's organization hint when it does not match the URL
+  // (fresh sign-in or deep link): org-scoped API routes read the hint, so it
+  // must be synced even though pages resolve context from the URL.
+  const repaired = useRef(false);
+  useEffect(() => {
+    if (repaired.current || !organizationId) return;
+    repaired.current = true;
+    void (async () => {
+      try {
+        const { data: session } = await authClient.getSession();
+        if (session?.session?.activeOrganizationId !== organizationId) {
+          await authClient.organization.setActive({ organizationId });
+          router.refresh();
+        }
+      } catch {
+        // Non-member organizations fail setActive; pages deny those requests.
+      }
+    })();
+  }, [organizationId, router]);
 
   async function switchOrganization(targetOrgId: string) {
     if (targetOrgId === organizationId) return;

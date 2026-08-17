@@ -12,8 +12,8 @@ export default async function MembersPage({
 }: {
   params: Promise<{ organization: string }>;
 }) {
-  const context = await getRequestContext();
   const { organization } = await params;
+  const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">{membershipStrings.errors.unauthorized}</p>;
   }
