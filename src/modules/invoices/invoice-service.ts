@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { PrismaClient, PaymentMethod } from "@/generated/prisma/client";
+import type { PaymentMethod, PricedLineKind, PrismaClient } from "@/generated/prisma/client";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import { transitionStatus } from "@/modules/work-orders/work-order-service";
 
@@ -21,7 +21,8 @@ export class InvoiceFailed extends Error {
       | "invoice_not_issued"
       | "invoice_already_paid"
       | "invoice_voided"
-      | "payment_exceeds_balance",
+      | "payment_exceeds_balance"
+      | "change_order_pending",
   ) {
     super("The invoice operation could not be completed.");
     this.name = "InvoiceFailed";
@@ -29,12 +30,18 @@ export class InvoiceFailed extends Error {
 }
 
 /**
- * Creates an invoice snapshot from a completed work order. The invoice is a
- * new immutable record — it does not follow later estimate edits. One invoice
- * per work order is enforced by a unique constraint.
+ * Creates an invoice snapshot from a work order. The invoice is a new
+ * immutable record — it does not follow later estimate edits. One invoice per
+ * work order is enforced by a unique constraint.
  *
- * The work order must be COMPLETED. The latest PRESENTED estimate revision's
- * lines are snapshot into invoice lines.
+ * Lines are assembled from the cumulative authorized scope (ADR 0014): the
+ * latest PRESENTED baseline revision plus every PRESENTED change order.
+ * Under the organization's default `invoiceLinePolicy` (APPROVED_ONLY) only
+ * lines the customer approved are billed; ALL_LINES preserves the legacy
+ * copy-everything behavior. Invoice totals are recomputed from the selected
+ * lines — credit lines contribute negative amounts.
+ *
+ * No invoice may be created while a change order is still undecided.
  */
 export async function createInvoiceFromWorkOrder(
   input: InvoiceServiceInput & { workOrderId: string },
@@ -55,6 +62,18 @@ export async function createInvoiceFromWorkOrder(
       throw new InvoiceFailed("work_order_not_completed");
     }
 
+    const pendingChangeOrder = await transaction.estimateRevision.findFirst({
+      where: {
+        organizationId: input.context.organizationId,
+        workOrderId: wo.id,
+        documentKind: "CHANGE_ORDER",
+        status: "PRESENTED",
+        lines: { some: { authorizationDecisions: { none: {} } } },
+      },
+      select: { id: true },
+    });
+    if (pendingChangeOrder) throw new InvoiceFailed("change_order_pending");
+
     // Check for existing invoice (one per work order).
     const existing = await transaction.invoice.findFirst({
       where: { workOrderId: wo.id, organizationId: input.context.organizationId },
@@ -62,25 +81,100 @@ export async function createInvoiceFromWorkOrder(
     });
     if (existing) throw new InvoiceFailed("invoice_already_exists");
 
-    // Get the latest PRESENTED revision's lines.
-    const latestRevision = await transaction.estimateRevision.findFirst({
-      where: { workOrderId: wo.id, status: "PRESENTED" },
-      orderBy: { revisionNumber: "desc" },
-      select: {
-        id: true,
-        currency: true,
-        subtotalMinor: true,
-        discountMinor: true,
-        taxMinor: true,
-        totalMinor: true,
+    const org = await transaction.organization.findUnique({
+      where: { id: input.context.organizationId },
+      select: { invoiceLinePolicy: true },
+    });
+    const approvedOnly = org?.invoiceLinePolicy !== "ALL_LINES";
+
+    // Baseline: the latest PRESENTED baseline revision.
+    const baseline = await transaction.estimateRevision.findFirst({
+      where: {
+        workOrderId: wo.id,
+        organizationId: input.context.organizationId,
+        documentKind: "BASELINE",
+        status: "PRESENTED",
       },
+      orderBy: { revisionNumber: "desc" },
+      select: { id: true, currency: true },
+    });
+    // Change orders: every PRESENTED change order, oldest first.
+    const changeOrders = await transaction.estimateRevision.findMany({
+      where: {
+        workOrderId: wo.id,
+        organizationId: input.context.organizationId,
+        documentKind: "CHANGE_ORDER",
+        status: "PRESENTED",
+      },
+      orderBy: { changeOrderNumber: "asc" },
+      select: { id: true },
     });
 
-    const currency = latestRevision?.currency ?? "USD";
-    const subtotalMinor = latestRevision?.subtotalMinor ?? 0n;
-    const discountMinor = latestRevision?.discountMinor ?? 0n;
-    const taxMinor = latestRevision?.taxMinor ?? 0n;
-    const totalMinor = latestRevision?.totalMinor ?? 0n;
+    const sourceRevisionIds = [
+      ...(baseline ? [baseline.id] : []),
+      ...changeOrders.map((co) => co.id),
+    ];
+
+    type SourceLine = {
+      id: string;
+      kind: PricedLineKind;
+      description: string;
+      quantityMilli: number;
+      unitPriceMinor: bigint;
+      grossMinor: bigint;
+      discountMinor: bigint;
+      taxable: boolean;
+      taxRateBasisPoints: number;
+      taxMinor: bigint;
+      totalMinor: bigint;
+      position: number;
+      approved: boolean;
+    };
+    const sourceLines: SourceLine[] = [];
+
+    for (const revisionId of sourceRevisionIds) {
+      const lines = await transaction.estimateLine.findMany({
+        where: { estimateRevisionId: revisionId },
+        orderBy: { position: "asc" },
+        include: {
+          authorizationDecisions: { select: { decision: true }, take: 1 },
+        },
+      });
+      for (const line of lines) {
+        sourceLines.push({
+          id: line.id,
+          kind: line.kind,
+          description: line.description,
+          quantityMilli: line.quantityMilli,
+          unitPriceMinor: line.unitPriceMinor,
+          grossMinor: line.grossMinor,
+          discountMinor: line.discountMinor,
+          taxable: line.taxable,
+          taxRateBasisPoints: line.taxRateBasisPoints,
+          taxMinor: line.taxMinor,
+          totalMinor: line.totalMinor,
+          position: line.position,
+          // Mirrors the money kernel: approved or authorization-not-required.
+          approved:
+            line.authorizationDecisions[0]?.decision === "APPROVED" || !line.authorizationRequired,
+        });
+      }
+    }
+
+    const selectedLines = approvedOnly ? sourceLines.filter((line) => line.approved) : sourceLines;
+
+    let subtotalMinor = 0n;
+    let discountMinor = 0n;
+    let taxMinor = 0n;
+    let totalMinor = 0n;
+    for (const line of selectedLines) {
+      subtotalMinor += line.grossMinor;
+      discountMinor += line.discountMinor;
+      taxMinor += line.taxMinor;
+      totalMinor += line.totalMinor;
+    }
+
+    const currency = baseline?.currency ?? "USD";
 
     // Generate invoice number.
     const number = await generateInvoiceNumber(transaction, input.context.organizationId);
@@ -102,33 +196,29 @@ export async function createInvoiceFromWorkOrder(
       },
     });
 
-    // Snapshot lines from the estimate revision.
-    if (latestRevision) {
-      const lines = await transaction.estimateLine.findMany({
-        where: { estimateRevisionId: latestRevision.id },
-        orderBy: { position: "asc" },
+    // Snapshot the selected lines with renumbered invoice positions.
+    let invoicePosition = 0;
+    for (const line of selectedLines) {
+      invoicePosition += 1;
+      await transaction.invoiceLine.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          invoiceId: invoice.id,
+          sourceEstimateLineId: line.id,
+          kind: line.kind,
+          description: line.description,
+          quantityMilli: line.quantityMilli,
+          unitPriceMinor: line.unitPriceMinor,
+          grossMinor: line.grossMinor,
+          discountMinor: line.discountMinor,
+          taxable: line.taxable,
+          taxRateBasisPoints: line.taxRateBasisPoints,
+          taxMinor: line.taxMinor,
+          totalMinor: line.totalMinor,
+          position: invoicePosition,
+        },
       });
-      for (const line of lines) {
-        await transaction.invoiceLine.create({
-          data: {
-            id: randomUUID(),
-            organizationId: input.context.organizationId,
-            invoiceId: invoice.id,
-            sourceEstimateLineId: line.id,
-            kind: line.kind,
-            description: line.description,
-            quantityMilli: line.quantityMilli,
-            unitPriceMinor: line.unitPriceMinor,
-            grossMinor: line.grossMinor,
-            discountMinor: line.discountMinor,
-            taxable: line.taxable,
-            taxRateBasisPoints: line.taxRateBasisPoints,
-            taxMinor: line.taxMinor,
-            totalMinor: line.totalMinor,
-            position: line.position,
-          },
-        });
-      }
     }
 
     // Activity event.
@@ -140,7 +230,7 @@ export async function createInvoiceFromWorkOrder(
         workOrderId: wo.id,
         actorUserId: input.context.actorId,
         eventType: "invoice.created",
-        summary: `Invoice ${number} created from work order ${wo.number}.`,
+        summary: `Invoice ${number} created from work order ${wo.number}${approvedOnly ? " (approved lines only)" : ""}.`,
       },
     });
 

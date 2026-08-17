@@ -85,7 +85,7 @@ export function calculateEstimate(
 
 export function calculateLine(input: PricedLineInput): CalculatedLine {
   assertNonNegativeSafeInteger(input.quantityMilli, "quantityMilli");
-  assertNonNegativeSafeInteger(input.unitPriceMinor, "unitPriceMinor");
+  assertSafeInteger(input.unitPriceMinor, "unitPriceMinor");
   assertNonNegativeSafeInteger(input.discountMinor, "discountMinor");
   assertNonNegativeSafeInteger(input.taxRateBasisPoints, "taxRateBasisPoints");
 
@@ -94,7 +94,14 @@ export function calculateLine(input: PricedLineInput): CalculatedLine {
     1_000n,
   );
 
-  if (input.discountMinor > grossMinor) {
+  // A negative unit price is a credit line (ADR 0014 change orders): it
+  // reduces what the customer owes. Credits cannot carry discounts — a
+  // positive discount on a negative gross would deepen the credit.
+  if (grossMinor < 0 && input.discountMinor > 0) {
+    throw new MoneyError("discount_on_credit", "A credit line cannot carry a discount.");
+  }
+
+  if (grossMinor >= 0 && input.discountMinor > grossMinor) {
     throw new MoneyError("discount_exceeds_line", "A discount cannot exceed its line gross.");
   }
 
@@ -139,10 +146,20 @@ function assertSafeInteger(value: number, field: string): void {
 }
 
 export class MoneyError extends Error {
-  readonly code: "currency_invalid" | "discount_exceeds_line" | "negative_value" | "unsafe_integer";
+  readonly code:
+    | "currency_invalid"
+    | "discount_exceeds_line"
+    | "discount_on_credit"
+    | "negative_value"
+    | "unsafe_integer";
 
   constructor(
-    code: "currency_invalid" | "discount_exceeds_line" | "negative_value" | "unsafe_integer",
+    code:
+      | "currency_invalid"
+      | "discount_exceeds_line"
+      | "discount_on_credit"
+      | "negative_value"
+      | "unsafe_integer",
     message: string,
   ) {
     super(message);

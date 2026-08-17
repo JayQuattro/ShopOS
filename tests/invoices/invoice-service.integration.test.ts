@@ -145,7 +145,7 @@ async function seedWorkOrderWithEstimate() {
     },
   });
 
-  await dbModule.db.estimateLine.create({
+  const line = await dbModule.db.estimateLine.create({
     data: {
       organizationId: orgId,
       estimateRevisionId: revision.id,
@@ -161,6 +161,27 @@ async function seedWorkOrderWithEstimate() {
       taxMinor: 2880n,
       totalMinor: 42880n,
       position: 1,
+    },
+  });
+
+  // The default invoice policy bills approved lines only (ADR 0014): record
+  // the customer's approval as part of the realistic completed-job flow.
+  const authorization = await dbModule.db.authorization.create({
+    data: {
+      id: randomUUID(),
+      organizationId: orgId,
+      estimateRevisionId: revision.id,
+      method: "CUSTOMER_LINK",
+      providedByName: "Inv Customer",
+      occurredAt: new Date(),
+    },
+  });
+  await dbModule.db.authorizationDecision.create({
+    data: {
+      authorizationId: authorization.id,
+      organizationId: orgId,
+      estimateLineId: line.id,
+      decision: "APPROVED",
     },
   });
 

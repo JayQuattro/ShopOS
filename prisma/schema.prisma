@@ -51,8 +51,30 @@ enum EstimateRevisionStatus {
   PRESENTED  @map("presented")
   SUPERSEDED @map("superseded")
   EXPIRED    @map("expired")
+  VOIDED     @map("voided")
 
   @@map("estimate_revision_status")
+}
+
+enum EstimateDocumentKind {
+  BASELINE     @map("baseline")
+  CHANGE_ORDER @map("change_order")
+
+  @@map("estimate_document_kind")
+}
+
+enum ChangeOrderCreditPolicy {
+  AUTO_APPLY      @map("auto_apply")
+  REQUIRE_APPROVAL @map("require_approval")
+
+  @@map("change_order_credit_policy")
+}
+
+enum InvoiceLinePolicy {
+  APPROVED_ONLY @map("approved_only")
+  ALL_LINES     @map("all_lines")
+
+  @@map("invoice_line_policy")
 }
 
 enum PricedLineKind {
@@ -76,6 +98,7 @@ enum AuthorizationMethod {
   IN_PERSON     @map("in_person")
   EMAIL         @map("email")
   OTHER         @map("other")
+  SYSTEM        @map("system")
 
   @@map("authorization_method")
 }
@@ -178,6 +201,8 @@ model Organization {
   authMetadata        String?                          @map("auth_metadata")
   status              OrganizationStatus               @default(ACTIVE)
   defaultCurrency     String                           @default("USD") @map("default_currency") @db.VarChar(3)
+  changeOrderCreditPolicy ChangeOrderCreditPolicy      @default(AUTO_APPLY) @map("change_order_credit_policy")
+  invoiceLinePolicy   InvoiceLinePolicy                @default(APPROVED_ONLY) @map("invoice_line_policy")
   subscriptionState   SubscriptionState                @default(UNMANAGED) @map("subscription_state")
   createdAt           DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -763,6 +788,9 @@ model EstimateRevision {
   workOrderId          String                 @map("work_order_id") @db.Uuid
   revisionNumber       Int                    @map("revision_number")
   status               EstimateRevisionStatus @default(DRAFT)
+  documentKind         EstimateDocumentKind   @default(BASELINE) @map("document_kind")
+  changeOrderNumber    Int?                    @map("change_order_number")
+  summaryNote          String?                 @map("summary_note") @db.VarChar(1000)
   currency             String                 @db.VarChar(3)
   subtotalMinor        BigInt                 @map("subtotal_minor")
   discountMinor        BigInt                 @map("discount_minor")
@@ -787,6 +815,7 @@ model EstimateRevision {
   @@unique([workOrderId, revisionNumber], map: "estimate_revision_number_unique")
   @@unique([organizationId, id], map: "estimate_revisions_org_id_unique")
   @@index([organizationId, workOrderId], map: "estimate_revisions_org_work_order_idx")
+  @@index([organizationId, workOrderId, documentKind, status], map: "estimate_revisions_org_wo_kind_status_idx")
   @@map("estimate_revisions")
 }
 
