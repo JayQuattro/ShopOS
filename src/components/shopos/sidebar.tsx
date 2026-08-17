@@ -73,6 +73,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           icon: ClipboardList,
           permission: "work_orders.read",
         },
+        {
+          label: "Service menu",
+          href: `${baseHref}/service-menu`,
+          icon: ClipboardList,
+          permission: "work_orders.read",
+        },
       ],
     },
     {
