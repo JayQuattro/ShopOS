@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import Script from "next/script";
 import { cookies } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
@@ -43,10 +44,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       data-density={density}
       suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
-      </head>
       <body>
+        {/* Runs before hydration to prevent theme flash; next/script keeps it
+            out of the client-rendered tree (a raw <script> there never
+            executes and React 19 warns about it). */}
+        <Script
+          id="shopos-theme-bootstrap"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
+        />
         <NextIntlClientProvider locale={resolvedLocale} messages={messages}>
           {children}
         </NextIntlClientProvider>
