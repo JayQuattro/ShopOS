@@ -783,6 +783,8 @@ model WorkOrder {
   customerConcern   String             @map("customer_concern")
   promisedAt        DateTime?          @map("promised_at") @db.Timestamptz(6)
   assignedTechnicianUserId String?     @map("assigned_technician_user_id") @db.Uuid
+  vehicleStage      VehicleStage?      @map("vehicle_stage")
+  bayLabel          String?            @map("bay_label") @db.VarChar(60)
   completedAt       DateTime?          @map("completed_at") @db.Timestamptz(6)
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -806,6 +808,7 @@ model WorkOrder {
   @@unique([organizationId, locationId, id], map: "work_orders_org_location_id_unique")
   @@unique([organizationId, id], map: "work_orders_org_id_unique")
   @@index([organizationId, locationId, status], map: "work_orders_org_location_status_idx")
+  @@index([organizationId, vehicleStage], map: "work_orders_org_stage_idx")
   @@map("work_orders")
 }
 
@@ -816,6 +819,18 @@ enum WorkOrderTaskStatus {
   SKIPPED          @map("skipped")
 
   @@map("work_order_task_status")
+}
+
+enum VehicleStage {
+  WAITING          @map("waiting")
+  IN_BAY           @map("in_bay")
+  ON_LIFT          @map("on_lift")
+  TEST_DRIVE       @map("test_drive")
+  WAITING_PARTS    @map("waiting_parts")
+  READY_FOR_PICKUP @map("ready_for_pickup")
+  PICKED_UP        @map("picked_up")
+
+  @@map("vehicle_stage")
 }
 
 enum PartOrderStatus {

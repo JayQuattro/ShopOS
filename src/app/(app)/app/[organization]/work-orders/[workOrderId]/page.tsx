@@ -9,6 +9,7 @@ import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listAssignableTechnicians } from "@/modules/work-orders/assignment-service";
 import { AssignmentSelect } from "./assignment-select";
+import { VehicleCard } from "./vehicle-card";
 import { EstimatePanel } from "./estimate-panel";
 import { InvoicePanel } from "./invoice-panel";
 import { WorkOrderEditForm } from "./work-order-edit-form";
@@ -150,6 +151,17 @@ export default async function WorkOrderDetailPage({
               workOrderId={wo.id}
               technicians={technicians}
               assignedUserId={wo.assignedTechnicianUserId}
+              canWrite={context.permissions.has("work_orders.write")}
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4">
+            <p className="text-xs text-muted-foreground">Vehicle</p>
+            <VehicleCard
+              workOrderId={wo.id}
+              stage={wo.vehicleStage}
+              bayLabel={wo.bayLabel}
               canWrite={context.permissions.has("work_orders.write")}
             />
           </CardContent>

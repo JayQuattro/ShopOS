@@ -36,6 +36,8 @@ export default async function WorkOrdersPage({
       customer: { select: { displayName: true } },
       asset: { select: { displayName: true } },
       assignedTechnician: { select: { displayName: true } },
+      vehicleStage: true,
+      bayLabel: true,
       createdAt: true,
     },
     take: 100,
@@ -122,6 +124,15 @@ export default async function WorkOrdersPage({
                       {wo.assignedTechnician?.displayName ?? (
                         <span className="text-muted-foreground">Unassigned</span>
                       )}
+                      {wo.vehicleStage === "READY_FOR_PICKUP" ? (
+                        <span className="ml-2 rounded bg-success/20 px-1.5 py-0.5 text-xs text-success">
+                          ready
+                        </span>
+                      ) : wo.bayLabel ? (
+                        <span className="ml-2 font-mono text-xs text-muted-foreground">
+                          {wo.bayLabel}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge
