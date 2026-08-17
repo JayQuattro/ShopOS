@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { assertDedicatedTestDatabase, resetTestDatabase } from "../helpers/database";
+import { passQualityCheck } from "@/modules/work-orders/quality-check-service";
 
 const TEST_DATABASE_URL =
   process.env.SHOPOS_TEST_DATABASE_URL ?? "postgres://shopos:shopos@localhost:5432/shopos_test";
@@ -465,6 +466,19 @@ describe("change orders (#129, ADR 0014)", { skip: shouldSkip }, () => {
     await addChangeOrderLine(seed, created.revisionId);
     await presentChangeOrder({ db: dbModule.db, context, revisionId: created.revisionId });
 
+    await expect(
+      transitionStatus({
+        db: dbModule.db,
+        context,
+        workOrderId: seed.workOrderId,
+        targetStatus: "COMPLETED",
+      }),
+    ).rejects.toMatchObject({ reason: "quality_check_required" });
+    await passQualityCheck({
+      db: dbModule.db,
+      context,
+      workOrderId: seed.workOrderId,
+    });
     await expect(
       transitionStatus({
         db: dbModule.db,

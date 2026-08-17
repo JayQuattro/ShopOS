@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { assertDedicatedTestDatabase, resetTestDatabase } from "../helpers/database";
+import { passQualityCheck } from "@/modules/work-orders/quality-check-service";
 
 const TEST_DATABASE_URL =
   process.env.SHOPOS_TEST_DATABASE_URL ?? "postgres://shopos:shopos@localhost:5432/shopos_test";
@@ -369,7 +370,8 @@ describe("work-order status transitions", { skip: shouldSkip }, () => {
       targetStatus: "AUTHORIZED",
     });
 
-    // Continue the walk.
+    // Continue the walk. QC gates COMPLETED for this organization.
+    await passQualityCheck({ db: dbModule.db, context, workOrderId: wo.id });
     for (const status of ["IN_PROGRESS", "COMPLETED", "INVOICED", "CLOSED"] as const) {
       await transitionStatus({
         db: dbModule.db,

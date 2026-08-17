@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { assertDedicatedTestDatabase, resetTestDatabase } from "../helpers/database";
+import { passQualityCheck } from "@/modules/work-orders/quality-check-service";
 
 /**
  * Full workflow integration test: the complete customer-to-payment pipeline.
@@ -315,6 +316,11 @@ describe("full customer-to-payment workflow", { skip: shouldSkip }, () => {
       context,
       workOrderId: workOrder.id,
       targetStatus: "IN_PROGRESS",
+    });
+    await passQualityCheck({
+      db: dbModule.db,
+      context,
+      workOrderId: workOrder.id,
     });
     await transitionStatus({
       db: dbModule.db,
