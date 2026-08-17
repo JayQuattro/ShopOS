@@ -189,6 +189,8 @@ export async function getAuthorizationState(
     revisionId: string;
     lines: ReadonlyArray<{
       estimateLineId: string;
+      description: string;
+      totalMinor: string;
       decision: "APPROVED" | "DECLINED" | "PENDING";
       authorizationRequired: boolean;
     }>;
@@ -208,7 +210,7 @@ export async function getAuthorizationState(
 
   const lines = await input.db.estimateLine.findMany({
     where: { estimateRevisionId: revision.id },
-    select: { id: true, authorizationRequired: true },
+    select: { id: true, authorizationRequired: true, description: true, totalMinor: true },
   });
 
   const decisions = await input.db.authorizationDecision.findMany({
@@ -225,6 +227,8 @@ export async function getAuthorizationState(
     revisionId: revision.id,
     lines: lines.map((line) => ({
       estimateLineId: line.id,
+      description: line.description,
+      totalMinor: line.totalMinor.toString(),
       authorizationRequired: line.authorizationRequired,
       decision: (decisionMap.get(line.id) as "APPROVED" | "DECLINED" | undefined) ?? "PENDING",
     })),
