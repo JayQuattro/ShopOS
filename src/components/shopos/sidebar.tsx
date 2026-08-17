@@ -67,6 +67,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           icon: Package,
           permission: "work_orders.read",
         },
+        {
+          label: "Schedule",
+          href: `${baseHref}/schedule`,
+          icon: ClipboardList,
+          permission: "work_orders.read",
+        },
       ],
     },
     {

@@ -92,6 +92,17 @@ enum AuthorizationDecisionValue {
   @@map("authorization_decision")
 }
 
+enum AppointmentStatus {
+  SCHEDULED  @map("scheduled")
+  CONFIRMED  @map("confirmed")
+  CHECKED_IN @map("checked_in")
+  COMPLETED  @map("completed")
+  CANCELLED  @map("cancelled")
+  NO_SHOW    @map("no_show")
+
+  @@map("appointment_status")
+}
+
 enum AuthorizationMethod {
   CUSTOMER_LINK @map("customer_link")
   PHONE         @map("phone")
@@ -180,6 +191,7 @@ model User {
   recordedPayments       Payment[]                         @relation("PaymentRecordedBy")
   activityEvents         ActivityEvent[]                   @relation("ActivityActor")
   assignedWorkOrders    WorkOrder[]                       @relation("WorkOrderTechnician")
+  createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   auditEvents            AuditEvent[]                      @relation("AuditActor")
   themePublications      OrganizationThemePublication[]    @relation("ThemePublishedBy")
   connectorInstances     ConnectorInstance[]               @relation("ConnectorCreatedBy")
@@ -218,6 +230,7 @@ model Organization {
   customers           Customer[]
   assets              Asset[]
   workOrders          WorkOrder[]
+  appointments        Appointment[]
   estimateRevisions   EstimateRevision[]
   estimateLines       EstimateLine[]
   authorizations      Authorization[]
@@ -274,6 +287,7 @@ model Location {
   accessGrants   LocationAccess[]
   homeAssets     Asset[]
   workOrders     WorkOrder[]
+  appointments   Appointment[]
   estimates      EstimateRevision[]
   invoices       Invoice[]
   payments       Payment[]
@@ -606,6 +620,7 @@ model Customer {
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   assets                Asset[]
   workOrders            WorkOrder[]
+  appointments          Appointment[]
   contacts              CustomerContact[]
   addresses             CustomerAddress[]
 
@@ -683,6 +698,7 @@ model Asset {
   automotiveProfile AutomotiveAssetProfile?
   equipmentProfile  EquipmentAssetProfile?
   workOrders        WorkOrder[]
+  appointments     Appointment[]
   workOrderAssets   WorkOrderAsset[]
 
   @@unique([organizationId, id], map: "assets_org_id_unique")
@@ -715,6 +731,34 @@ model EquipmentAssetProfile {
   @@map("equipment_asset_profiles")
 }
 
+model Appointment {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  locationId        String            @map("location_id") @db.Uuid
+  customerId        String            @map("customer_id") @db.Uuid
+  assetId           String?           @map("asset_id") @db.Uuid
+  workOrderId       String?           @map("work_order_id") @db.Uuid
+  status            AppointmentStatus @default(SCHEDULED)
+  reason            String            @db.VarChar(500)
+  notes             String?
+  startAt           DateTime          @map("start_at") @db.Timestamptz(6)
+  endAt             DateTime          @map("end_at") @db.Timestamptz(6)
+  createdByUserId   String?           @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location          Location          @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  customer          Customer          @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
+  asset             Asset?            @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+  workOrder         WorkOrder?        @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict)
+  createdBy         User?             @relation("AppointmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "appointments_org_id_unique")
+  @@index([organizationId, locationId, startAt], map: "appointments_org_location_start_idx")
+  @@index([organizationId, customerId, startAt], map: "appointments_org_customer_start_idx")
+  @@map("appointments")
+}
+
 model WorkOrder {
   id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId    String             @map("organization_id") @db.Uuid
@@ -739,6 +783,7 @@ model WorkOrder {
   attachments       WorkOrderAttachment[]
   estimateRevisions EstimateRevision[]
   invoice           Invoice?
+  appointments      Appointment[]
   activityEvents    ActivityEvent[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
