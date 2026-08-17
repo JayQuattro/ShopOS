@@ -185,6 +185,7 @@ const CUSTOMER_TIMELINE: ReadonlyArray<
   },
   { eventType: "parts.received", label: () => "Parts arrived" },
   { eventType: "invoice.issued", label: () => "Invoice issued" },
+  { eventType: "quality_check.passed", label: () => "Final quality check passed" },
   { eventType: "payment.recorded", label: () => "Payment received" },
 ];
 

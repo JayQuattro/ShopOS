@@ -23,7 +23,8 @@ export class WorkOrderTransitionFailed extends Error {
       | "concurrent_change"
       | "authorization_required"
       | "estimate_required"
-      | "change_order_pending",
+      | "change_order_pending"
+      | "quality_check_required",
   ) {
     super("The work-order transition could not be completed.");
     this.name = "WorkOrderTransitionFailed";
@@ -76,6 +77,22 @@ async function assertTransitionPrerequisites(
   }
 
   if (targetStatus === "COMPLETED") {
+    // Final quality control: when the organization requires it, the check
+    // must have passed before the work order can complete.
+    const org = await transaction.organization.findUnique({
+      where: { id: organizationId },
+      select: { qualityCheckRequired: true },
+    });
+    if (org?.qualityCheckRequired) {
+      const workOrderRow = await transaction.workOrder.findFirst({
+        where: { id: workOrderId, organizationId },
+        select: { qcStatus: true },
+      });
+      if (workOrderRow && workOrderRow.qcStatus !== "passed") {
+        throw new WorkOrderTransitionFailed("quality_check_required");
+      }
+    }
+
     const pendingChangeOrder = await transaction.estimateRevision.findFirst({
       where: {
         organizationId,
