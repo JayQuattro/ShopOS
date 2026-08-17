@@ -434,11 +434,24 @@ export function EstimatePanel({
             </div>
           ) : null}
 
-          {canWrite && selectedRev.status === "PRESENTED" ? (
+          {selectedRev.status === "PRESENTED" ? (
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={resendLink} disabled={pending}>
-                Resend authorization email
-              </Button>
+              <a
+                href={`#`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  const orgId = window.location.pathname.split("/")[2] ?? "";
+                  window.open(`/print/${orgId}/estimate/${selectedRev.id}`, "_blank", "noreferrer");
+                }}
+                className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+              >
+                Print {isChangeOrder ? "change order" : "estimate"}
+              </a>
+              {canWrite ? (
+                <Button variant="outline" size="sm" onClick={resendLink} disabled={pending}>
+                  Resend authorization email
+                </Button>
+              ) : null}
             </div>
           ) : null}
 

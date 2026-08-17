@@ -107,19 +107,37 @@ export default async function WorkOrderDetailPage({
           { label: wo.number },
         ]}
         actions={
-          <StatusBadge
-            tone={
-              wo.status === "COMPLETED" || wo.status === "CLOSED"
-                ? "ready"
-                : wo.status === "IN_PROGRESS"
-                  ? "waiting"
-                  : wo.status === "BLOCKED"
-                    ? "attention"
-                    : "neutral"
-            }
-          >
-            {wo.status.replace(/_/g, " ").toLowerCase()}
-          </StatusBadge>
+          <div className="flex items-center gap-2">
+            <a
+              href={`/print/${context.organizationId}/repair-order/${wo.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              Print RO
+            </a>
+            <a
+              href={`/print/${context.organizationId}/authorization/${wo.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              Print authorization
+            </a>
+            <StatusBadge
+              tone={
+                wo.status === "COMPLETED" || wo.status === "CLOSED"
+                  ? "ready"
+                  : wo.status === "IN_PROGRESS"
+                    ? "waiting"
+                    : wo.status === "BLOCKED"
+                      ? "attention"
+                      : "neutral"
+              }
+            >
+              {wo.status.replace(/_/g, " ").toLowerCase()}
+            </StatusBadge>
+          </div>
         }
       />
 

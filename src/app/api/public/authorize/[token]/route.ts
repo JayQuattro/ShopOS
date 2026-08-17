@@ -35,6 +35,7 @@ export async function GET(
         currency: data.currency,
         totalMinor: data.totalMinor,
         previouslyApprovedMinor: data.previouslyApprovedMinor,
+        previousDocuments: data.previousDocuments,
         lines: data.lines,
         // Renderable evidence only: non-image documents are not exposed.
         attachments: attachments
