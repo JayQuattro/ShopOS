@@ -348,3 +348,44 @@ export async function downloadAttachmentForAuthorizationLink(
     body,
   };
 }
+
+/**
+ * Serves a document-evidence photo through a customer repair-tracker token
+ * (same model as the authorization-link access above): images attached to the
+ * tracker's work-order documents only, while the link is unrevoked.
+ */
+export async function downloadAttachmentForTrackerLink(
+  db: PrismaClient,
+  input: Readonly<{ token: string; attachmentId: string }>,
+): Promise<Readonly<{ fileName: string; contentType: string; body: Uint8Array }>> {
+  const { buildRepairTrackerView, TrackerLinkFailed } =
+    await import("@/modules/work-orders/tracker-link-service");
+  try {
+    await buildRepairTrackerView(db, input.token);
+  } catch {
+    throw new TrackerLinkFailed("invalid_token");
+  }
+  const link = await db.repairTrackerLink.findUnique({ where: { token: input.token } });
+
+  const attachment = await db.workOrderAttachment.findFirst({
+    where: {
+      id: input.attachmentId,
+      organizationId: link!.organizationId,
+      workOrderId: link!.workOrderId,
+      estimateRevisionId: { not: null },
+      contentType: { startsWith: "image/" },
+    },
+    select: { objectKey: true, fileName: true, contentType: true },
+  });
+  if (!attachment) throw new AttachmentOperationFailed("attachment_not_found");
+
+  const storage = await resolveStorageProvider(db);
+  if (!storage) throw new AttachmentOperationFailed("storage_not_configured");
+
+  const body = await storage.get({
+    organizationId: link!.organizationId,
+    objectKey: attachment.objectKey,
+  });
+
+  return { fileName: attachment.fileName, contentType: attachment.contentType, body };
+}

@@ -237,6 +237,7 @@ model Organization {
   timeEntries          TimeEntry[]
   workOrderTasks     WorkOrderTask[]
   partSuppliers      PartSupplier[]
+  repairTrackerLinks  RepairTrackerLink[]
   partOrders         PartOrder[]
   partOrderLines    PartOrderLine[]
   estimateRevisions   EstimateRevision[]
@@ -795,6 +796,7 @@ model WorkOrder {
   timeEntries        TimeEntry[]
   tasks              WorkOrderTask[]
   partOrders         PartOrder[]
+  trackerLink        RepairTrackerLink?
   activityEvents    ActivityEvent[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
@@ -827,6 +829,21 @@ enum PartOrderSource {
   CONNECTOR @map("connector")
 
   @@map("part_order_source")
+}
+
+model RepairTrackerLink {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  workOrderId    String    @map("work_order_id") @db.Uuid
+  token          String    @unique @db.VarChar(128)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workOrder      WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, workOrderId], map: "repair_tracker_links_org_wo_unique")
+  @@index([token, revokedAt], map: "repair_tracker_links_token_idx")
+  @@map("repair_tracker_links")
 }
 
 model PartSupplier {
