@@ -74,6 +74,9 @@ export default async function WorkOrderDetailPage({
           currency: true,
         },
       },
+      assistingTechnicians: {
+        select: { userId: true, user: { select: { displayName: true } } },
+      },
     },
   });
 
@@ -151,6 +154,10 @@ export default async function WorkOrderDetailPage({
               workOrderId={wo.id}
               technicians={technicians}
               assignedUserId={wo.assignedTechnicianUserId}
+              assisting={wo.assistingTechnicians.map((entry) => ({
+                userId: entry.userId,
+                displayName: entry.user.displayName,
+              }))}
               canWrite={context.permissions.has("work_orders.write")}
             />
           </CardContent>

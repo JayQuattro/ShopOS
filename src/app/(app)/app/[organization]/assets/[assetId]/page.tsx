@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SummaryCard } from "@/components/shopos/states";
 import { PageHeader } from "@/components/shopos/page-header";
 import { db } from "@/db/client";
+import { formatDate, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 
 export default async function AssetDetailPage({
@@ -26,8 +27,17 @@ export default async function AssetDetailPage({
       equipmentProfile: true,
       workOrders: {
         orderBy: { createdAt: "desc" },
-        take: 10,
-        select: { id: true, number: true, status: true, customerConcern: true },
+        take: 25,
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          customerConcern: true,
+          createdAt: true,
+          invoice: {
+            select: { status: true, currency: true, totalMinor: true, paidMinor: true },
+          },
+        },
       },
     },
   });
@@ -133,30 +143,40 @@ export default async function AssetDetailPage({
         </Card>
       ) : null}
 
-      {asset.workOrders.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recent work orders</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Service history</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {asset.workOrders.length === 0 ? (
+            <p className="py-4 text-sm text-muted-foreground">No service history yet.</p>
+          ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="py-2 pr-4 font-medium">Date</th>
                   <th className="py-2 pr-4 font-medium">RO #</th>
                   <th className="py-2 pr-4 font-medium">Status</th>
-                  <th className="py-2 pr-4 font-medium">Concern</th>
+                  <th className="py-2 pr-4 font-medium text-right">Invoiced</th>
                   <th className="py-2 pr-4 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
                 {asset.workOrders.map((wo) => (
                   <tr key={wo.id} className="border-b border-border/60">
+                    <td className="py-3 pr-4 whitespace-nowrap font-mono text-xs tabular-nums">
+                      {formatDate(wo.createdAt, "UTC", "en-US")}
+                    </td>
                     <td className="py-3 pr-4 font-mono">{wo.number}</td>
                     <td className="py-3 pr-4 capitalize">
                       {wo.status.replace(/_/g, " ").toLowerCase()}
                     </td>
-                    <td className="py-3 pr-4 max-w-md truncate text-muted-foreground">
-                      {wo.customerConcern}
+                    <td className="py-3 pr-4 text-right font-mono tabular-nums">
+                      {wo.invoice ? (
+                        formatMoney(Number(wo.invoice.totalMinor), wo.invoice.currency, "en-US")
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="py-3 pr-4">
                       <Link
@@ -170,9 +190,9 @@ export default async function AssetDetailPage({
                 ))}
               </tbody>
             </table>
-          </CardContent>
-        </Card>
-      ) : null}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

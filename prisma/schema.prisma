@@ -191,6 +191,7 @@ model User {
   recordedPayments       Payment[]                         @relation("PaymentRecordedBy")
   activityEvents         ActivityEvent[]                   @relation("ActivityActor")
   assignedWorkOrders    WorkOrder[]                       @relation("WorkOrderTechnician")
+  assistingWorkOrders   WorkOrderTechnician[]             @relation("WorkOrderAssistingTechnician")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   timeEntries            TimeEntry[]                       @relation("TimeEntryWorker")
   createdTasks           WorkOrderTask[]                @relation("TaskCreatedBy")
@@ -238,6 +239,7 @@ model Organization {
   workOrderTasks     WorkOrderTask[]
   partSuppliers      PartSupplier[]
   repairTrackerLinks  RepairTrackerLink[]
+  workOrderTechnicians WorkOrderTechnician[]
   serviceTemplates   ServiceTemplate[]
   serviceTemplateLines ServiceTemplateLine[]
   serviceTemplateTasks ServiceTemplateTask[]
@@ -802,6 +804,7 @@ model WorkOrder {
   tasks              WorkOrderTask[]
   partOrders         PartOrder[]
   trackerLink        RepairTrackerLink?
+  assistingTechnicians WorkOrderTechnician[]
   activityEvents    ActivityEvent[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
@@ -899,6 +902,21 @@ model ServiceTemplateTask {
   @@unique([organizationId, id], map: "service_template_tasks_org_id_unique")
   @@index([organizationId, serviceTemplateId], map: "service_template_tasks_org_template_idx")
   @@map("service_template_tasks")
+}
+
+model WorkOrderTechnician {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  workOrderId    String   @map("work_order_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workOrder      WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  user           User @relation("WorkOrderAssistingTechnician", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([workOrderId, userId], map: "work_order_technicians_unique")
+  @@index([organizationId, workOrderId], map: "work_order_technicians_org_wo_idx")
+  @@map("work_order_technicians")
 }
 
 model RepairTrackerLink {

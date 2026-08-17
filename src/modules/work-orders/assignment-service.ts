@@ -179,3 +179,113 @@ export async function listAssignableTechnicians(
     }))
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
+
+// ─── Assisting technicians ──────────────────────────────────────────────────
+
+export class TechnicianTeamFailed extends Error {
+  constructor(public readonly reason: "work_order_not_found" | "technician_not_a_member") {
+    super("The technician team operation could not be completed.");
+    this.name = "TechnicianTeamFailed";
+  }
+}
+
+/**
+ * Replaces the set of assisting technicians (everyone besides the lead).
+ * Each user must be an active member of the organization; the lead may also
+ * appear here without harm but is excluded from storage for cleanliness.
+ */
+export async function setAssistingTechnicians(
+  input: AssignmentServiceInput & { workOrderId: string; userIds: ReadonlyArray<string> },
+): Promise<void> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.write",
+  );
+
+  const uniqueIds = [...new Set(input.userIds)];
+
+  await input.db.$transaction(async (transaction) => {
+    const workOrder = await transaction.workOrder.findFirst({
+      where: { id: input.workOrderId, organizationId: input.context.organizationId },
+      select: {
+        id: true,
+        locationId: true,
+        assignedTechnicianUserId: true,
+        assistingTechnicians: { select: { userId: true, user: { select: { displayName: true } } } },
+      },
+    });
+    if (!workOrder) throw new TechnicianTeamFailed("work_order_not_found");
+
+    for (const userId of uniqueIds) {
+      const membership = await transaction.organizationMembership.findFirst({
+        where: { organizationId: input.context.organizationId, userId, active: true },
+        select: { id: true },
+      });
+      if (!membership) throw new TechnicianTeamFailed("technician_not_a_member");
+    }
+
+    const previousNames = workOrder.assistingTechnicians.map((entry) => entry.user.displayName);
+
+    await transaction.workOrderTechnician.deleteMany({
+      where: { organizationId: input.context.organizationId, workOrderId: workOrder.id },
+    });
+    for (const userId of uniqueIds) {
+      if (userId === workOrder.assignedTechnicianUserId) continue;
+      await transaction.workOrderTechnician.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          workOrderId: workOrder.id,
+          userId,
+        },
+      });
+    }
+
+    const names = await Promise.all(
+      uniqueIds
+        .filter((userId) => userId !== workOrder.assignedTechnicianUserId)
+        .map(async (userId) => {
+          const user = await transaction.user.findUnique({
+            where: { id: userId },
+            select: { displayName: true },
+          });
+          return user?.displayName ?? "Technician";
+        }),
+    );
+
+    if (names.join(",") !== previousNames.join(",")) {
+      await transaction.activityEvent.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          locationId: workOrder.locationId,
+          workOrderId: workOrder.id,
+          actorUserId: input.context.actorId,
+          eventType: "work_order.technicians_updated",
+          summary:
+            names.length > 0
+              ? `Also working: ${names.join(", ")}.`
+              : "Assisting technicians cleared.",
+        },
+      });
+    }
+  });
+}
+
+export async function listAssistingTechnicians(
+  input: AssignmentServiceInput & { workOrderId: string },
+): Promise<ReadonlyArray<Readonly<{ userId: string; displayName: string }>>> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+
+  const rows = await input.db.workOrderTechnician.findMany({
+    where: { organizationId: input.context.organizationId, workOrderId: input.workOrderId },
+    orderBy: { createdAt: "asc" },
+    select: { userId: true, user: { select: { displayName: true } } },
+  });
+  return rows.map((row) => ({ userId: row.userId, displayName: row.user.displayName }));
+}
