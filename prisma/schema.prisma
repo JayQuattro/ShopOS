@@ -238,6 +238,9 @@ model Organization {
   workOrderTasks     WorkOrderTask[]
   partSuppliers      PartSupplier[]
   repairTrackerLinks  RepairTrackerLink[]
+  serviceTemplates   ServiceTemplate[]
+  serviceTemplateLines ServiceTemplateLine[]
+  serviceTemplateTasks ServiceTemplateTask[]
   partOrders         PartOrder[]
   partOrderLines    PartOrderLine[]
   estimateRevisions   EstimateRevision[]
@@ -829,6 +832,58 @@ enum PartOrderSource {
   CONNECTOR @map("connector")
 
   @@map("part_order_source")
+}
+
+model ServiceTemplate {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(180)
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lines          ServiceTemplateLine[]
+  tasks          ServiceTemplateTask[]
+
+  @@unique([organizationId, id], map: "service_templates_org_id_unique")
+  @@unique([organizationId, name], map: "service_templates_org_name_unique")
+  @@map("service_templates")
+}
+
+model ServiceTemplateLine {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String       @map("organization_id") @db.Uuid
+  serviceTemplateId String       @map("service_template_id") @db.Uuid
+  position          Int
+  kind              PricedLineKind
+  serviceGroupKey   String       @map("service_group_key") @db.VarChar(80)
+  description       String
+  quantityMilli     Int          @map("quantity_milli")
+  unitPriceMinor    BigInt       @map("unit_price_minor")
+  taxable           Boolean
+  taxRateBasisPoints Int         @map("tax_rate_basis_points")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  serviceTemplate   ServiceTemplate @relation(fields: [organizationId, serviceTemplateId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id], map: "service_template_lines_org_id_unique")
+  @@index([organizationId, serviceTemplateId], map: "service_template_lines_org_template_idx")
+  @@map("service_template_lines")
+}
+
+model ServiceTemplateTask {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  serviceTemplateId String   @map("service_template_id") @db.Uuid
+  position          Int
+  title             String   @db.VarChar(200)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  serviceTemplate   ServiceTemplate @relation(fields: [organizationId, serviceTemplateId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id], map: "service_template_tasks_org_id_unique")
+  @@index([organizationId, serviceTemplateId], map: "service_template_tasks_org_template_idx")
+  @@map("service_template_tasks")
 }
 
 model RepairTrackerLink {

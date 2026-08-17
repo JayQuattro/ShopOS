@@ -18,6 +18,7 @@ import { TimePanel } from "./time-panel";
 import { TaskPanel } from "./task-panel";
 import { PartsPanel } from "./parts-panel";
 import { TrackerLinkCard } from "./tracker-link-card";
+import { ApplyTemplateCard } from "./apply-template-card";
 
 export default async function WorkOrderDetailPage({
   params,
@@ -282,6 +283,11 @@ export default async function WorkOrderDetailPage({
         workOrderId={wo.id}
         timeZone={wo.location?.timeZone ?? "UTC"}
         technicians={technicians}
+        canWrite={context.permissions.has("work_orders.write")}
+      />
+
+      <ApplyTemplateCard
+        workOrderId={wo.id}
         canWrite={context.permissions.has("work_orders.write")}
       />
 
