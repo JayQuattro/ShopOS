@@ -7,6 +7,7 @@ import { resolveStorageProvider } from "@/modules/integrations/storage/storage-c
 export type AttachmentFailedReason =
   | "work_order_not_found"
   | "attachment_not_found"
+  | "revision_not_found"
   | "storage_not_configured"
   | "file_too_large"
   | "invalid_content_type";
@@ -41,7 +42,12 @@ const ALLOWED_CONTENT_TYPES = new Set([
 ]);
 
 export async function listAttachments(
-  input: Readonly<{ db: PrismaClient; context: TenantContext; workOrderId: string }>,
+  input: Readonly<{
+    db: PrismaClient;
+    context: TenantContext;
+    workOrderId: string;
+    estimateRevisionId?: string;
+  }>,
 ): Promise<readonly AttachmentSummary[]> {
   assertTenantAccess(
     input.context,
@@ -53,6 +59,7 @@ export async function listAttachments(
     where: {
       organizationId: input.context.organizationId,
       workOrderId: input.workOrderId,
+      ...(input.estimateRevisionId ? { estimateRevisionId: input.estimateRevisionId } : {}),
     },
     orderBy: { createdAt: "desc" },
     select: {
@@ -80,6 +87,8 @@ export async function uploadAttachment(
     db: PrismaClient;
     context: TenantContext;
     workOrderId: string;
+    /** When set, the file is evidence for this estimate document and becomes visible to the customer through that document's authorization link. */
+    estimateRevisionId?: string;
     fileName: string;
     contentType: string;
     body: Uint8Array;
@@ -113,6 +122,20 @@ export async function uploadAttachment(
   });
   if (!workOrder) throw new AttachmentOperationFailed("work_order_not_found");
 
+  // A document-scoped upload must reference an estimate revision of this
+  // work order in the same tenant.
+  if (input.estimateRevisionId) {
+    const revision = await input.db.estimateRevision.findFirst({
+      where: {
+        id: input.estimateRevisionId,
+        organizationId: input.context.organizationId,
+        workOrderId: input.workOrderId,
+      },
+      select: { id: true },
+    });
+    if (!revision) throw new AttachmentOperationFailed("revision_not_found");
+  }
+
   const attachmentId = randomUUID();
   const objectKey = `work-orders/${input.workOrderId}/${attachmentId}/${input.fileName}`;
 
@@ -128,6 +151,7 @@ export async function uploadAttachment(
       id: attachmentId,
       organizationId: input.context.organizationId,
       workOrderId: input.workOrderId,
+      estimateRevisionId: input.estimateRevisionId ?? null,
       objectKey,
       fileName: input.fileName,
       contentType: input.contentType,
@@ -247,4 +271,80 @@ export async function deleteAttachment(
       summary: `File removed: ${attachment.fileName}.`,
     },
   });
+}
+
+// ─── Public authorization-link access ───────────────────────────────────────
+//
+// A customer authorization link is the authorization (same model as the public
+// decision route): the unguessable 32-byte token gates access. These helpers
+// expose ONLY attachments explicitly linked to the document the token belongs
+// to — work-order-wide attachments are never reachable through a link.
+
+export async function listAttachmentsForAuthorizationLink(
+  db: PrismaClient,
+  token: string,
+): Promise<readonly AttachmentSummary[]> {
+  const { validateAuthorizationLink } =
+    await import("@/modules/estimates/authorization-link-service");
+  const link = await validateAuthorizationLink(db, token);
+
+  const attachments = await db.workOrderAttachment.findMany({
+    where: {
+      organizationId: link.organizationId,
+      workOrderId: link.workOrderId,
+      estimateRevisionId: link.revisionId,
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      fileName: true,
+      contentType: true,
+      sizeBytes: true,
+      createdAt: true,
+    },
+  });
+
+  return attachments.map((a) => ({
+    id: a.id,
+    fileName: a.fileName,
+    contentType: a.contentType,
+    sizeBytes: a.sizeBytes,
+    uploadedByDisplayName: null,
+    createdAt: a.createdAt,
+  }));
+}
+
+export async function downloadAttachmentForAuthorizationLink(
+  db: PrismaClient,
+  input: Readonly<{ token: string; attachmentId: string }>,
+): Promise<Readonly<{ fileName: string; contentType: string; body: Uint8Array }>> {
+  const { validateAuthorizationLink } =
+    await import("@/modules/estimates/authorization-link-service");
+  const link = await validateAuthorizationLink(db, input.token);
+
+  // Scope by the link's document — an id from any other document (or a
+  // work-order-wide attachment) is simply not found.
+  const attachment = await db.workOrderAttachment.findFirst({
+    where: {
+      id: input.attachmentId,
+      organizationId: link.organizationId,
+      estimateRevisionId: link.revisionId,
+    },
+    select: { objectKey: true, fileName: true, contentType: true },
+  });
+  if (!attachment) throw new AttachmentOperationFailed("attachment_not_found");
+
+  const storage = await resolveStorageProvider(db);
+  if (!storage) throw new AttachmentOperationFailed("storage_not_configured");
+
+  const body = await storage.get({
+    organizationId: link.organizationId,
+    objectKey: attachment.objectKey,
+  });
+
+  return {
+    fileName: attachment.fileName,
+    contentType: attachment.contentType,
+    body,
+  };
 }

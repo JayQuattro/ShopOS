@@ -763,21 +763,24 @@ model WorkOrderAsset {
 }
 
 model WorkOrderAttachment {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId   String   @map("organization_id") @db.Uuid
-  workOrderId      String   @map("work_order_id") @db.Uuid
-  objectKey        String   @map("object_key") @db.VarChar(512)
-  fileName         String   @map("file_name") @db.VarChar(255)
-  contentType      String   @map("content_type") @db.VarChar(127)
-  sizeBytes        Int      @map("size_bytes")
-  uploadedByUserId String?  @map("uploaded_by_user_id") @db.Uuid
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  workOrder        WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
-  uploadedBy       User?     @relation("AttachmentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String   @map("organization_id") @db.Uuid
+  workOrderId         String   @map("work_order_id") @db.Uuid
+  estimateRevisionId  String?  @map("estimate_revision_id") @db.Uuid
+  objectKey           String   @map("object_key") @db.VarChar(512)
+  fileName            String   @map("file_name") @db.VarChar(255)
+  contentType         String   @map("content_type") @db.VarChar(127)
+  sizeBytes           Int      @map("size_bytes")
+  uploadedByUserId    String?  @map("uploaded_by_user_id") @db.Uuid
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization        Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workOrder           WorkOrder        @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  estimateRevision    EstimateRevision? @relation(fields: [organizationId, estimateRevisionId], references: [organizationId, id], onDelete: Cascade)
+  uploadedBy          User?            @relation("AttachmentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id], map: "work_order_attachments_org_id_unique")
   @@index([organizationId, workOrderId], map: "work_order_attachments_org_wo_idx")
+  @@index([organizationId, estimateRevisionId], map: "work_order_attachments_org_revision_idx")
   @@map("work_order_attachments")
 }
 
@@ -811,6 +814,7 @@ model EstimateRevision {
   lines                EstimateLine[]
   authorizations       Authorization[]
   authorizationLinks   AuthorizationLink[]
+  attachments          WorkOrderAttachment[]
 
   @@unique([workOrderId, revisionNumber], map: "estimate_revision_number_unique")
   @@unique([organizationId, id], map: "estimate_revisions_org_id_unique")

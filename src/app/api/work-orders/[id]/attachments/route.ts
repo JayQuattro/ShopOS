@@ -10,16 +10,18 @@ import { getRequestContext } from "@/modules/tenancy/request-context";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   try {
     const tenantContext = await getRequestContext();
     const { id } = await context.params;
+    const estimateRevisionId = new URL(request.url).searchParams.get("revisionId") ?? undefined;
     const attachments = await listAttachments({
       db,
       context: tenantContext,
       workOrderId: id,
+      ...(estimateRevisionId ? { estimateRevisionId } : {}),
     });
     return Response.json({ attachments }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
@@ -43,6 +45,10 @@ export async function POST(
     return Response.json({ error: "missing_file" }, { status: 400 });
   }
 
+  const revisionField = formData.get("revisionId");
+  const estimateRevisionId =
+    typeof revisionField === "string" && revisionField.length > 0 ? revisionField : undefined;
+
   const body = new Uint8Array(await file.arrayBuffer());
 
   try {
@@ -52,6 +58,7 @@ export async function POST(
       db,
       context: tenantContext,
       workOrderId: id,
+      ...(estimateRevisionId ? { estimateRevisionId } : {}),
       fileName: file.name,
       contentType: file.type || "application/octet-stream",
       body,
@@ -70,6 +77,7 @@ function attachmentError(error: unknown): Response {
     const statusMap: Record<string, number> = {
       work_order_not_found: 404,
       attachment_not_found: 404,
+      revision_not_found: 404,
       storage_not_configured: 503,
       file_too_large: 413,
       invalid_content_type: 415,

@@ -25,6 +25,11 @@ type EstimateData = {
     totalMinor: string;
     authorizationRequired: boolean;
   }>;
+  attachments: ReadonlyArray<{
+    id: string;
+    fileName: string;
+    contentType: string;
+  }>;
 };
 
 type Decision = "APPROVED" | "DECLINED" | "PENDING";
@@ -188,6 +193,31 @@ export default function AuthorizePage() {
         ) : null}
         {!isChangeOrder ? (
           <p className="mt-1 text-sm text-muted-foreground">For {data.customerName}</p>
+        ) : null}
+
+        {data.attachments.length > 0 ? (
+          <div className="mt-6">
+            <h2 className="text-sm font-semibold">Photos from the shop</h2>
+            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {data.attachments.map((attachment) => (
+                <a
+                  key={attachment.id}
+                  href={`/api/public/authorize/${token}/attachments/${attachment.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group block overflow-hidden rounded-lg border border-border bg-muted"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- remote evidence served through the token-scoped route */}
+                  <img
+                    src={`/api/public/authorize/${token}/attachments/${attachment.id}`}
+                    alt={attachment.fileName}
+                    className="aspect-square w-full object-cover transition-opacity group-hover:opacity-90"
+                    loading="lazy"
+                  />
+                </a>
+              ))}
+            </div>
+          </div>
         ) : null}
 
         <div className="mt-6 rounded-lg border border-border bg-card p-4 shadow-sm">
