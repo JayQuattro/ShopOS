@@ -681,6 +681,33 @@ describe("change orders (#129, ADR 0014)", { skip: shouldSkip }, () => {
     ).rejects.toMatchObject({ reason: "revision_decided" });
   });
 
+  it("returns cumulative context on the customer authorization link", async () => {
+    const { createChangeOrder, presentChangeOrder } =
+      await import("@/modules/estimates/change-order-service");
+    const { validateAuthorizationLink } =
+      await import("@/modules/estimates/authorization-link-service");
+    const seed = await seedAuthorizedWorkOrder();
+    const context = seed.context();
+
+    const created = await createChangeOrder({
+      db: dbModule.db,
+      context,
+      workOrderId: seed.workOrderId,
+      note: "Rotor replacement needed.",
+    });
+    await addChangeOrderLine(seed, created.revisionId);
+    await presentChangeOrder({ db: dbModule.db, context, revisionId: created.revisionId });
+
+    const link = await dbModule.db.authorizationLink.findFirst({
+      where: { estimateRevisionId: created.revisionId, revokedAt: null },
+    });
+    const view = await validateAuthorizationLink(dbModule.db, link!.token);
+    expect(view.documentKind).toBe("CHANGE_ORDER");
+    expect(view.changeOrderNumber).toBe(1);
+    expect(view.summaryNote).toContain("Rotor");
+    expect(view.previouslyApprovedMinor).toBe("10600");
+  });
+
   it("denies cross-organization change order operations", async () => {
     const { createChangeOrder } = await import("@/modules/estimates/change-order-service");
     const seedA = await seedAuthorizedWorkOrder();

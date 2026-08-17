@@ -78,6 +78,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           icon: Settings,
           permission: "organizations.manage",
         },
+        {
+          label: "Work preferences",
+          href: `${baseHref}/settings/work`,
+          icon: Settings,
+          permission: "organizations.manage",
+        },
       ],
     },
   ];

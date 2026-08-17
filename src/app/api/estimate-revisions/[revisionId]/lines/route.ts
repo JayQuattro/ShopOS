@@ -12,12 +12,55 @@ const addLineSchema = z.object({
   serviceGroupKey: z.string().trim().min(1).max(80),
   description: z.string().trim().min(1).max(500),
   quantityMilli: z.number().int().min(0),
-  unitPriceMinor: z.number().int().min(0),
+  // Negative unit prices are credit lines, allowed only on change orders
+  // (ADR 0014); the service rejects them for baseline revisions.
+  unitPriceMinor: z.number().int(),
   discountMinor: z.number().int().min(0).default(0),
   taxable: z.boolean(),
   taxRateBasisPoints: z.number().int().min(0),
   position: z.number().int().min(1),
 });
+
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ revisionId: string }> },
+): Promise<Response> {
+  try {
+    const tenantContext = await getRequestContext();
+    const { revisionId } = await context.params;
+    const lines = await db.estimateLine.findMany({
+      where: { estimateRevisionId: revisionId, organizationId: tenantContext.organizationId },
+      orderBy: { position: "asc" },
+      select: {
+        id: true,
+        kind: true,
+        description: true,
+        quantityMilli: true,
+        unitPriceMinor: true,
+        discountMinor: true,
+        taxable: true,
+        taxRateBasisPoints: true,
+        taxMinor: true,
+        totalMinor: true,
+        position: true,
+      },
+    });
+    return Response.json(
+      {
+        lines: lines.map((line) => ({
+          ...line,
+          unitPriceMinor: line.unitPriceMinor.toString(),
+          discountMinor: line.discountMinor.toString(),
+          taxMinor: line.taxMinor.toString(),
+          totalMinor: line.totalMinor.toString(),
+        })),
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch (error) {
+    return mapTenantError(error);
+  }
+}
 
 export async function POST(
   request: Request,

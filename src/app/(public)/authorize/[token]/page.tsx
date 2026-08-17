@@ -10,10 +10,15 @@ import { formatMoney } from "@/i18n/formatters";
 
 type EstimateData = {
   workOrderNumber: string;
+  organizationName: string;
   customerName: string;
   revisionNumber: number;
+  documentKind: "BASELINE" | "CHANGE_ORDER";
+  changeOrderNumber: number | null;
+  summaryNote: string | null;
   currency: string;
   totalMinor: string;
+  previouslyApprovedMinor: string;
   lines: ReadonlyArray<{
     id: string;
     description: string;
@@ -36,6 +41,7 @@ export default function AuthorizePage() {
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [summary, setSummary] = useState<{ approved: string[]; declined: string[] } | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -48,7 +54,6 @@ export default function AuthorizePage() {
         }
         const estimateData: EstimateData = await res.json();
         setData(estimateData);
-        // Default all authorization-required lines to PENDING.
         const initial: Record<string, Decision> = {};
         for (const line of estimateData.lines) {
           initial[line.id] = "PENDING";
@@ -92,6 +97,14 @@ export default function AuthorizePage() {
         setError(body.error ?? "Could not submit your decision.");
         return;
       }
+      setSummary({
+        approved: data.lines
+          .filter((l) => decisions[l.id] === "APPROVED")
+          .map((l) => l.description),
+        declined: data.lines
+          .filter((l) => decisions[l.id] === "DECLINED")
+          .map((l) => l.description),
+      });
       setSubmitted(true);
     } catch {
       setError("Could not submit your decision.");
@@ -121,14 +134,25 @@ export default function AuthorizePage() {
     );
   }
 
-  if (submitted) {
+  if (submitted && data) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-background px-4">
         <div className="w-full max-w-md">
           <Alert variant="info">
             <AlertTitle>Thank you</AlertTitle>
             <AlertDescription>
-              Your authorization decision has been recorded. You can close this page.
+              <p>Your decision has been recorded for work order {data.workOrderNumber}.</p>
+              {summary && summary.approved.length > 0 ? (
+                <p className="mt-2">
+                  <span className="font-medium">Approved:</span> {summary.approved.join(", ")}
+                </p>
+              ) : null}
+              {summary && summary.declined.length > 0 ? (
+                <p className="mt-1">
+                  <span className="font-medium">Declined:</span> {summary.declined.join(", ")}
+                </p>
+              ) : null}
+              <p className="mt-2">You can close this page.</p>
             </AlertDescription>
           </Alert>
         </div>
@@ -138,15 +162,41 @@ export default function AuthorizePage() {
 
   if (!data) return null;
 
+  const isChangeOrder = data.documentKind === "CHANGE_ORDER";
+  const previouslyApproved = Number(data.previouslyApprovedMinor);
+
+  // Live cumulative math: what this submission approves, and the new total.
+  const approvingNow = data.lines
+    .filter((l) => decisions[l.id] === "APPROVED")
+    .reduce((sum, l) => sum + Number(l.totalMinor), 0);
+  const newTotal = previouslyApproved + approvingNow;
+
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background px-4 py-10">
       <div className="w-full max-w-lg">
-        <h1 className="text-xl font-semibold tracking-tight">Authorize work</h1>
+        <h1 className="text-xl font-semibold tracking-tight">
+          {isChangeOrder ? "Approve additional work" : "Authorize work"}
+        </h1>
         <p className="text-sm text-muted-foreground">
-          {data.customerName} · Work order {data.workOrderNumber} · Revision {data.revisionNumber}
+          {data.organizationName} · Work order {data.workOrderNumber}
+          {isChangeOrder
+            ? ` · Change order ${data.changeOrderNumber ?? ""}`
+            : ` · Revision ${data.revisionNumber}`}
         </p>
+        {isChangeOrder && data.summaryNote ? (
+          <p className="mt-3 rounded-md bg-muted px-3 py-2 text-sm">{data.summaryNote}</p>
+        ) : null}
+        {!isChangeOrder ? (
+          <p className="mt-1 text-sm text-muted-foreground">For {data.customerName}</p>
+        ) : null}
 
         <div className="mt-6 rounded-lg border border-border bg-card p-4 shadow-sm">
+          {isChangeOrder ? (
+            <p className="mb-3 text-sm text-muted-foreground">
+              You&rsquo;ve already approved other work on this job. You&rsquo;re only deciding the
+              items below.
+            </p>
+          ) : null}
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-muted-foreground">
@@ -192,10 +242,34 @@ export default function AuthorizePage() {
               ))}
             </tbody>
             <tfoot>
+              {isChangeOrder ? (
+                <>
+                  <tr>
+                    <td className="pt-3 text-muted-foreground">Previously approved</td>
+                    <td className="pt-3 text-right font-mono tabular-nums text-muted-foreground">
+                      {formatMoney(previouslyApproved, data.currency, "en-US")}
+                    </td>
+                    <td></td>
+                  </tr>
+                  <tr>
+                    <td className="pt-1 text-muted-foreground">This change (as selected)</td>
+                    <td className="pt-1 text-right font-mono tabular-nums">
+                      {formatMoney(approvingNow, data.currency, "en-US")}
+                    </td>
+                    <td></td>
+                  </tr>
+                </>
+              ) : null}
               <tr className="border-t border-border">
-                <td className="pt-3 font-semibold">Total</td>
+                <td className="pt-3 font-semibold">
+                  {isChangeOrder ? "New authorized total" : "Total"}
+                </td>
                 <td className="pt-3 text-right font-mono font-semibold tabular-nums">
-                  {formatMoney(Number(data.totalMinor), data.currency, "en-US")}
+                  {formatMoney(
+                    isChangeOrder ? newTotal : Number(data.totalMinor),
+                    data.currency,
+                    "en-US",
+                  )}
                 </td>
                 <td></td>
               </tr>
@@ -218,11 +292,12 @@ export default function AuthorizePage() {
             disabled={submitting}
           />
           <Button type="submit" disabled={submitting || !name.trim()}>
-            {submitting ? "Submitting…" : "Submit authorization"}
+            {submitting ? "Submitting…" : "Submit decision"}
           </Button>
           <p className="text-xs text-muted-foreground">
             By submitting, you authorize the approved services listed above. Declined services will
-            not be performed.
+            not be performed
+            {isChangeOrder ? "; everything you approved previously is unaffected." : "."}
           </p>
         </form>
       </div>

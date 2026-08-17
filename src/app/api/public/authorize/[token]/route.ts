@@ -23,10 +23,15 @@ export async function GET(
     return Response.json(
       {
         workOrderNumber: data.workOrderNumber,
+        organizationName: data.organizationName,
         customerName: data.customerName,
         revisionNumber: data.revisionNumber,
+        documentKind: data.documentKind,
+        changeOrderNumber: data.changeOrderNumber,
+        summaryNote: data.summaryNote,
         currency: data.currency,
         totalMinor: data.totalMinor,
+        previouslyApprovedMinor: data.previouslyApprovedMinor,
         lines: data.lines,
       },
       { headers: { "Cache-Control": "no-store" } },

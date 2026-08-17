@@ -38,11 +38,14 @@ export default async function WorkOrderDetailPage({
       location: { select: { id: true, name: true, timeZone: true } },
       estimateRevisions: {
         orderBy: { revisionNumber: "desc" },
-        take: 5,
+        take: 10,
         select: {
           id: true,
           revisionNumber: true,
           status: true,
+          documentKind: true,
+          changeOrderNumber: true,
+          summaryNote: true,
           currency: true,
           totalMinor: true,
           presentedAt: true,
@@ -210,10 +213,16 @@ export default async function WorkOrderDetailPage({
         <CardContent>
           <EstimatePanel
             workOrderId={wo.id}
+            workOrderStatus={wo.status}
+            canWrite={context.permissions.has("work_orders.write")}
+            canRecordDecisions={context.permissions.has("authorizations.record")}
             revisions={wo.estimateRevisions.map((rev) => ({
               id: rev.id,
               revisionNumber: rev.revisionNumber,
               status: rev.status,
+              documentKind: rev.documentKind,
+              changeOrderNumber: rev.changeOrderNumber,
+              summaryNote: rev.summaryNote,
               currency: rev.currency,
               totalMinor: rev.totalMinor.toString(),
             }))}

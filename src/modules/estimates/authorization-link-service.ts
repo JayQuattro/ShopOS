@@ -111,9 +111,15 @@ export async function validateAuthorizationLink(
     organizationId: string;
     revisionId: string;
     revisionNumber: number;
+    documentKind: "BASELINE" | "CHANGE_ORDER";
+    changeOrderNumber: number | null;
+    summaryNote: string | null;
     currency: string;
     totalMinor: string;
+    /** Cumulative approved total of this work order before this document. */
+    previouslyApprovedMinor: string;
     workOrderNumber: string;
+    organizationName: string;
     customerName: string;
     lines: ReadonlyArray<
       Readonly<{
@@ -131,10 +137,15 @@ export async function validateAuthorizationLink(
       estimateRevision: {
         select: {
           id: true,
+          workOrderId: true,
           revisionNumber: true,
+          documentKind: true,
+          changeOrderNumber: true,
+          summaryNote: true,
           currency: true,
           totalMinor: true,
           workOrder: { select: { number: true, customer: { select: { displayName: true } } } },
+          organization: { select: { name: true } },
           lines: {
             orderBy: { position: "asc" },
             select: { id: true, description: true, totalMinor: true, authorizationRequired: true },
@@ -150,14 +161,51 @@ export async function validateAuthorizationLink(
   if (link.usedAt) throw new AuthorizationLinkFailed("link_used");
 
   const rev = link.estimateRevision;
+
+  // Cumulative framing (ADR 0014): approved lines of the other presented
+  // documents of this work order, in minor units.
+  const otherRevisions = await db.estimateRevision.findMany({
+    where: {
+      organizationId: link.organizationId,
+      workOrderId: rev.workOrderId,
+      status: "PRESENTED",
+      id: { not: rev.id },
+    },
+    select: {
+      lines: {
+        select: {
+          totalMinor: true,
+          authorizationRequired: true,
+          authorizationDecisions: { select: { decision: true }, take: 1 },
+        },
+      },
+    },
+  });
+  const previouslyApprovedMinor = otherRevisions.reduce(
+    (sum, other) =>
+      sum +
+      other.lines
+        .filter(
+          (line) =>
+            line.authorizationDecisions[0]?.decision === "APPROVED" || !line.authorizationRequired,
+        )
+        .reduce((lineSum, line) => lineSum + Number(line.totalMinor), 0),
+    0,
+  );
+
   return {
     linkId: link.id,
     organizationId: link.organizationId,
     revisionId: rev.id,
     revisionNumber: rev.revisionNumber,
+    documentKind: rev.documentKind,
+    changeOrderNumber: rev.changeOrderNumber,
+    summaryNote: rev.summaryNote,
     currency: rev.currency,
     totalMinor: rev.totalMinor.toString(),
+    previouslyApprovedMinor: previouslyApprovedMinor.toString(),
     workOrderNumber: rev.workOrder.number,
+    organizationName: rev.organization.name,
     customerName: rev.workOrder.customer.displayName,
     lines: rev.lines.map((l) => ({
       id: l.id,
