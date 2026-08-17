@@ -2,6 +2,10 @@ import { randomBytes, randomUUID } from "node:crypto";
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
+import {
+  VEHICLE_STAGE_LABELS,
+  type VehicleStageValue,
+} from "@/modules/work-orders/vehicle-staging-service";
 
 export type TrackerServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
 
@@ -172,6 +176,13 @@ const CUSTOMER_TIMELINE: ReadonlyArray<
   },
   { eventType: "authorization.recorded", label: () => "Your decision was recorded" },
   { eventType: "parts.ordered", label: () => "Parts ordered" },
+  {
+    eventType: "vehicle.stage_changed",
+    label: (data) => {
+      const to = String(data.to ?? "");
+      return VEHICLE_STAGE_LABELS[to as VehicleStageValue] ?? "Vehicle moved";
+    },
+  },
   { eventType: "parts.received", label: () => "Parts arrived" },
   { eventType: "invoice.issued", label: () => "Invoice issued" },
   { eventType: "payment.recorded", label: () => "Payment received" },
@@ -182,6 +193,7 @@ export type RepairTrackerView = Readonly<{
   workOrderNumber: string;
   customerName: string;
   statusLabel: string;
+  readyForPickup: boolean;
   awaitingApproval: boolean;
   awaitingParts: boolean;
   authorizeUrl: string | null;
@@ -215,6 +227,7 @@ export async function buildRepairTrackerView(
       id: true,
       number: true,
       status: true,
+      vehicleStage: true,
       customer: { select: { displayName: true } },
       organization: { select: { name: true } },
       invoice: {
@@ -283,6 +296,7 @@ export async function buildRepairTrackerView(
     workOrderNumber: workOrder.number,
     customerName: workOrder.customer.displayName,
     statusLabel: friendlyWorkOrderStatus(workOrder.status),
+    readyForPickup: workOrder.vehicleStage === "READY_FOR_PICKUP",
     awaitingApproval: pendingAuthLink !== null,
     awaitingParts: outstandingParts !== null,
     authorizeUrl: pendingAuthLink ? `/authorize/${pendingAuthLink.token}` : null,

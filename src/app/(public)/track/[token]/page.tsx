@@ -12,6 +12,7 @@ type TrackerView = {
   workOrderNumber: string;
   customerName: string;
   statusLabel: string;
+  readyForPickup: boolean;
   awaitingApproval: boolean;
   awaitingParts: boolean;
   authorizeUrl: string | null;
