@@ -15,6 +15,7 @@ import { WorkOrderEditForm } from "./work-order-edit-form";
 import { StatusTransitionPanel } from "./status-transition-panel";
 import { AttachmentPanel } from "./attachment-panel";
 import { TimePanel } from "./time-panel";
+import { TaskPanel } from "./task-panel";
 
 export default async function WorkOrderDetailPage({
   params,
@@ -279,6 +280,12 @@ export default async function WorkOrderDetailPage({
         workOrderId={wo.id}
         timeZone={wo.location?.timeZone ?? "UTC"}
         technicians={technicians}
+        canWrite={context.permissions.has("work_orders.write")}
+      />
+
+      <TaskPanel
+        workOrderId={wo.id}
+        workOrderStatus={wo.status}
         canWrite={context.permissions.has("work_orders.write")}
       />
 
