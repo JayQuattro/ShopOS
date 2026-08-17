@@ -120,6 +120,14 @@ export async function validateAuthorizationLink(
     totalMinor: string;
     /** Cumulative approved total of this work order before this document. */
     previouslyApprovedMinor: string;
+    /** What each earlier document contributed, with its approved lines. */
+    previousDocuments: ReadonlyArray<
+      Readonly<{
+        label: string;
+        approvedLines: ReadonlyArray<Readonly<{ description: string; amountMinor: string }>>;
+        declinedCount: number;
+      }>
+    >;
     workOrderNumber: string;
     organizationName: string;
     customerName: string;
@@ -166,7 +174,8 @@ export async function validateAuthorizationLink(
   const rev = link.estimateRevision;
 
   // Cumulative framing (ADR 0014): approved lines of the other presented
-  // documents of this work order, in minor units.
+  // documents, with per-document detail so the customer sees exactly what
+  // they already authorized.
   const otherRevisions = await db.estimateRevision.findMany({
     where: {
       organizationId: link.organizationId,
@@ -174,9 +183,15 @@ export async function validateAuthorizationLink(
       status: "PRESENTED",
       id: { not: rev.id },
     },
+    orderBy: { revisionNumber: "asc" },
     select: {
+      revisionNumber: true,
+      documentKind: true,
+      changeOrderNumber: true,
       lines: {
+        orderBy: { position: "asc" },
         select: {
+          description: true,
           totalMinor: true,
           authorizationRequired: true,
           authorizationDecisions: { select: { decision: true }, take: 1 },
@@ -184,17 +199,31 @@ export async function validateAuthorizationLink(
       },
     },
   });
-  const previouslyApprovedMinor = otherRevisions.reduce(
-    (sum, other) =>
-      sum +
-      other.lines
-        .filter(
-          (line) =>
-            line.authorizationDecisions[0]?.decision === "APPROVED" || !line.authorizationRequired,
-        )
-        .reduce((lineSum, line) => lineSum + Number(line.totalMinor), 0),
-    0,
-  );
+  let previouslyApprovedMinor = 0;
+  const previousDocuments = otherRevisions.map((other) => {
+    const approvedLines: Array<{ description: string; amountMinor: string }> = [];
+    let declinedCount = 0;
+    for (const line of other.lines) {
+      const decision = line.authorizationDecisions[0]?.decision;
+      if (decision === "APPROVED" || (!line.authorizationRequired && !decision)) {
+        approvedLines.push({
+          description: line.description,
+          amountMinor: line.totalMinor.toString(),
+        });
+        previouslyApprovedMinor += Number(line.totalMinor);
+      } else if (decision === "DECLINED") {
+        declinedCount += 1;
+      }
+    }
+    return {
+      label:
+        other.documentKind === "CHANGE_ORDER"
+          ? `Change order ${other.changeOrderNumber ?? ""}`.trim()
+          : `Estimate (revision ${other.revisionNumber})`,
+      approvedLines,
+      declinedCount,
+    };
+  });
 
   return {
     linkId: link.id,
@@ -209,6 +238,7 @@ export async function validateAuthorizationLink(
     currency: rev.currency,
     totalMinor: rev.totalMinor.toString(),
     previouslyApprovedMinor: previouslyApprovedMinor.toString(),
+    previousDocuments,
     workOrderNumber: rev.workOrder.number,
     organizationName: rev.organization.name,
     customerName: rev.workOrder.customer.displayName,

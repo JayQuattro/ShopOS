@@ -126,17 +126,27 @@ export default async function CustomerDetailPage({
           { label: customer.displayName },
         ]}
         actions={
-          context.permissions.has("customers.write") ? (
-            <CustomerEditForm
-              customerId={customer.id}
-              initialDisplayName={customer.displayName}
-              initialEmail={customer.primaryEmail ?? ""}
-              initialPhone={customer.primaryPhone ?? ""}
-              initialReference={customer.organizationReference ?? ""}
-              initialInternalNotes={customer.internalNotes ?? ""}
-              canWrite
-            />
-          ) : undefined
+          <div className="flex items-center gap-2">
+            <a
+              href={`/print/${context.organizationId}/customer/${customer.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              Print
+            </a>
+            {context.permissions.has("customers.write") ? (
+              <CustomerEditForm
+                customerId={customer.id}
+                initialDisplayName={customer.displayName}
+                initialEmail={customer.primaryEmail ?? ""}
+                initialPhone={customer.primaryPhone ?? ""}
+                initialReference={customer.organizationReference ?? ""}
+                initialInternalNotes={customer.internalNotes ?? ""}
+                canWrite
+              />
+            ) : null}
+          </div>
         }
       />
 

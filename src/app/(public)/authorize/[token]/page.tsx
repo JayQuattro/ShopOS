@@ -19,6 +19,11 @@ type EstimateData = {
   currency: string;
   totalMinor: string;
   previouslyApprovedMinor: string;
+  previousDocuments: ReadonlyArray<{
+    label: string;
+    approvedLines: ReadonlyArray<{ description: string; amountMinor: string }>;
+    declinedCount: number;
+  }>;
   lines: ReadonlyArray<{
     id: string;
     description: string;
@@ -221,10 +226,39 @@ export default function AuthorizePage() {
         ) : null}
 
         <div className="mt-6 rounded-lg border border-border bg-card p-4 shadow-sm">
+          {isChangeOrder && data.previousDocuments.length > 0 ? (
+            <details className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2">
+              <summary className="cursor-pointer text-sm font-medium">
+                What you&rsquo;ve already approved on this job
+              </summary>
+              <div className="mt-2 flex flex-col gap-2">
+                {data.previousDocuments.map((doc) => (
+                  <div key={doc.label}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {doc.label}
+                      {doc.declinedCount > 0
+                        ? ` · ${doc.declinedCount} item${doc.declinedCount === 1 ? "" : "s"} declined`
+                        : ""}
+                    </p>
+                    <ul className="mt-1 flex flex-col gap-0.5">
+                      {doc.approvedLines.map((line, index) => (
+                        <li key={index} className="flex justify-between gap-4 text-sm">
+                          <span>{line.description}</span>
+                          <span className="font-mono tabular-nums">
+                            {formatMoney(Number(line.amountMinor), data.currency, "en-US")}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
           {isChangeOrder ? (
             <p className="mb-3 text-sm text-muted-foreground">
-              You&rsquo;ve already approved other work on this job. You&rsquo;re only deciding the
-              items below.
+              You&rsquo;re only deciding the items below — everything above stays approved exactly
+              as it is.
             </p>
           ) : null}
           <table className="w-full text-sm">
