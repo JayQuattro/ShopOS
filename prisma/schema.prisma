@@ -194,6 +194,7 @@ model User {
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   timeEntries            TimeEntry[]                       @relation("TimeEntryWorker")
   createdTasks           WorkOrderTask[]                @relation("TaskCreatedBy")
+  createdPartOrders       PartOrder[]                    @relation("PartOrderCreatedBy")
   auditEvents            AuditEvent[]                      @relation("AuditActor")
   themePublications      OrganizationThemePublication[]    @relation("ThemePublishedBy")
   connectorInstances     ConnectorInstance[]               @relation("ConnectorCreatedBy")
@@ -235,6 +236,9 @@ model Organization {
   appointments        Appointment[]
   timeEntries          TimeEntry[]
   workOrderTasks     WorkOrderTask[]
+  partSuppliers      PartSupplier[]
+  partOrders         PartOrder[]
+  partOrderLines    PartOrderLine[]
   estimateRevisions   EstimateRevision[]
   estimateLines       EstimateLine[]
   authorizations      Authorization[]
@@ -790,6 +794,7 @@ model WorkOrder {
   appointments      Appointment[]
   timeEntries        TimeEntry[]
   tasks              WorkOrderTask[]
+  partOrders         PartOrder[]
   activityEvents    ActivityEvent[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
@@ -806,6 +811,91 @@ enum WorkOrderTaskStatus {
   SKIPPED          @map("skipped")
 
   @@map("work_order_task_status")
+}
+
+enum PartOrderStatus {
+  REQUESTED @map("requested")
+  ORDERED   @map("ordered")
+  RECEIVED  @map("received")
+  CANCELLED @map("cancelled")
+
+  @@map("part_order_status")
+}
+
+enum PartOrderSource {
+  MANUAL    @map("manual")
+  CONNECTOR @map("connector")
+
+  @@map("part_order_source")
+}
+
+model PartSupplier {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(180)
+  phone          String?  @db.VarChar(40)
+  email          String?  @db.VarChar(320)
+  website        String?  @db.VarChar(2048)
+  notes          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  orders         PartOrder[]
+
+  @@unique([organizationId, id], map: "part_suppliers_org_id_unique")
+  @@unique([organizationId, name], map: "part_suppliers_org_name_unique")
+  @@index([organizationId, active], map: "part_suppliers_org_active_idx")
+  @@map("part_suppliers")
+}
+
+model PartOrder {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String          @map("organization_id") @db.Uuid
+  locationId      String          @map("location_id") @db.Uuid
+  workOrderId     String          @map("work_order_id") @db.Uuid
+  supplierId      String          @map("supplier_id") @db.Uuid
+  status          PartOrderStatus @default(REQUESTED)
+  source          PartOrderSource @default(MANUAL) @map("source")
+  externalOrderId String?         @map("external_order_id") @db.VarChar(180)
+  currency        String          @db.VarChar(3)
+  trackingNumber  String?         @map("tracking_number") @db.VarChar(180)
+  note            String?
+  orderedAt       DateTime?       @map("ordered_at") @db.Timestamptz(6)
+  receivedAt      DateTime?       @map("received_at") @db.Timestamptz(6)
+  createdByUserId String?         @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workOrder       WorkOrder       @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  supplier        PartSupplier    @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       User?           @relation("PartOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lines           PartOrderLine[]
+
+  @@unique([organizationId, id], map: "part_orders_org_id_unique")
+  @@index([organizationId, workOrderId], map: "part_orders_org_wo_idx")
+  @@index([organizationId, status], map: "part_orders_org_status_idx")
+  @@map("part_orders")
+}
+
+model PartOrderLine {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  partOrderId     String   @map("part_order_id") @db.Uuid
+  description     String
+  partNumber      String?  @map("part_number") @db.VarChar(120)
+  quantity        Int
+  receivedQuantity Int    @default(0) @map("received_quantity")
+  unitCostMinor   BigInt   @map("unit_cost_minor")
+  note            String?
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  partOrder       PartOrder @relation(fields: [organizationId, partOrderId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id], map: "part_order_lines_org_id_unique")
+  @@index([organizationId, partOrderId], map: "part_order_lines_org_order_idx")
+  @@map("part_order_lines")
 }
 
 model WorkOrderTask {

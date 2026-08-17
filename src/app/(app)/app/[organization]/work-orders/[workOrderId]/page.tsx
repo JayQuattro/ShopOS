@@ -16,6 +16,7 @@ import { StatusTransitionPanel } from "./status-transition-panel";
 import { AttachmentPanel } from "./attachment-panel";
 import { TimePanel } from "./time-panel";
 import { TaskPanel } from "./task-panel";
+import { PartsPanel } from "./parts-panel";
 
 export default async function WorkOrderDetailPage({
   params,
@@ -288,6 +289,8 @@ export default async function WorkOrderDetailPage({
         workOrderStatus={wo.status}
         canWrite={context.permissions.has("work_orders.write")}
       />
+
+      <PartsPanel workOrderId={wo.id} canWrite={context.permissions.has("work_orders.write")} />
 
       <Card>
         <CardHeader>
