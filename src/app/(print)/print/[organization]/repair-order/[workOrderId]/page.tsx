@@ -37,6 +37,10 @@ export default async function RepairOrderPrintPage({
       customer: { select: { displayName: true, primaryPhone: true, primaryEmail: true } },
       asset: { select: { displayName: true, manufacturer: true, model: true } },
       assignedTechnician: { select: { displayName: true } },
+      qcStatus: true,
+      qcNote: true,
+      qcPassedAt: true,
+      qcPassedBy: { select: { displayName: true } },
       assistingTechnicians: { select: { user: { select: { displayName: true } } } },
       tasks: {
         orderBy: { position: "asc" },
@@ -169,6 +173,16 @@ export default async function RepairOrderPrintPage({
                 </li>
               ))}
             </ul>
+          </PrintSection>
+        ) : null}
+
+        {workOrder.qcStatus === "passed" ? (
+          <PrintSection heading="Quality control">
+            <p>
+              Passed{workOrder.qcPassedBy ? ` by ${workOrder.qcPassedBy.displayName}` : ""}
+              {workOrder.qcPassedAt ? ` on ${formatDate(workOrder.qcPassedAt, tz, "en-US")}` : ""}
+              {workOrder.qcNote ? ` — ${workOrder.qcNote}` : ""}
+            </p>
           </PrintSection>
         ) : null}
 

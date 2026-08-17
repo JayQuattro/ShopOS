@@ -17,6 +17,7 @@ import { StatusTransitionPanel } from "./status-transition-panel";
 import { AttachmentPanel } from "./attachment-panel";
 import { TimePanel } from "./time-panel";
 import { TaskPanel } from "./task-panel";
+import { QualityCheckCard } from "./quality-check-card";
 import { PartsPanel } from "./parts-panel";
 import { TrackerLinkCard } from "./tracker-link-card";
 import { ApplyTemplateCard } from "./apply-template-card";
@@ -325,6 +326,12 @@ export default async function WorkOrderDetailPage({
 
       <ApplyTemplateCard
         workOrderId={wo.id}
+        canWrite={context.permissions.has("work_orders.write")}
+      />
+
+      <QualityCheckCard
+        workOrderId={wo.id}
+        timeZone={wo.location?.timeZone ?? "UTC"}
         canWrite={context.permissions.has("work_orders.write")}
       />
 

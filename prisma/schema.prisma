@@ -199,6 +199,7 @@ model User {
   recordedPayments       Payment[]                         @relation("PaymentRecordedBy")
   activityEvents         ActivityEvent[]                   @relation("ActivityActor")
   assignedWorkOrders    WorkOrder[]                       @relation("WorkOrderTechnician")
+  qcPassedWorkOrders   WorkOrder[]                       @relation("WorkOrderQcPassedBy")
   assistingWorkOrders   WorkOrderTechnician[]             @relation("WorkOrderAssistingTechnician")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   timeEntries            TimeEntry[]                       @relation("TimeEntryWorker")
@@ -228,6 +229,7 @@ model Organization {
   defaultCurrency     String                           @default("USD") @map("default_currency") @db.VarChar(3)
   changeOrderCreditPolicy ChangeOrderCreditPolicy      @default(AUTO_APPLY) @map("change_order_credit_policy")
   defaultPaperSize       PaperSize                    @default(LETTER) @map("default_paper_size")
+  qualityCheckRequired  Boolean                      @default(true) @map("quality_check_required")
   invoiceLinePolicy   InvoiceLinePolicy                @default(APPROVED_ONLY) @map("invoice_line_policy")
   subscriptionState   SubscriptionState                @default(UNMANAGED) @map("subscription_state")
   createdAt           DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -794,6 +796,10 @@ model WorkOrder {
   customerConcern   String             @map("customer_concern")
   promisedAt        DateTime?          @map("promised_at") @db.Timestamptz(6)
   assignedTechnicianUserId String?     @map("assigned_technician_user_id") @db.Uuid
+  qcStatus              String         @default("pending") @map("qc_status")
+  qcNote                String?        @map("qc_note")
+  qcPassedByUserId      String?        @map("qc_passed_by_user_id") @db.Uuid
+  qcPassedAt            DateTime?      @map("qc_passed_at") @db.Timestamptz(6)
   vehicleStage      VehicleStage?      @map("vehicle_stage")
   bayLabel          String?            @map("bay_label") @db.VarChar(60)
   completedAt       DateTime?          @map("completed_at") @db.Timestamptz(6)
@@ -804,6 +810,7 @@ model WorkOrder {
   customer          Customer           @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
   asset             Asset?             @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
   assignedTechnician User?             @relation("WorkOrderTechnician", fields: [assignedTechnicianUserId], references: [id], onDelete: Restrict)
+  qcPassedBy           User?            @relation("WorkOrderQcPassedBy", fields: [qcPassedByUserId], references: [id], onDelete: Restrict)
   workOrderAssets   WorkOrderAsset[]
   attachments       WorkOrderAttachment[]
   estimateRevisions EstimateRevision[]
