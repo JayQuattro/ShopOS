@@ -112,6 +112,7 @@ async function seed(): Promise<void> {
       create: {
         id: ids.owner,
         email: "owner@example.test",
+        emailVerified: true,
         displayName: "Jordan Lee",
       },
     });
@@ -614,6 +615,7 @@ async function seedOperationalDemo(): Promise<void> {
       create: {
         id: ids.technician,
         email: "maria@example.test",
+        emailVerified: true,
         displayName: "Maria Chen",
       },
     });
