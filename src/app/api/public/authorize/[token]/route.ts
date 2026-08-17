@@ -3,12 +3,14 @@ import { z } from "zod";
 import { db } from "@/db/client";
 import { validateAuthorizationLink } from "@/modules/estimates/authorization-link-service";
 import { AuthorizationLinkFailed } from "@/modules/estimates/authorization-link-service";
+import { listAttachmentsForAuthorizationLink } from "@/modules/work-orders/attachment-service";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Public customer authorization endpoint — no authentication required.
- * GET returns the estimate details for the linked token.
+ * GET returns the estimate details for the linked token, including the
+ * document's evidence photos (images only).
  * POST records the customer's approve/decline decisions.
  */
 
@@ -20,6 +22,7 @@ export async function GET(
 
   try {
     const data = await validateAuthorizationLink(db, token);
+    const attachments = await listAttachmentsForAuthorizationLink(db, token);
     return Response.json(
       {
         workOrderNumber: data.workOrderNumber,
@@ -33,6 +36,14 @@ export async function GET(
         totalMinor: data.totalMinor,
         previouslyApprovedMinor: data.previouslyApprovedMinor,
         lines: data.lines,
+        // Renderable evidence only: non-image documents are not exposed.
+        attachments: attachments
+          .filter((attachment) => attachment.contentType.startsWith("image/"))
+          .map((attachment) => ({
+            id: attachment.id,
+            fileName: attachment.fileName,
+            contentType: attachment.contentType,
+          })),
       },
       { headers: { "Cache-Control": "no-store" } },
     );

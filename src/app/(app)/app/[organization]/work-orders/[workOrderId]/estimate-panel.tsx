@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/i18n/formatters";
+import { AttachmentPanel } from "./attachment-panel";
 import { AuthorizationRecorder } from "./authorization-recorder";
 
 export type Revision = {
@@ -438,6 +439,17 @@ export function EstimatePanel({
               <Button variant="outline" size="sm" onClick={resendLink} disabled={pending}>
                 Resend authorization email
               </Button>
+            </div>
+          ) : null}
+
+          {canWrite && (isDraft || selectedRev.status === "PRESENTED") ? (
+            <div className="border-t border-border pt-3">
+              <AttachmentPanel
+                workOrderId={workOrderId}
+                canWrite={canWrite}
+                estimateRevisionId={selectedRev.id}
+                compact
+              />
             </div>
           ) : null}
 
