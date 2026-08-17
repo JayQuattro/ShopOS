@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/shopos/page-header";
 import { db } from "@/db/client";
 import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { listAssignableTechnicians } from "@/modules/work-orders/assignment-service";
+import { AssignmentSelect } from "./assignment-select";
 import { EstimatePanel } from "./estimate-panel";
 import { InvoicePanel } from "./invoice-panel";
 import { WorkOrderEditForm } from "./work-order-edit-form";
@@ -68,6 +70,8 @@ export default async function WorkOrderDetailPage({
       },
     },
   });
+
+  const technicians = wo ? await listAssignableTechnicians({ db, context }) : [];
 
   if (!wo) {
     return (
@@ -136,8 +140,13 @@ export default async function WorkOrderDetailPage({
         </Card>
         <Card>
           <CardContent className="py-4">
-            <p className="text-xs text-muted-foreground">Type</p>
-            <p className="font-medium capitalize">{wo.workType.toLowerCase()}</p>
+            <p className="text-xs text-muted-foreground">Technician</p>
+            <AssignmentSelect
+              workOrderId={wo.id}
+              technicians={technicians}
+              assignedUserId={wo.assignedTechnicianUserId}
+              canWrite={context.permissions.has("work_orders.write")}
+            />
           </CardContent>
         </Card>
       </div>

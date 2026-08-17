@@ -179,6 +179,7 @@ model User {
   recordedAuthorizations Authorization[]                   @relation("AuthorizationRecordedBy")
   recordedPayments       Payment[]                         @relation("PaymentRecordedBy")
   activityEvents         ActivityEvent[]                   @relation("ActivityActor")
+  assignedWorkOrders    WorkOrder[]                       @relation("WorkOrderTechnician")
   auditEvents            AuditEvent[]                      @relation("AuditActor")
   themePublications      OrganizationThemePublication[]    @relation("ThemePublishedBy")
   connectorInstances     ConnectorInstance[]               @relation("ConnectorCreatedBy")
@@ -725,6 +726,7 @@ model WorkOrder {
   status            WorkOrderStatus    @default(DRAFT)
   customerConcern   String             @map("customer_concern")
   promisedAt        DateTime?          @map("promised_at") @db.Timestamptz(6)
+  assignedTechnicianUserId String?     @map("assigned_technician_user_id") @db.Uuid
   completedAt       DateTime?          @map("completed_at") @db.Timestamptz(6)
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -732,6 +734,7 @@ model WorkOrder {
   location          Location           @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
   customer          Customer           @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
   asset             Asset?             @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+  assignedTechnician User?             @relation("WorkOrderTechnician", fields: [assignedTechnicianUserId], references: [id], onDelete: Restrict)
   workOrderAssets   WorkOrderAsset[]
   attachments       WorkOrderAttachment[]
   estimateRevisions EstimateRevision[]
