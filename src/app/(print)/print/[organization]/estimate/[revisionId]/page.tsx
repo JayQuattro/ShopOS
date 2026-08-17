@@ -71,8 +71,8 @@ export default async function EstimatePrintPage({
         organizationName={revision.organization.name}
         locationName={revision.location.name}
         title={title}
-        subtitle={`${revision.workOrder.number}
-        paper={paper} · revision ${revision.revisionNumber}`}
+        subtitle={`${revision.workOrder.number} · revision ${revision.revisionNumber}`}
+        paper={paper}
       >
         <PrintSection heading="Customer & vehicle">
           <PrintKV

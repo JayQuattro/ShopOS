@@ -48,8 +48,8 @@ export function PrintFrame({
             <div className="text-right">
               <p className="text-lg font-semibold uppercase tracking-wide">{title}</p>
               {subtitle ? <p className="text-sm text-neutral-600">{subtitle}</p> : null}
-              <p className="text-xs text-neutral-500">
-                Printed {new Date().toLocaleDateString("en-US")}
+              <p className="text-xs text-neutral-500" suppressHydrationWarning>
+                Printed {new Date().toLocaleDateString("en-US", { timeZone: "UTC" })}
               </p>
             </div>
           </div>
