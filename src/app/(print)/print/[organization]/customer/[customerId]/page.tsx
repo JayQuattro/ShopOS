@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { resolvePaperSize } from "@/modules/organizations/paper-size";
 import { PrintButton } from "@/components/print/print-button";
 import { PrintFrame, PrintKV, PrintSection } from "@/components/print/print-frame";
 
@@ -10,10 +11,13 @@ export const dynamic = "force-dynamic";
 
 export default async function CustomerPrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organization: string; customerId: string }>;
+  searchParams: Promise<{ paper?: string }>;
 }) {
   const { organization, customerId } = await params;
+  const { paper: paperOverride } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) notFound();
 
@@ -26,7 +30,7 @@ export default async function CustomerPrintPage({
       primaryPhone: true,
       organizationReference: true,
       internalNotes: true,
-      organization: { select: { name: true } },
+      organization: { select: { name: true, defaultPaperSize: true } },
       contacts: {
         orderBy: [{ isPrimary: "desc" }, { name: "asc" }],
         select: { name: true, role: true, email: true, phone: true },
@@ -72,14 +76,17 @@ export default async function CustomerPrintPage({
     );
   }
 
+  const paper = resolvePaperSize(customer.organization.defaultPaperSize, paperOverride);
+
   return (
     <>
-      <PrintButton />
+      <PrintButton paper={paper} />
       <PrintFrame
         organizationName={customer.organization.name}
         locationName={null}
         title="Customer record"
         subtitle={customer.displayName}
+        paper={paper}
       >
         <PrintSection heading="Profile">
           <PrintKV

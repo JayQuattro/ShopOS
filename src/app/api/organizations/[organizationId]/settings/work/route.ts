@@ -16,8 +16,8 @@ export async function GET(
   context: { params: Promise<{ organizationId: string }> },
 ): Promise<Response> {
   try {
-    const tenantContext = await getRequestContext();
     const { organizationId } = await context.params;
+    const tenantContext = await getRequestContext(organizationId);
     if (tenantContext.organizationId !== organizationId) {
       return Response.json({ error: "organization_denied" }, { status: 403 });
     }
@@ -34,6 +34,7 @@ export async function GET(
 const updateSchema = z.object({
   changeOrderCreditPolicy: z.enum(["AUTO_APPLY", "REQUIRE_APPROVAL"]),
   invoiceLinePolicy: z.enum(["APPROVED_ONLY", "ALL_LINES"]),
+  defaultPaperSize: z.enum(["LETTER", "A4", "LEGAL"]),
 });
 
 export async function PUT(
@@ -53,8 +54,8 @@ export async function PUT(
   }
 
   try {
-    const tenantContext = await getRequestContext();
     const { organizationId } = await context.params;
+    const tenantContext = await getRequestContext(organizationId);
     if (tenantContext.organizationId !== organizationId) {
       return Response.json({ error: "organization_denied" }, { status: 403 });
     }

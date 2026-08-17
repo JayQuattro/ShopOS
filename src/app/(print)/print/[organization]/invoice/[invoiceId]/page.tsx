@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { resolvePaperSize } from "@/modules/organizations/paper-size";
 import { PrintButton } from "@/components/print/print-button";
 import { PrintFrame, PrintKV, PrintSection } from "@/components/print/print-frame";
 
@@ -10,10 +11,13 @@ export const dynamic = "force-dynamic";
 
 export default async function InvoicePrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organization: string; invoiceId: string }>;
+  searchParams: Promise<{ paper?: string }>;
 }) {
   const { organization, invoiceId } = await params;
+  const { paper: paperOverride } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) notFound();
 
@@ -29,7 +33,7 @@ export default async function InvoicePrintPage({
       totalMinor: true,
       paidMinor: true,
       issuedAt: true,
-      organization: { select: { name: true } },
+      organization: { select: { name: true, defaultPaperSize: true } },
       location: { select: { name: true } },
       workOrder: {
         select: {
@@ -55,14 +59,17 @@ export default async function InvoicePrintPage({
   const money = (minor: bigint | number) => formatMoney(Number(minor), currency, "en-US");
   const balance = invoice.totalMinor - invoice.paidMinor;
 
+  const paper = resolvePaperSize(invoice.organization.defaultPaperSize, paperOverride);
+
   return (
     <>
-      <PrintButton />
+      <PrintButton paper={paper} />
       <PrintFrame
         organizationName={invoice.organization.name}
         locationName={invoice.location.name}
         title="Invoice"
-        subtitle={`${invoice.number} · ${invoice.workOrder.number}`}
+        subtitle={`${invoice.number}
+        paper={paper} · ${invoice.workOrder.number}`}
       >
         <PrintSection heading="Bill to">
           <PrintKV

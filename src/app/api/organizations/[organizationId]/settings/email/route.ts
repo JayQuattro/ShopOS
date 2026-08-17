@@ -19,8 +19,8 @@ export async function GET(
   context: { params: Promise<{ organizationId: string }> },
 ): Promise<Response> {
   try {
-    const tenantContext = await getRequestContext();
     const { organizationId } = await context.params;
+    const tenantContext = await getRequestContext(organizationId);
     if (tenantContext.organizationId !== organizationId) {
       return Response.json({ error: "organization_denied" }, { status: 403 });
     }
@@ -62,8 +62,8 @@ export async function PUT(
   }
 
   try {
-    const tenantContext = await getRequestContext();
     const { organizationId } = await context.params;
+    const tenantContext = await getRequestContext(organizationId);
     if (tenantContext.organizationId !== organizationId) {
       return Response.json({ error: "organization_denied" }, { status: 403 });
     }
@@ -94,8 +94,8 @@ export async function DELETE(
   }
 
   try {
-    const tenantContext = await getRequestContext();
     const { organizationId } = await context.params;
+    const tenantContext = await getRequestContext(organizationId);
     if (tenantContext.organizationId !== organizationId) {
       return Response.json({ error: "organization_denied" }, { status: 403 });
     }

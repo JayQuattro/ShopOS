@@ -1,26 +1,44 @@
 import type { ReactNode } from "react";
 
+import type { PaperSizeValue } from "@/modules/organizations/paper-size";
+
 /**
  * The skeleton of every printed document: shop letterhead, a document title,
  * and consistent print typography. Pages render black-on-white, sized for
  * letter paper, with the print button overlay excluded via print:hidden.
  */
+/** CSS @page size and on-screen width per paper size. */
+const PAPER_CSS: Readonly<
+  Record<PaperSizeValue, { page: string; width: string; padding: string }>
+> = {
+  LETTER: { page: "letter", width: "max-w-[8.5in]", padding: "px-[0.75in]" },
+  A4: { page: "A4", width: "max-w-[210mm]", padding: "px-[18mm]" },
+  LEGAL: { page: "legal", width: "max-w-[8.5in]", padding: "px-[0.75in]" },
+};
+
 export function PrintFrame({
   organizationName,
   locationName,
   title,
   subtitle,
+  paper = "LETTER",
   children,
 }: Readonly<{
   organizationName: string;
   locationName?: string | null;
   title: string;
   subtitle?: string;
+  paper?: PaperSizeValue;
   children: ReactNode;
 }>) {
+  const css = PAPER_CSS[paper];
   return (
     <div className="min-h-svh bg-neutral-100 text-neutral-900 print:bg-white">
-      <div className="mx-auto max-w-[8.5in] bg-white px-[0.75in] py-10 shadow-sm print:shadow-none">
+      {/* Server-rendered stylesheet: sets the printed page size. */}
+      <style dangerouslySetInnerHTML={{ __html: `@page { size: ${css.page}; margin: 0.5in; }` }} />
+      <div
+        className={`mx-auto ${css.width} ${css.padding} bg-white py-10 shadow-sm print:shadow-none`}
+      >
         <header className="border-b-2 border-neutral-900 pb-4">
           <div className="flex items-start justify-between">
             <div>

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { formatDate } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { resolvePaperSize } from "@/modules/organizations/paper-size";
 import { PrintButton } from "@/components/print/print-button";
 import { PrintFrame, PrintSection } from "@/components/print/print-frame";
 
@@ -21,10 +22,13 @@ const Line = ({ label }: Readonly<{ label: string }>) => (
  */
 export default async function IntakePrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organization: string }>;
+  searchParams: Promise<{ paper?: string }>;
 }) {
   const { organization } = await params;
+  const { paper: paperOverride } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) notFound();
 
@@ -32,14 +36,17 @@ export default async function IntakePrintPage({
     where: { id: context.organizationId },
     select: {
       name: true,
+      defaultPaperSize: true,
       locations: { where: { active: true }, orderBy: { code: "asc" }, select: { name: true } },
     },
   });
   if (!org) notFound();
 
+  const paper = resolvePaperSize(org.defaultPaperSize, paperOverride);
+
   return (
     <>
-      <PrintButton />
+      <PrintButton paper={paper} />
       <PrintFrame
         organizationName={org.name}
         locationName={org.locations.map((location) => location.name).join(" · ")}
