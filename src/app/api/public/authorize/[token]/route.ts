@@ -116,6 +116,23 @@ export async function POST(
     const { markLinkUsed } = await import("@/modules/estimates/authorization-link-service");
     await markLinkUsed(db, linkData.linkId);
 
+    // Customer receipt email via the outbox (same event as staff-recorded
+    // decisions, so every recorded decision produces one receipt).
+    await db.outboxEvent.create({
+      data: {
+        id: randomUUID(),
+        organizationId: linkData.organizationId,
+        eventType: "authorization.recorded",
+        aggregateType: "authorization",
+        aggregateId: authorization.id,
+        payload: {
+          revisionId: linkData.revisionId,
+          workOrderId: linkData.workOrderId,
+          locationId: linkData.locationId,
+        },
+      },
+    });
+
     // Transition the work order to AUTHORIZED if at least one line was approved.
     const hasApproval = parsed.data.decisions.some((d) => d.decision === "APPROVED");
     if (hasApproval) {

@@ -1,7 +1,12 @@
 import "dotenv/config";
 
 import { db } from "../src/db/client";
+import { AuthorizationRecordedEmailHandler } from "../src/modules/estimates/authorization-receipt-handler";
 import { EstimatePresentedEmailHandler } from "../src/modules/estimates/estimate-email-handler";
+import {
+  InvoiceIssuedEmailHandler,
+  PaymentRecordedEmailHandler,
+} from "../src/modules/invoices/invoice-email-handlers";
 import { EventHandlerRegistry } from "../src/modules/outbox/event-handler";
 import { OutboxDispatcher } from "../src/modules/outbox/outbox-dispatcher";
 
@@ -23,6 +28,9 @@ async function main(): Promise<void> {
 
   const handlers = new EventHandlerRegistry();
   handlers.register(new EstimatePresentedEmailHandler(db));
+  handlers.register(new AuthorizationRecordedEmailHandler(db));
+  handlers.register(new InvoiceIssuedEmailHandler(db));
+  handlers.register(new PaymentRecordedEmailHandler(db));
 
   const dispatcher = new OutboxDispatcher({
     db,
