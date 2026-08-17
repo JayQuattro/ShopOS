@@ -68,8 +68,8 @@ export default async function InvoicePrintPage({
         organizationName={invoice.organization.name}
         locationName={invoice.location.name}
         title="Invoice"
-        subtitle={`${invoice.number}
-        paper={paper} · ${invoice.workOrder.number}`}
+        subtitle={`${invoice.number} · ${invoice.workOrder.number}`}
+        paper={paper}
       >
         <PrintSection heading="Bill to">
           <PrintKV
