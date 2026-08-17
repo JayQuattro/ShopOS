@@ -12,3 +12,6 @@ dist/
 tmp/
 .zcode/
 Open-Source Shop Management Platform Bootstrap.pdf
+
+# Seeded local file storage (created by pnpm db:seed)
+.data/
