@@ -36,8 +36,11 @@ export type ShellContext = Readonly<{
  * provides the user identity; the tenant context provides the org and
  * permissions; display fields are fetched in scoped queries.
  */
-export async function resolveShellContext(db: PrismaClient): Promise<ShellContext> {
-  const tenant = await getRequestContext();
+export async function resolveShellContext(
+  db: PrismaClient,
+  forOrganizationId?: string,
+): Promise<ShellContext> {
+  const tenant = await getRequestContext(forOrganizationId);
   const session = await getCurrentSession();
 
   if (!session) {

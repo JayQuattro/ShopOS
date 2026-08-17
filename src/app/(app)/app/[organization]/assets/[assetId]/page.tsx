@@ -12,8 +12,8 @@ export default async function AssetDetailPage({
 }: {
   params: Promise<{ organization: string; assetId: string }>;
 }) {
-  const context = await getRequestContext();
   const { organization, assetId } = await params;
+  const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
   }
