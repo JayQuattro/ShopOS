@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { formatDate, formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { resolvePaperSize } from "@/modules/organizations/paper-size";
 import { PrintButton } from "@/components/print/print-button";
 import { PrintFrame, PrintKV, PrintSection } from "@/components/print/print-frame";
 
@@ -10,10 +11,13 @@ export const dynamic = "force-dynamic";
 
 export default async function RepairOrderPrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organization: string; workOrderId: string }>;
+  searchParams: Promise<{ paper?: string }>;
 }) {
   const { organization, workOrderId } = await params;
+  const { paper: paperOverride } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) notFound();
 
@@ -28,7 +32,7 @@ export default async function RepairOrderPrintPage({
       promisedAt: true,
       completedAt: true,
       bayLabel: true,
-      organization: { select: { name: true } },
+      organization: { select: { name: true, defaultPaperSize: true } },
       location: { select: { name: true, timeZone: true } },
       customer: { select: { displayName: true, primaryPhone: true, primaryEmail: true } },
       asset: { select: { displayName: true, manufacturer: true, model: true } },
@@ -61,6 +65,7 @@ export default async function RepairOrderPrintPage({
   if (!workOrder) notFound();
 
   const tz = workOrder.location.timeZone;
+  const paper = resolvePaperSize(workOrder.organization.defaultPaperSize, paperOverride);
   const totalMinutes = workOrder.timeEntries.reduce((sum, entry) => {
     if (!entry.endedAt) return sum;
     return (
@@ -73,12 +78,13 @@ export default async function RepairOrderPrintPage({
 
   return (
     <>
-      <PrintButton />
+      <PrintButton paper={paper} />
       <PrintFrame
         organizationName={workOrder.organization.name}
         locationName={workOrder.location.name}
         title="Repair order"
         subtitle={workOrder.number}
+        paper={paper}
       >
         <PrintSection heading="Customer & vehicle">
           <PrintKV

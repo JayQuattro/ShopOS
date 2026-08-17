@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { resolvePaperSize } from "@/modules/organizations/paper-size";
 import { PrintButton } from "@/components/print/print-button";
 import { PrintFrame, PrintKV, PrintSection } from "@/components/print/print-frame";
 
@@ -10,10 +11,13 @@ export const dynamic = "force-dynamic";
 
 export default async function EstimatePrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organization: string; revisionId: string }>;
+  searchParams: Promise<{ paper?: string }>;
 }) {
   const { organization, revisionId } = await params;
+  const { paper: paperOverride } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) notFound();
 
@@ -32,7 +36,7 @@ export default async function EstimatePrintPage({
       totalMinor: true,
       presentedAt: true,
       expiresAt: true,
-      organization: { select: { name: true } },
+      organization: { select: { name: true, defaultPaperSize: true } },
       location: { select: { name: true } },
       workOrder: {
         select: {
@@ -58,14 +62,17 @@ export default async function EstimatePrintPage({
       ? `Change order ${revision.changeOrderNumber ?? ""}`.trim()
       : "Estimate";
 
+  const paper = resolvePaperSize(revision.organization.defaultPaperSize, paperOverride);
+
   return (
     <>
-      <PrintButton />
+      <PrintButton paper={paper} />
       <PrintFrame
         organizationName={revision.organization.name}
         locationName={revision.location.name}
         title={title}
-        subtitle={`${revision.workOrder.number} · revision ${revision.revisionNumber}`}
+        subtitle={`${revision.workOrder.number}
+        paper={paper} · revision ${revision.revisionNumber}`}
       >
         <PrintSection heading="Customer & vehicle">
           <PrintKV

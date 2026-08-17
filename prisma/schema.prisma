@@ -70,6 +70,14 @@ enum ChangeOrderCreditPolicy {
   @@map("change_order_credit_policy")
 }
 
+enum PaperSize {
+  LETTER @map("letter")
+  A4     @map("a4")
+  LEGAL  @map("legal")
+
+  @@map("paper_size")
+}
+
 enum InvoiceLinePolicy {
   APPROVED_ONLY @map("approved_only")
   ALL_LINES     @map("all_lines")
@@ -219,6 +227,7 @@ model Organization {
   status              OrganizationStatus               @default(ACTIVE)
   defaultCurrency     String                           @default("USD") @map("default_currency") @db.VarChar(3)
   changeOrderCreditPolicy ChangeOrderCreditPolicy      @default(AUTO_APPLY) @map("change_order_credit_policy")
+  defaultPaperSize       PaperSize                    @default(LETTER) @map("default_paper_size")
   invoiceLinePolicy   InvoiceLinePolicy                @default(APPROVED_ONLY) @map("invoice_line_policy")
   subscriptionState   SubscriptionState                @default(UNMANAGED) @map("subscription_state")
   createdAt           DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)

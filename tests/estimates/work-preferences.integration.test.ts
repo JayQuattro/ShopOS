@@ -109,6 +109,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
     expect(preferences).toEqual({
       changeOrderCreditPolicy: "AUTO_APPLY",
       invoiceLinePolicy: "APPROVED_ONLY",
+      defaultPaperSize: "LETTER",
     });
   });
 
@@ -119,12 +120,14 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
     await updateWorkPreferences(dbModule.db, context(), {
       changeOrderCreditPolicy: "REQUIRE_APPROVAL",
       invoiceLinePolicy: "ALL_LINES",
+      defaultPaperSize: "A4",
     });
 
     const preferences = await getWorkPreferences(dbModule.db, context());
     expect(preferences).toEqual({
       changeOrderCreditPolicy: "REQUIRE_APPROVAL",
       invoiceLinePolicy: "ALL_LINES",
+      defaultPaperSize: "A4",
     });
 
     const audit = await dbModule.db.auditEvent.findFirst({
@@ -145,6 +148,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
       updateWorkPreferences(dbModule.db, context(), {
         changeOrderCreditPolicy: "REQUIRE_APPROVAL",
         invoiceLinePolicy: "ALL_LINES",
+        defaultPaperSize: "LEGAL",
       }),
     ).rejects.toThrow();
   });

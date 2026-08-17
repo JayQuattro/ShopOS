@@ -6,6 +6,7 @@ import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy
 export type WorkPreferences = Readonly<{
   changeOrderCreditPolicy: "AUTO_APPLY" | "REQUIRE_APPROVAL";
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
+  defaultPaperSize: "LETTER" | "A4" | "LEGAL";
 }>;
 
 export class WorkPreferencesFailed extends Error {
@@ -27,13 +28,14 @@ export async function getWorkPreferences(
 
   const organization = await db.organization.findUnique({
     where: { id: context.organizationId },
-    select: { changeOrderCreditPolicy: true, invoiceLinePolicy: true },
+    select: { changeOrderCreditPolicy: true, invoiceLinePolicy: true, defaultPaperSize: true },
   });
   if (!organization) throw new WorkPreferencesFailed("organization_not_found");
 
   return {
     changeOrderCreditPolicy: organization.changeOrderCreditPolicy,
     invoiceLinePolicy: organization.invoiceLinePolicy,
+    defaultPaperSize: organization.defaultPaperSize,
   };
 }
 
@@ -55,6 +57,7 @@ export async function updateWorkPreferences(
       data: {
         changeOrderCreditPolicy: preferences.changeOrderCreditPolicy,
         invoiceLinePolicy: preferences.invoiceLinePolicy,
+        defaultPaperSize: preferences.defaultPaperSize,
       },
     });
     if (update.count !== 1) throw new WorkPreferencesFailed("organization_not_found");

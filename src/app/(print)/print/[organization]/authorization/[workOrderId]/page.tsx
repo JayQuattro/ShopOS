@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { resolvePaperSize } from "@/modules/organizations/paper-size";
 import { PrintButton } from "@/components/print/print-button";
 import { PrintFrame, PrintKV, PrintSection } from "@/components/print/print-frame";
 
@@ -15,10 +16,13 @@ export const dynamic = "force-dynamic";
  */
 export default async function AuthorizationPrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organization: string; workOrderId: string }>;
+  searchParams: Promise<{ paper?: string }>;
 }) {
   const { organization, workOrderId } = await params;
+  const { paper: paperOverride } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) notFound();
 
@@ -28,7 +32,7 @@ export default async function AuthorizationPrintPage({
       number: true,
       createdAt: true,
       customerConcern: true,
-      organization: { select: { name: true } },
+      organization: { select: { name: true, defaultPaperSize: true } },
       location: { select: { name: true } },
       customer: { select: { displayName: true, primaryPhone: true } },
       asset: { select: { displayName: true, manufacturer: true, model: true } },
@@ -68,14 +72,17 @@ export default async function AuthorizationPrintPage({
     0n,
   );
 
+  const paper = resolvePaperSize(workOrder.organization.defaultPaperSize, paperOverride);
+
   return (
     <>
-      <PrintButton />
+      <PrintButton paper={paper} />
       <PrintFrame
         organizationName={workOrder.organization.name}
         locationName={workOrder.location.name}
         title="Work authorization"
         subtitle={workOrder.number}
+        paper={paper}
       >
         <PrintSection heading="Customer & vehicle">
           <PrintKV

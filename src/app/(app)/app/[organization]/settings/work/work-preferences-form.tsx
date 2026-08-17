@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 type WorkPreferences = {
   changeOrderCreditPolicy: "AUTO_APPLY" | "REQUIRE_APPROVAL";
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
+  defaultPaperSize: "LETTER" | "A4" | "LEGAL";
 };
 
 const CREDIT_POLICY_HELP: Record<WorkPreferences["changeOrderCreditPolicy"], string> = {
@@ -20,6 +21,12 @@ const CREDIT_POLICY_HELP: Record<WorkPreferences["changeOrderCreditPolicy"], str
 const INVOICE_POLICY_HELP: Record<WorkPreferences["invoiceLinePolicy"], string> = {
   APPROVED_ONLY: "Invoices bill only the lines the customer approved (recommended).",
   ALL_LINES: "Invoices bill every line of the estimate documents, decided or not (legacy).",
+};
+
+const PAPER_HELP: Record<WorkPreferences["defaultPaperSize"], string> = {
+  LETTER: "8.5 × 11 in — the default in North America.",
+  A4: "210 × 297 mm — the international standard.",
+  LEGAL: "8.5 × 14 in — for long documents and contracts.",
 };
 
 export function WorkPreferencesForm() {
@@ -157,6 +164,35 @@ export function WorkPreferencesForm() {
                   {value === "APPROVED_ONLY" ? "Approved lines only" : "All lines"}
                 </span>
                 <span className="block text-muted-foreground">{INVOICE_POLICY_HELP[value]}</span>
+              </span>
+            </label>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Paper size</CardTitle>
+          <CardDescription>Default paper for printed documents.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {(["LETTER", "A4", "LEGAL"] as const).map((value) => (
+            <label key={value} className="flex items-start gap-3 text-sm">
+              <input
+                type="radio"
+                name="defaultPaperSize"
+                checked={preferences.defaultPaperSize === value}
+                onChange={() =>
+                  setPreferences((prev) => (prev ? { ...prev, defaultPaperSize: value } : prev))
+                }
+                disabled={pending}
+                className="mt-0.5 size-4"
+              />
+              <span>
+                <span className="font-medium">
+                  {value === "LETTER" ? "Letter" : value === "A4" ? "A4" : "Legal"}
+                </span>
+                <span className="block text-muted-foreground">{PAPER_HELP[value]}</span>
               </span>
             </label>
           ))}
