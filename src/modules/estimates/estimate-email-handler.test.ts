@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildEstimateAuthorizationEmail } from "@/modules/estimates/estimate-email-handler";
+import {
+  buildChangeOrderEmail,
+  buildEstimateAuthorizationEmail,
+} from "@/modules/estimates/estimate-email-handler";
 
 describe("buildEstimateAuthorizationEmail", () => {
   const email = buildEstimateAuthorizationEmail({
@@ -43,5 +46,47 @@ describe("buildEstimateAuthorizationEmail", () => {
       expiresAt: new Date("2026-08-19T12:00:00Z"),
     });
     expect(eur.text).toContain("€99.00");
+  });
+});
+
+describe("buildChangeOrderEmail", () => {
+  const base = {
+    organizationName: "Ridgeline Auto",
+    workOrderNumber: "RO-2043",
+    changeOrderNumber: 1,
+    note: "Seized caliper slide pins — rotors scored beyond spec.",
+    deltaMinor: "42000",
+    currency: "USD",
+    previouslyApprovedMinor: "128450",
+    newTotalMinor: "170450",
+  } as const;
+
+  it("frames the delta and new total cumulatively for approvals", () => {
+    const email = buildChangeOrderEmail({
+      ...base,
+      authorizeUrl: "http://localhost:3000/authorize/tok123",
+      expiresAt: new Date("2026-08-20T12:00:00Z"),
+    });
+    expect(email.subject).toContain("Additional work needs your approval");
+    expect(email.text).toContain("Previously authorized: $1,284.50");
+    expect(email.text).toContain("This change: +$420.00");
+    expect(email.text).toContain("New authorized total: $1,704.50");
+    expect(email.text).toContain("http://localhost:3000/authorize/tok123");
+    expect(email.text).toContain("Seized caliper slide pins");
+  });
+
+  it("notifies without a link when a credit is auto-applied", () => {
+    const email = buildChangeOrderEmail({
+      ...base,
+      deltaMinor: "-6500",
+      newTotalMinor: "121950",
+      authorizeUrl: null,
+      expiresAt: null,
+    });
+    expect(email.subject).toContain("Price adjustment");
+    expect(email.text).toContain("This change: -$65.00");
+    expect(email.text).toContain("applied automatically");
+    expect(email.text).not.toContain("/authorize/");
+    expect(email.text).not.toContain("approve or decline");
   });
 });

@@ -22,7 +22,8 @@ export class WorkOrderTransitionFailed extends Error {
       | "invalid_transition"
       | "concurrent_change"
       | "authorization_required"
-      | "estimate_required",
+      | "estimate_required"
+      | "change_order_pending",
   ) {
     super("The work-order transition could not be completed.");
     this.name = "WorkOrderTransitionFailed";
@@ -36,9 +37,10 @@ export class WorkOrderTransitionFailed extends Error {
  * Business rules:
  * - ESTIMATING: no prerequisites (can always start estimating).
  * - AWAITING_AUTHORIZATION: requires at least one PRESENTED estimate revision.
- * - AUTHORIZED: requires at least one APPROVED authorization decision.
+ * - AUTHORIZED: requires at least one APPROVED decision on a BASELINE revision
+ *   (change-order approvals authorize deltas incrementally, ADR 0014).
+ * - COMPLETED: no undecided change order may remain (resolve, void, or decline).
  * - IN_PROGRESS: only reachable from AUTHORIZED or BLOCKED (state machine handles this).
- * - COMPLETED: no additional check beyond the state machine.
  */
 async function assertTransitionPrerequisites(
   transaction: TransactionalClient,
@@ -57,19 +59,35 @@ async function assertTransitionPrerequisites(
   }
 
   if (targetStatus === "AUTHORIZED") {
-    // Check that at least one line has been approved via an authorization decision.
+    // Only baseline approvals authorize the work order itself (ADR 0014).
     const hasApproval = await transaction.authorizationDecision.findFirst({
       where: {
         decision: "APPROVED",
         organizationId,
         estimateLine: {
-          revision: { workOrderId },
+          revision: { workOrderId, documentKind: "BASELINE" },
         },
       },
       select: { authorizationId: true },
     });
     if (!hasApproval) {
       throw new WorkOrderTransitionFailed("authorization_required");
+    }
+  }
+
+  if (targetStatus === "COMPLETED") {
+    const pendingChangeOrder = await transaction.estimateRevision.findFirst({
+      where: {
+        organizationId,
+        workOrderId,
+        documentKind: "CHANGE_ORDER",
+        status: "PRESENTED",
+        lines: { some: { authorizationDecisions: { none: {} } } },
+      },
+      select: { id: true },
+    });
+    if (pendingChangeOrder) {
+      throw new WorkOrderTransitionFailed("change_order_pending");
     }
   }
 }

@@ -5,15 +5,13 @@ import { formatDate, formatMoney } from "@/i18n/formatters";
 import type { EventHandler, EventHandlerInput } from "@/modules/outbox/event-handler";
 import { getAuthConfig } from "@/modules/identity/config";
 import { sendTransactionalEmail } from "@/modules/integrations/email/transactional-email";
+import { getAuthorizedTotals } from "@/modules/estimates/change-order-service";
 
 export const ESTIMATE_PRESENTED_EVENT = "estimate.presented";
 
 /** Default locale for customer email until per-customer locale preferences land (#60). */
 const EMAIL_LOCALE = "en";
 const EMAIL_TIME_ZONE = "UTC";
-
-/** Lifetime of authorization links issued by presentRevision. */
-export const AUTHORIZATION_LINK_TTL_HOURS = 72;
 
 /**
  * Builds the customer-facing authorization email. Pure and unit-tested:
@@ -58,9 +56,92 @@ export function buildEstimateAuthorizationEmail(
 }
 
 /**
+ * Builds the change-order customer email (ADR 0014). Two variants share the
+ * cumulative framing — the delta and the new total are always shown:
+ * - awaiting decision: one-time authorize URL and expiry;
+ * - auto-applied credit: notification only, no URL.
+ *
+ * Pure and unit-tested; the token appears only in the authorize URL.
+ */
+export function buildChangeOrderEmail(
+  input: Readonly<{
+    organizationName: string;
+    workOrderNumber: string;
+    changeOrderNumber: number;
+    note: string;
+    deltaMinor: string;
+    currency: string;
+    previouslyApprovedMinor: string;
+    newTotalMinor: string;
+    authorizeUrl: string | null;
+    expiresAt: Date | null;
+  }>,
+): Readonly<{ subject: string; text: string }> {
+  const delta = formatSignedMoney(Number(input.deltaMinor), input.currency);
+  const previous = formatMoney(Number(input.previouslyApprovedMinor), input.currency, EMAIL_LOCALE);
+  const newTotal = formatMoney(Number(input.newTotalMinor), input.currency, EMAIL_LOCALE);
+
+  const isCredit = Number(input.deltaMinor) <= 0;
+  const applied = input.authorizeUrl === null;
+
+  const lines = [
+    isCredit
+      ? `${input.organizationName} adjusted the price for ${input.workOrderNumber}.`
+      : `${input.organizationName} found additional work needed on ${input.workOrderNumber} and needs your approval.`,
+    "",
+    `Change order ${input.changeOrderNumber}: ${input.note}`,
+    "",
+    `Previously authorized: ${previous}`,
+    `This change: ${delta}`,
+    `New authorized total: ${newTotal}`,
+  ];
+
+  if (applied) {
+    lines.push(
+      "",
+      "Because this change only reduces what you owe, it has been applied automatically — no action is needed.",
+    );
+  } else {
+    lines.push(
+      "",
+      "Open the secure link below to review the details and approve or decline the additional work:",
+      input.authorizeUrl ?? "",
+    );
+    if (input.expiresAt) {
+      lines.push(
+        "",
+        `This link expires ${formatDate(input.expiresAt, EMAIL_TIME_ZONE, EMAIL_LOCALE, {
+          weekday: "long",
+          month: "long",
+          hour: "2-digit",
+          minute: "2-digit",
+        })} (UTC) and can only be used once.`,
+      );
+    }
+  }
+
+  lines.push("", "If you did not expect this email, you can ignore it.");
+
+  return {
+    subject: applied
+      ? `Price adjustment on ${input.workOrderNumber} — ${input.organizationName}`
+      : `Additional work needs your approval — ${input.workOrderNumber} (${input.organizationName})`,
+    text: lines.join("\n"),
+  };
+}
+
+/** Formats a possibly-negative minor-unit amount with an explicit sign. */
+function formatSignedMoney(amountMinor: number, currency: string): string {
+  const magnitude = formatMoney(Math.abs(amountMinor), currency, EMAIL_LOCALE);
+  return amountMinor < 0 ? `-${magnitude}` : `+${magnitude}`;
+}
+
+/**
  * Sends the customer their authorization email when an estimate revision is
  * presented. Registered on the outbox dispatcher; the dispatcher has already
- * revalidated the organization context before this handler runs.
+ * revalidated the organization context before this handler runs. Change orders
+ * get the cumulative delta framing of ADR 0014; auto-applied credits notify
+ * without a link.
  */
 export class EstimatePresentedEmailHandler implements EventHandler {
   readonly eventType = ESTIMATE_PRESENTED_EVENT;
@@ -81,6 +162,9 @@ export class EstimatePresentedEmailHandler implements EventHandler {
       where: { id: revisionId, organizationId },
       select: {
         revisionNumber: true,
+        changeOrderNumber: true,
+        documentKind: true,
+        summaryNote: true,
         currency: true,
         totalMinor: true,
         workOrder: {
@@ -124,28 +208,68 @@ export class EstimatePresentedEmailHandler implements EventHandler {
       return;
     }
 
-    const link = await this.db.authorizationLink.findFirst({
-      where: {
-        organizationId,
-        estimateRevisionId: revisionId,
-        revokedAt: null,
-        usedAt: null,
-      },
-      orderBy: { createdAt: "desc" },
-      select: { token: true, expiresAt: true },
-    });
-    if (!link) throw new Error("no active authorization link for presented revision");
+    // Auto-applied credit change orders carry SYSTEM decisions and no link.
+    const autoApplied =
+      revision.documentKind === "CHANGE_ORDER" &&
+      (await this.db.authorizationDecision.findFirst({
+        where: {
+          decision: "APPROVED",
+          authorization: { method: "SYSTEM", estimateRevisionId: revisionId },
+          estimateLine: { estimateRevisionId: revisionId },
+        },
+        select: { authorizationId: true },
+      })) !== null;
 
-    const authorizeUrl = `${getAuthConfig().baseURL}/authorize/${link.token}`;
-    const email = buildEstimateAuthorizationEmail({
-      organizationName: revision.organization.name,
-      workOrderNumber: revision.workOrder.number,
-      revisionNumber: revision.revisionNumber,
-      totalMinor: revision.totalMinor.toString(),
-      currency: revision.currency,
-      authorizeUrl,
-      expiresAt: link.expiresAt,
-    });
+    let authorizeUrl: string | null = null;
+    let expiresAt: Date | null = null;
+    if (!autoApplied) {
+      const link = await this.db.authorizationLink.findFirst({
+        where: {
+          organizationId,
+          estimateRevisionId: revisionId,
+          revokedAt: null,
+          usedAt: null,
+        },
+        orderBy: { createdAt: "desc" },
+        select: { token: true, expiresAt: true },
+      });
+      if (!link) throw new Error("no active authorization link for presented revision");
+      authorizeUrl = `${getAuthConfig().baseURL}/authorize/${link.token}`;
+      expiresAt = link.expiresAt;
+    }
+
+    let email: Readonly<{ subject: string; text: string }>;
+    if (revision.documentKind === "CHANGE_ORDER") {
+      const totals = await getAuthorizedTotals(this.db, { organizationId, workOrderId });
+      email = buildChangeOrderEmail({
+        organizationName: revision.organization.name,
+        workOrderNumber: revision.workOrder.number,
+        changeOrderNumber: revision.changeOrderNumber ?? 0,
+        note: revision.summaryNote ?? "Additional work discovered during service.",
+        deltaMinor: revision.totalMinor.toString(),
+        currency: revision.currency,
+        previouslyApprovedMinor: (totals
+          ? totals.cumulativeApprovedMinor - Number(revision.totalMinor)
+          : 0
+        ).toString(),
+        newTotalMinor: (totals
+          ? totals.cumulativeApprovedMinor
+          : Number(revision.totalMinor)
+        ).toString(),
+        authorizeUrl,
+        expiresAt,
+      });
+    } else {
+      email = buildEstimateAuthorizationEmail({
+        organizationName: revision.organization.name,
+        workOrderNumber: revision.workOrder.number,
+        revisionNumber: revision.revisionNumber,
+        totalMinor: revision.totalMinor.toString(),
+        currency: revision.currency,
+        authorizeUrl: authorizeUrl ?? "",
+        expiresAt: expiresAt ?? new Date(),
+      });
+    }
 
     const outcome = await sendTransactionalEmail({
       db: this.db,
@@ -162,8 +286,10 @@ export class EstimatePresentedEmailHandler implements EventHandler {
       workOrderId,
       eventType: outcome.delivered ? "estimate.email_sent" : "estimate.email_unavailable",
       summary: outcome.delivered
-        ? `Authorization email sent to the customer for revision ${revision.revisionNumber}.`
-        : `Email connector not configured; authorization link for revision ${revision.revisionNumber} was not emailed. Re-send after configuring email.`,
+        ? revision.documentKind === "CHANGE_ORDER"
+          ? `Change order ${revision.changeOrderNumber} ${autoApplied ? "notification" : "authorization"} email sent to the customer.`
+          : `Authorization email sent to the customer for revision ${revision.revisionNumber}.`
+        : `Email connector not configured; the ${revision.documentKind === "CHANGE_ORDER" ? `change order ${revision.changeOrderNumber}` : `revision ${revision.revisionNumber}`} email was not sent. Re-send after configuring email.`,
     });
   }
 

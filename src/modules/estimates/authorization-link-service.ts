@@ -20,7 +20,10 @@ export class AuthorizationLinkFailed extends Error {
   }
 }
 
-const DEFAULT_TTL_HOURS = 72;
+/** Lifetime of authorization links issued by presentation and resend flows. */
+export const AUTHORIZATION_LINK_TTL_HOURS = 72;
+
+const DEFAULT_TTL_HOURS = AUTHORIZATION_LINK_TTL_HOURS;
 
 /**
  * Creates an expiring, revocable authorization link for a PRESENTED estimate

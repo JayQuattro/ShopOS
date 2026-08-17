@@ -4,9 +4,9 @@ import type { PrismaClient, PricedLineKind } from "@/generated/prisma/client";
 import { calculateLine, currencyCode, type PricedLineInput } from "@/modules/shared/money";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import { transitionStatus } from "@/modules/work-orders/work-order-service";
-import { AUTHORIZATION_LINK_TTL_HOURS } from "@/modules/estimates/estimate-email-handler";
+import { AUTHORIZATION_LINK_TTL_HOURS } from "@/modules/estimates/authorization-link-service";
 
-type TransactionalClient = Omit<
+export type TransactionalClient = Omit<
   PrismaClient,
   "$connect" | "$disconnect" | "$on" | "$use" | "$extends"
 >;
@@ -20,7 +20,10 @@ export class EstimateFailed extends Error {
       | "revision_not_found"
       | "revision_not_draft"
       | "line_not_found"
-      | "invalid_currency",
+      | "invalid_currency"
+      | "credit_line_not_allowed"
+      | "revision_not_baseline"
+      | "revision_decided",
   ) {
     super("The estimate operation could not be completed.");
     this.name = "EstimateFailed";
@@ -120,6 +123,11 @@ export async function addLine(
     const revision = await loadRevisionForMutation(transaction, input.context, input.revisionId);
     if (revision.status !== "DRAFT") throw new EstimateFailed("revision_not_draft");
 
+    // Credit lines (negative unit price) exist only on change orders (ADR 0014).
+    if (input.unitPriceMinor < 0 && revision.documentKind !== "CHANGE_ORDER") {
+      throw new EstimateFailed("credit_line_not_allowed");
+    }
+
     const line = await transaction.estimateLine.create({
       data: {
         id: randomUUID(),
@@ -194,6 +202,9 @@ export async function presentRevision(
   await input.db.$transaction(async (transaction) => {
     const revision = await loadRevisionForMutation(transaction, input.context, input.revisionId);
     if (revision.status !== "DRAFT") throw new EstimateFailed("revision_not_draft");
+    if (revision.documentKind === "CHANGE_ORDER") {
+      throw new EstimateFailed("revision_not_baseline");
+    }
 
     // Recompute totals one final time.
     const totals = await computeTotals(transaction, revision.id);
@@ -334,6 +345,16 @@ export async function supersedeRevision(
     const oldRevision = await loadRevisionForMutation(transaction, input.context, input.revisionId);
     if (oldRevision.status !== "PRESENTED") throw new EstimateFailed("revision_not_draft");
 
+    // Superseding is pre-authorization correction (ADR 0014): once any line of
+    // the revision carries a decision, the document is history.
+    const decidedLines = await transaction.authorizationDecision.findFirst({
+      where: {
+        estimateLine: { estimateRevisionId: oldRevision.id },
+      },
+      select: { authorizationId: true },
+    });
+    if (decidedLines) throw new EstimateFailed("revision_decided");
+
     // Mark old revision as superseded.
     await transaction.estimateRevision.update({
       where: { id: oldRevision.id },
@@ -349,6 +370,9 @@ export async function supersedeRevision(
         workOrderId: oldRevision.workOrderId,
         revisionNumber: nextNumber,
         status: "DRAFT",
+        documentKind: oldRevision.documentKind,
+        changeOrderNumber: oldRevision.changeOrderNumber,
+        summaryNote: oldRevision.summaryNote,
         currency: oldRevision.currency,
         subtotalMinor: 0n,
         discountMinor: 0n,
@@ -378,6 +402,9 @@ async function loadRevisionForMutation(
       locationId: true,
       revisionNumber: true,
       status: true,
+      documentKind: true,
+      changeOrderNumber: true,
+      summaryNote: true,
       currency: true,
     },
   });
@@ -385,7 +412,7 @@ async function loadRevisionForMutation(
   return revision;
 }
 
-async function computeTotals(
+export async function computeTotals(
   transaction: TransactionalClient,
   revisionId: string,
 ): Promise<{ subtotalMinor: number; discountMinor: number; taxMinor: number; totalMinor: number }> {
