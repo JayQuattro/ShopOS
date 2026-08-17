@@ -192,6 +192,7 @@ model User {
   activityEvents         ActivityEvent[]                   @relation("ActivityActor")
   assignedWorkOrders    WorkOrder[]                       @relation("WorkOrderTechnician")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
+  timeEntries            TimeEntry[]                       @relation("TimeEntryWorker")
   auditEvents            AuditEvent[]                      @relation("AuditActor")
   themePublications      OrganizationThemePublication[]    @relation("ThemePublishedBy")
   connectorInstances     ConnectorInstance[]               @relation("ConnectorCreatedBy")
@@ -231,6 +232,7 @@ model Organization {
   assets              Asset[]
   workOrders          WorkOrder[]
   appointments        Appointment[]
+  timeEntries          TimeEntry[]
   estimateRevisions   EstimateRevision[]
   estimateLines       EstimateLine[]
   authorizations      Authorization[]
@@ -784,6 +786,7 @@ model WorkOrder {
   estimateRevisions EstimateRevision[]
   invoice           Invoice?
   appointments      Appointment[]
+  timeEntries        TimeEntry[]
   activityEvents    ActivityEvent[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
@@ -830,6 +833,27 @@ model WorkOrderAttachment {
   @@index([organizationId, workOrderId], map: "work_order_attachments_org_wo_idx")
   @@index([organizationId, estimateRevisionId], map: "work_order_attachments_org_revision_idx")
   @@map("work_order_attachments")
+}
+
+model TimeEntry {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  locationId      String    @map("location_id") @db.Uuid
+  workOrderId     String    @map("work_order_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  startedAt       DateTime  @map("started_at") @db.Timestamptz(6)
+  endedAt         DateTime? @map("ended_at") @db.Timestamptz(6)
+  note            String?
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workOrder       WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  user            User @relation("TimeEntryWorker", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "time_entries_org_id_unique")
+  @@index([organizationId, workOrderId, startedAt], map: "time_entries_org_wo_start_idx")
+  @@index([organizationId, userId, startedAt], map: "time_entries_org_user_start_idx")
+  @@map("time_entries")
 }
 
 model EstimateRevision {
