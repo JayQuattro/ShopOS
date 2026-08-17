@@ -3,7 +3,9 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shopos/page-header";
+import { SummaryCard } from "@/components/shopos/states";
 import { db } from "@/db/client";
+import { formatDate, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { ContactForm } from "./contact-form";
 import { AddressForm } from "./address-form";
@@ -49,12 +51,23 @@ export default async function CustomerDetailPage({
       },
       workOrders: {
         orderBy: { createdAt: "desc" },
-        take: 10,
+        take: 25,
         select: {
           id: true,
           number: true,
           status: true,
           customerConcern: true,
+          createdAt: true,
+          promisedAt: true,
+          asset: { select: { displayName: true } },
+          invoice: {
+            select: {
+              status: true,
+              currency: true,
+              totalMinor: true,
+              paidMinor: true,
+            },
+          },
         },
       },
     },
@@ -73,6 +86,33 @@ export default async function CustomerDetailPage({
           </Link>
         </CardContent>
       </Card>
+    );
+  }
+
+  // Lifetime stats: visits, invoiced (non-void), and last visit.
+  const [visitCount, invoicedRows, lastVisit] = await Promise.all([
+    db.workOrder.count({
+      where: { organizationId: context.organizationId, customerId: customer.id },
+    }),
+    db.invoice.findMany({
+      where: {
+        organizationId: context.organizationId,
+        workOrder: { customerId: customer.id },
+        status: { not: "VOID" },
+      },
+      select: { currency: true, totalMinor: true },
+    }),
+    db.workOrder.findFirst({
+      where: { organizationId: context.organizationId, customerId: customer.id },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    }),
+  ]);
+  const lifetimeByCurrency = new Map<string, number>();
+  for (const row of invoicedRows) {
+    lifetimeByCurrency.set(
+      row.currency,
+      (lifetimeByCurrency.get(row.currency) ?? 0) + Number(row.totalMinor),
     );
   }
 
@@ -99,6 +139,24 @@ export default async function CustomerDetailPage({
           ) : undefined
         }
       />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <SummaryCard label="Visits" value={String(visitCount)} />
+        <SummaryCard
+          label="Lifetime invoiced"
+          value={
+            lifetimeByCurrency.size === 0
+              ? "—"
+              : [...lifetimeByCurrency.entries()]
+                  .map(([currency, minor]) => formatMoney(minor, currency, "en-US"))
+                  .join(" · ")
+          }
+        />
+        <SummaryCard
+          label="Last visit"
+          value={lastVisit ? formatDate(lastVisit.createdAt, "UTC", "en-US") : "—"}
+        />
+      </div>
 
       <Card>
         <CardHeader>
@@ -252,30 +310,54 @@ export default async function CustomerDetailPage({
         </Card>
       ) : null}
 
-      {customer.workOrders.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recent work orders</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Service history</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {customer.workOrders.length === 0 ? (
+            <p className="py-4 text-sm text-muted-foreground">No visits yet.</p>
+          ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="py-2 pr-4 font-medium">Date</th>
                   <th className="py-2 pr-4 font-medium">RO #</th>
+                  <th className="py-2 pr-4 font-medium">Vehicle / asset</th>
                   <th className="py-2 pr-4 font-medium">Status</th>
-                  <th className="py-2 pr-4 font-medium">Concern</th>
+                  <th className="py-2 pr-4 font-medium text-right">Invoiced</th>
                   <th className="py-2 pr-4 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
                 {customer.workOrders.map((wo) => (
                   <tr key={wo.id} className="border-b border-border/60">
+                    <td className="py-3 pr-4 whitespace-nowrap font-mono text-xs tabular-nums">
+                      {formatDate(wo.createdAt, "UTC", "en-US")}
+                    </td>
                     <td className="py-3 pr-4 font-mono">{wo.number}</td>
+                    <td className="py-3 pr-4">
+                      {wo.asset?.displayName ?? <span className="text-muted-foreground">—</span>}
+                    </td>
                     <td className="py-3 pr-4 capitalize">
                       {wo.status.replace(/_/g, " ").toLowerCase()}
                     </td>
-                    <td className="py-3 pr-4 max-w-md truncate text-muted-foreground">
-                      {wo.customerConcern}
+                    <td className="py-3 pr-4 text-right font-mono tabular-nums">
+                      {wo.invoice ? (
+                        <span
+                          className={
+                            wo.invoice.status === "PAID"
+                              ? "text-success"
+                              : wo.invoice.status === "VOID"
+                                ? "text-muted-foreground line-through"
+                                : ""
+                          }
+                        >
+                          {formatMoney(Number(wo.invoice.totalMinor), wo.invoice.currency, "en-US")}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="py-3 pr-4">
                       <Link
@@ -289,9 +371,9 @@ export default async function CustomerDetailPage({
                 ))}
               </tbody>
             </table>
-          </CardContent>
-        </Card>
-      ) : null}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

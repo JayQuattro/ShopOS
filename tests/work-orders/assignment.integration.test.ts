@@ -305,3 +305,85 @@ describe("work-order technician assignment (#133)", { skip: shouldSkip }, () => 
     expect(names).not.toContain("No Role");
   });
 });
+
+describe("assisting technicians (#146)", () => {
+  it("sets, replaces, and clears the assisting team with activity", async () => {
+    const { setAssistingTechnicians, listAssistingTechnicians } =
+      await import("@/modules/work-orders/assignment-service");
+    const seedData = await seed();
+
+    // A second assignable member.
+    const helperId = randomUUID();
+    const helperMembershipId = randomUUID();
+    await dbModule.db.user.create({
+      data: {
+        id: helperId,
+        email: `h-${helperId.slice(0, 8)}@example.test`,
+        displayName: "Harper Help",
+      },
+    });
+    await dbModule.db.organizationMembership.create({
+      data: {
+        id: helperMembershipId,
+        organizationId: seedData.orgId,
+        userId: helperId,
+        organizationWideLocationAccess: true,
+      },
+    });
+
+    await setAssistingTechnicians({
+      db: dbModule.db,
+      context: seedData.context(),
+      workOrderId: seedData.workOrderId,
+      userIds: [seedData.techId, helperId],
+    });
+    let team = await listAssistingTechnicians({
+      db: dbModule.db,
+      context: seedData.context(),
+      workOrderId: seedData.workOrderId,
+    });
+    expect(team.map((member) => member.displayName).sort()).toEqual(["Harper Help", "Taylor Tech"]);
+
+    const activity = await dbModule.db.activityEvent.findFirst({
+      where: { workOrderId: seedData.workOrderId, eventType: "work_order.technicians_updated" },
+    });
+    expect(activity?.summary).toContain("Harper Help");
+
+    await setAssistingTechnicians({
+      db: dbModule.db,
+      context: seedData.context(),
+      workOrderId: seedData.workOrderId,
+      userIds: [helperId],
+    });
+    team = await listAssistingTechnicians({
+      db: dbModule.db,
+      context: seedData.context(),
+      workOrderId: seedData.workOrderId,
+    });
+    expect(team.map((member) => member.displayName)).toEqual(["Harper Help"]);
+  });
+
+  it("rejects non-members and cross-organization work orders", async () => {
+    const { setAssistingTechnicians } = await import("@/modules/work-orders/assignment-service");
+    const seedData = await seed();
+
+    await expect(
+      setAssistingTechnicians({
+        db: dbModule.db,
+        context: seedData.context(),
+        workOrderId: seedData.workOrderId,
+        userIds: [seedData.outsiderId],
+      }),
+    ).rejects.toMatchObject({ reason: "technician_not_a_member" });
+
+    const other = await seed();
+    await expect(
+      setAssistingTechnicians({
+        db: dbModule.db,
+        context: seedData.context(),
+        workOrderId: other.workOrderId,
+        userIds: [seedData.techId],
+      }),
+    ).rejects.toMatchObject({ reason: "work_order_not_found" });
+  });
+});
