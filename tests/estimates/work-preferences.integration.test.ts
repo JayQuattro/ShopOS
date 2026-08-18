@@ -1,3 +1,92 @@
+async function seedWorkOrder() {
+  const orgId = randomUUID();
+  const locationId = randomUUID();
+  const userId = randomUUID();
+  const membershipId = randomUUID();
+  const roleId = randomUUID();
+  const customerId = randomUUID();
+
+  await dbModule.db.$transaction([
+    dbModule.db.organization.create({
+      data: { id: orgId, slug: `org-${orgId.slice(0, 8)}`, name: "Prefs WO Org" },
+    }),
+    dbModule.db.location.create({
+      data: { id: locationId, organizationId: orgId, code: "MAIN", name: "Main", timeZone: "UTC" },
+    }),
+    dbModule.db.user.create({
+      data: {
+        id: userId,
+        email: `w-${userId.slice(0, 8)}@example.test`,
+        displayName: "Prefs WO User",
+      },
+    }),
+    dbModule.db.organizationMembership.create({
+      data: {
+        id: membershipId,
+        organizationId: orgId,
+        userId,
+        organizationWideLocationAccess: true,
+      },
+    }),
+    dbModule.db.role.create({
+      data: {
+        id: roleId,
+        organizationId: orgId,
+        key: "owner",
+        name: "Owner",
+        permissions: [
+          "work_orders.read",
+          "work_orders.write",
+          "estimates.present",
+          "organizations.manage",
+        ],
+      },
+    }),
+    dbModule.db.membershipRole.create({ data: { organizationId: orgId, membershipId, roleId } }),
+    dbModule.db.customer.create({
+      data: {
+        id: customerId,
+        organizationId: orgId,
+        kind: "INDIVIDUAL",
+        displayName: "Prefs WO Customer",
+      },
+    }),
+    dbModule.db.workOrder.create({
+      data: {
+        organizationId: orgId,
+        locationId,
+        customerId,
+        number: "RO-9999",
+        customerConcern: "seeding",
+      },
+    }),
+  ]);
+
+  const workOrderId = (await dbModule.db.workOrder.findFirst({ where: { organizationId: orgId } }))!
+    .id;
+
+  return {
+    customerId,
+    locationId,
+    workOrderId,
+    context: () =>
+      ({
+        actorId: userId,
+        organizationId: orgId,
+        membershipId,
+        requestId: randomUUID(),
+        organizationWideLocationAccess: true,
+        allowedLocationIds: new Set<string>(),
+        permissions: new Set([
+          "work_orders.read",
+          "work_orders.write",
+          "estimates.present",
+          "organizations.manage",
+        ] as const),
+      }) as import("@/modules/tenancy/policy").TenantContext,
+  };
+}
+
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -110,6 +199,10 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
       changeOrderCreditPolicy: "AUTO_APPLY",
       invoiceLinePolicy: "APPROVED_ONLY",
       defaultPaperSize: "LETTER",
+      qualityCheckRequired: true,
+      authorizationLinkTtlHours: 72,
+      workOrderNumberPrefix: "RO-",
+      invoiceNumberPrefix: "INV-",
     });
   });
 
@@ -121,6 +214,10 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
       changeOrderCreditPolicy: "REQUIRE_APPROVAL",
       invoiceLinePolicy: "ALL_LINES",
       defaultPaperSize: "A4",
+      qualityCheckRequired: false,
+      authorizationLinkTtlHours: 48,
+      workOrderNumberPrefix: "WO-",
+      invoiceNumberPrefix: "IN-",
     });
 
     const preferences = await getWorkPreferences(dbModule.db, context());
@@ -128,6 +225,10 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
       changeOrderCreditPolicy: "REQUIRE_APPROVAL",
       invoiceLinePolicy: "ALL_LINES",
       defaultPaperSize: "A4",
+      qualityCheckRequired: false,
+      authorizationLinkTtlHours: 48,
+      workOrderNumberPrefix: "WO-",
+      invoiceNumberPrefix: "IN-",
     });
 
     const audit = await dbModule.db.auditEvent.findFirst({
@@ -149,7 +250,72 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
         changeOrderCreditPolicy: "REQUIRE_APPROVAL",
         invoiceLinePolicy: "ALL_LINES",
         defaultPaperSize: "LEGAL",
+        qualityCheckRequired: true,
+        authorizationLinkTtlHours: 72,
+        workOrderNumberPrefix: "RO-",
+        invoiceNumberPrefix: "INV-",
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("work preferences gate effects (#163)", { skip: shouldSkip }, () => {
+  it("authorization links honor the configured TTL", async () => {
+    const { updateWorkPreferences } = await import("@/modules/estimates/work-preferences-service");
+    const { createDraftRevision, presentRevision } =
+      await import("@/modules/estimates/estimate-service");
+    const seedData = await seedWorkOrder();
+    const context = seedData.context();
+
+    await updateWorkPreferences(dbModule.db, context, {
+      changeOrderCreditPolicy: "AUTO_APPLY",
+      invoiceLinePolicy: "APPROVED_ONLY",
+      defaultPaperSize: "LETTER",
+      qualityCheckRequired: true,
+      authorizationLinkTtlHours: 48,
+      workOrderNumberPrefix: "RO-",
+      invoiceNumberPrefix: "INV-",
+    });
+
+    const { revisionId } = await createDraftRevision({
+      db: dbModule.db,
+      context,
+      workOrderId: seedData.workOrderId,
+      currency: "USD",
+    });
+    await presentRevision({ db: dbModule.db, context, revisionId });
+
+    const link = await dbModule.db.authorizationLink.findFirst({
+      where: { estimateRevisionId: revisionId },
+    });
+    expect(link).not.toBeNull();
+    const hours = (link!.expiresAt.getTime() - Date.now()) / 3_600_000;
+    expect(hours).toBeGreaterThan(47.9);
+    expect(hours).toBeLessThan(48.1);
+  });
+
+  it("work orders and invoices use the configured prefixes", async () => {
+    const { updateWorkPreferences } = await import("@/modules/estimates/work-preferences-service");
+    const { WorkOrderRepository } = await import("@/modules/work-orders/work-order-repository");
+    const seedData = await seedWorkOrder();
+    const context = seedData.context();
+
+    await updateWorkPreferences(dbModule.db, context, {
+      changeOrderCreditPolicy: "AUTO_APPLY",
+      invoiceLinePolicy: "APPROVED_ONLY",
+      defaultPaperSize: "LETTER",
+      qualityCheckRequired: true,
+      authorizationLinkTtlHours: 72,
+      workOrderNumberPrefix: "JOB-",
+      invoiceNumberPrefix: "BILL-",
+    });
+
+    const repository = new WorkOrderRepository({ db: dbModule.db, context });
+    const created = await repository.create({
+      customerId: seedData.customerId,
+      locationId: seedData.locationId,
+      customerConcern: "Prefix test",
+    });
+    expect(created.number).toMatch(/^JOB-\d+$/);
   });
 });

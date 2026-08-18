@@ -35,6 +35,10 @@ const updateSchema = z.object({
   changeOrderCreditPolicy: z.enum(["AUTO_APPLY", "REQUIRE_APPROVAL"]),
   invoiceLinePolicy: z.enum(["APPROVED_ONLY", "ALL_LINES"]),
   defaultPaperSize: z.enum(["LETTER", "A4", "LEGAL"]),
+  qualityCheckRequired: z.boolean(),
+  authorizationLinkTtlHours: z.number().int().min(1).max(720),
+  workOrderNumberPrefix: z.string().trim().min(1).max(12),
+  invoiceNumberPrefix: z.string().trim().min(1).max(12),
 });
 
 export async function PUT(

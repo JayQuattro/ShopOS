@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import { computeTotals, type TransactionalClient } from "@/modules/estimates/estimate-service";
-import { AUTHORIZATION_LINK_TTL_HOURS } from "@/modules/estimates/authorization-link-service";
+import { resolveLinkTtlHours } from "@/modules/estimates/authorization-link-service";
 
 type ChangeOrderServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
 
@@ -235,13 +235,14 @@ export async function presentChangeOrder(
         data: { revokedAt: new Date() },
       });
 
+      const ttlHours = await resolveLinkTtlHours(transaction, input.context.organizationId);
       await transaction.authorizationLink.create({
         data: {
           id: randomUUID(),
           organizationId: input.context.organizationId,
           estimateRevisionId: revision.id,
           token: randomBytes(32).toString("base64url"),
-          expiresAt: new Date(Date.now() + AUTHORIZATION_LINK_TTL_HOURS * 60 * 60 * 1000),
+          expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000),
         },
       });
     }
@@ -393,13 +394,14 @@ export async function resendAuthorizationLink(
       data: { revokedAt: new Date() },
     });
 
+    const ttlHours = await resolveLinkTtlHours(transaction, input.context.organizationId);
     await transaction.authorizationLink.create({
       data: {
         id: randomUUID(),
         organizationId: input.context.organizationId,
         estimateRevisionId: revision.id,
         token: randomBytes(32).toString("base64url"),
-        expiresAt: new Date(Date.now() + AUTHORIZATION_LINK_TTL_HOURS * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000),
       },
     });
 

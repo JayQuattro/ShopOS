@@ -7,10 +7,16 @@ export type WorkPreferences = Readonly<{
   changeOrderCreditPolicy: "AUTO_APPLY" | "REQUIRE_APPROVAL";
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
   defaultPaperSize: "LETTER" | "A4" | "LEGAL";
+  qualityCheckRequired: boolean;
+  authorizationLinkTtlHours: number;
+  workOrderNumberPrefix: string;
+  invoiceNumberPrefix: string;
 }>;
 
 export class WorkPreferencesFailed extends Error {
-  constructor(public readonly reason: "organization_not_found") {
+  constructor(
+    public readonly reason: "organization_not_found" | "invalid_link_ttl" | "invalid_prefix",
+  ) {
     super("The work preferences operation could not be completed.");
     this.name = "WorkPreferencesFailed";
   }
@@ -28,7 +34,15 @@ export async function getWorkPreferences(
 
   const organization = await db.organization.findUnique({
     where: { id: context.organizationId },
-    select: { changeOrderCreditPolicy: true, invoiceLinePolicy: true, defaultPaperSize: true },
+    select: {
+      changeOrderCreditPolicy: true,
+      invoiceLinePolicy: true,
+      defaultPaperSize: true,
+      qualityCheckRequired: true,
+      authorizationLinkTtlHours: true,
+      workOrderNumberPrefix: true,
+      invoiceNumberPrefix: true,
+    },
   });
   if (!organization) throw new WorkPreferencesFailed("organization_not_found");
 
@@ -36,6 +50,10 @@ export async function getWorkPreferences(
     changeOrderCreditPolicy: organization.changeOrderCreditPolicy,
     invoiceLinePolicy: organization.invoiceLinePolicy,
     defaultPaperSize: organization.defaultPaperSize,
+    qualityCheckRequired: organization.qualityCheckRequired,
+    authorizationLinkTtlHours: organization.authorizationLinkTtlHours,
+    workOrderNumberPrefix: organization.workOrderNumberPrefix,
+    invoiceNumberPrefix: organization.invoiceNumberPrefix,
   };
 }
 
@@ -51,6 +69,19 @@ export async function updateWorkPreferences(
 ): Promise<void> {
   assertTenantAccess(context, { organizationId: context.organizationId }, "organizations.manage");
 
+  if (
+    !Number.isSafeInteger(preferences.authorizationLinkTtlHours) ||
+    preferences.authorizationLinkTtlHours < 1 ||
+    preferences.authorizationLinkTtlHours > 720
+  ) {
+    throw new WorkPreferencesFailed("invalid_link_ttl");
+  }
+  for (const prefix of [preferences.workOrderNumberPrefix, preferences.invoiceNumberPrefix]) {
+    if (prefix.trim().length < 1 || prefix.trim().length > 12) {
+      throw new WorkPreferencesFailed("invalid_prefix");
+    }
+  }
+
   await db.$transaction(async (transaction) => {
     const update = await transaction.organization.updateMany({
       where: { id: context.organizationId },
@@ -58,6 +89,10 @@ export async function updateWorkPreferences(
         changeOrderCreditPolicy: preferences.changeOrderCreditPolicy,
         invoiceLinePolicy: preferences.invoiceLinePolicy,
         defaultPaperSize: preferences.defaultPaperSize,
+        qualityCheckRequired: preferences.qualityCheckRequired,
+        authorizationLinkTtlHours: preferences.authorizationLinkTtlHours,
+        workOrderNumberPrefix: preferences.workOrderNumberPrefix.trim(),
+        invoiceNumberPrefix: preferences.invoiceNumberPrefix.trim(),
       },
     });
     if (update.count !== 1) throw new WorkPreferencesFailed("organization_not_found");

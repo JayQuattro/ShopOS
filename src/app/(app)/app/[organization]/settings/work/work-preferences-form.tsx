@@ -4,12 +4,17 @@ import { useEffect, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 type WorkPreferences = {
   changeOrderCreditPolicy: "AUTO_APPLY" | "REQUIRE_APPROVAL";
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
   defaultPaperSize: "LETTER" | "A4" | "LEGAL";
+  qualityCheckRequired: boolean;
+  authorizationLinkTtlHours: number;
+  workOrderNumberPrefix: string;
+  invoiceNumberPrefix: string;
 };
 
 const CREDIT_POLICY_HELP: Record<WorkPreferences["changeOrderCreditPolicy"], string> = {
@@ -196,6 +201,88 @@ export function WorkPreferencesForm() {
               </span>
             </label>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Quality control</CardTitle>
+          <CardDescription>Gate completion on a passed final check.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={preferences.qualityCheckRequired}
+              onChange={(e) =>
+                setPreferences((prev) =>
+                  prev ? { ...prev, qualityCheckRequired: e.target.checked } : prev,
+                )
+              }
+              disabled={pending}
+              className="mt-0.5 size-4"
+            />
+            <span>
+              <span className="font-medium">Require a passed quality check before completion</span>
+              <span className="block text-muted-foreground">
+                When off, jobs can complete without the QC gate.
+              </span>
+            </span>
+          </label>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Approvals &amp; numbering</CardTitle>
+          <CardDescription>
+            How long approval links live, and the prefixes on new document numbers.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm font-medium">
+            Approval link lifetime (hours, 1–720)
+            <Input
+              type="number"
+              min={1}
+              max={720}
+              value={preferences.authorizationLinkTtlHours}
+              onChange={(e) =>
+                setPreferences((prev) =>
+                  prev
+                    ? { ...prev, authorizationLinkTtlHours: Number(e.target.value) || 72 }
+                    : prev,
+                )
+              }
+              disabled={pending}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Work-order number prefix
+            <Input
+              value={preferences.workOrderNumberPrefix}
+              onChange={(e) =>
+                setPreferences((prev) =>
+                  prev ? { ...prev, workOrderNumberPrefix: e.target.value } : prev,
+                )
+              }
+              disabled={pending}
+              maxLength={12}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Invoice number prefix
+            <Input
+              value={preferences.invoiceNumberPrefix}
+              onChange={(e) =>
+                setPreferences((prev) =>
+                  prev ? { ...prev, invoiceNumberPrefix: e.target.value } : prev,
+                )
+              }
+              disabled={pending}
+              maxLength={12}
+            />
+          </label>
         </CardContent>
       </Card>
 
