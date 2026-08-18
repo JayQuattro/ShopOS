@@ -12,6 +12,7 @@ import {
   ArrowLeftRight,
   KeyRound,
   Wallet,
+  Coins,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -150,6 +151,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           href: `${baseHref}/billing`,
           icon: Wallet,
           permission: "customers.read",
+        },
+        {
+          label: "Cash drawer",
+          href: `${baseHref}/cash-drawer`,
+          icon: Coins,
+          permission: "payments.record",
         },
       ],
     },

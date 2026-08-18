@@ -218,6 +218,8 @@ model User {
   assistingWorkOrders   WorkOrderTechnician[]             @relation("WorkOrderAssistingTechnician")
   assignedServiceCalls  ServiceCall[]                     @relation("ServiceCallTechnician")
   portalCustomers       Customer[]                        @relation("CustomerPortalUser")
+  openedCashDrawers     CashDrawerSession[]               @relation("CashDrawerOpenedBy")
+  closedCashDrawers     CashDrawerSession[]               @relation("CashDrawerClosedBy")
   drivenTransportJobs   TransportJob[]                    @relation("TransportDriver")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
@@ -308,6 +310,7 @@ model Organization {
   subletWorks         SubletWork[]
   serviceCalls        ServiceCall[]
   transportJobs       TransportJob[]
+  cashDrawerSessions CashDrawerSession[]
   businessHours       LocationBusinessHour[]
   shopFees            ShopFee[]
   partOrders         PartOrder[]
@@ -380,6 +383,7 @@ model Location {
   auditEvents    AuditEvent[]
   serviceCalls   ServiceCall[]
   transportJobs  TransportJob[]
+  cashDrawerSessions CashDrawerSession[]
 
   @@unique([organizationId, code], map: "locations_org_code_unique")
   @@unique([organizationId, id], map: "locations_org_id_unique")
@@ -1323,6 +1327,34 @@ model TransportJob {
   @@index([organizationId, locationId, status], map: "transport_jobs_org_location_status_idx")
   @@index([organizationId, driverUserId], map: "transport_jobs_org_driver_idx")
   @@map("transport_jobs")
+}
+
+model CashDrawerSession {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  locationId        String    @map("location_id") @db.Uuid
+  currency          String    @db.VarChar(3)
+  openingFloatMinor Int       @default(0) @map("opening_float_minor")
+  status            String    @default("open") @db.VarChar(16)
+  methodTotals      Json      @default("{}") @map("method_totals")
+  countedCashMinor  Int?      @map("counted_cash_minor")
+  expectedCashMinor Int?      @map("expected_cash_minor")
+  overShortMinor    Int?      @map("over_short_minor")
+  openedByUserId    String    @map("opened_by_user_id") @db.Uuid
+  openedAt          DateTime  @default(now()) @map("opened_at") @db.Timestamptz(6)
+  closedByUserId    String?   @map("closed_by_user_id") @db.Uuid
+  closedAt          DateTime? @map("closed_at") @db.Timestamptz(6)
+  note              String?
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location          Location  @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  openedBy          User      @relation("CashDrawerOpenedBy", fields: [openedByUserId], references: [id], onDelete: Restrict)
+  closedBy          User?     @relation("CashDrawerClosedBy", fields: [closedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "cash_drawer_org_id_unique")
+  @@index([organizationId, locationId, status], map: "cash_drawer_org_location_status_idx")
+  @@map("cash_drawer_sessions")
 }
 
 model MaintenanceSchedule {
