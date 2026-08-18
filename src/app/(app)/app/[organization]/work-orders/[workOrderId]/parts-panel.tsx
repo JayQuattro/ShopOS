@@ -31,6 +31,14 @@ type PartOrder = {
 
 type Supplier = { id: string; name: string; active: boolean };
 
+type InventoryCandidate = {
+  partNumber: string;
+  name: string;
+  quantity: number;
+  unitCostMinor: string;
+  currency: string;
+};
+
 type DraftLine = {
   description: string;
   partNumber: string;
@@ -46,6 +54,7 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [supplierId, setSupplierId] = useState("");
@@ -188,6 +197,37 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
     });
   }
 
+  async function receiveIntoStock(line: InventoryCandidate) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/work-orders/${workOrderId}/receive-into-stock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partNumber: line.partNumber,
+          name: line.name,
+          quantity: line.quantity,
+          unitCostMinor: Number(line.unitCostMinor),
+          currency: line.currency,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          data.error === "invalid_quantity"
+            ? "Quantity must be at least 1."
+            : "Could not receive into stock.",
+        );
+      }
+      setNotice(`${line.name} received into inventory.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not receive into stock.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function receiveFlow(order: PartOrder) {
     const bodyLines = order.lines
       .filter((line) => line.receivedQuantity < line.quantity)
@@ -225,6 +265,11 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {notice ? (
+          <Alert variant="info">
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        ) : null}
         {error ? (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -432,9 +477,30 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
                           </span>
                         ) : null}
                       </span>
-                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                        {line.receivedQuantity}/{line.quantity} ·{" "}
-                        {formatMoney(Number(line.unitCostMinor), order.currency, "en-US")}
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                          {line.receivedQuantity}/{line.quantity} ·{" "}
+                          {formatMoney(Number(line.unitCostMinor), order.currency, "en-US")}
+                        </span>
+                        {canWrite && line.partNumber && line.receivedQuantity > 0 ? (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() =>
+                              void receiveIntoStock({
+                                partNumber: line.partNumber!,
+                                name: line.description,
+                                quantity: line.receivedQuantity,
+                                unitCostMinor: line.unitCostMinor,
+                                currency: order.currency,
+                              })
+                            }
+                            className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted"
+                            title="Move received quantity into inventory"
+                          >
+                            → stock
+                          </button>
+                        ) : null}
                       </span>
                     </li>
                   ))}
