@@ -5,6 +5,7 @@ import { calculateLine, currencyCode, type PricedLineInput } from "@/modules/sha
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import { transitionStatus } from "@/modules/work-orders/work-order-service";
 import { resolveLinkTtlHours } from "@/modules/estimates/authorization-link-service";
+import { feeLinesForPresentation } from "@/modules/taxes/shop-fee-service";
 
 export type TransactionalClient = Omit<
   PrismaClient,
@@ -204,6 +205,47 @@ export async function presentRevision(
     if (revision.status !== "DRAFT") throw new EstimateFailed("revision_not_draft");
     if (revision.documentKind === "CHANGE_ORDER") {
       throw new EstimateFailed("revision_not_baseline");
+    }
+
+    // Auto-apply active shop fees (Settings → Fees) before sealing.
+    const feeLines = await feeLinesForPresentation(transaction, {
+      organizationId: input.context.organizationId,
+      workOrderId: revision.workOrderId,
+      revisionId: revision.id,
+      documentKind: "BASELINE",
+      nextPosition: await nextRevisionLinePosition(transaction, revision.id),
+    });
+    for (const fee of feeLines) {
+      if (fee.existing) continue;
+      const calculated = calculateLine({
+        id: `fee-${fee.position}`,
+        kind: "fee",
+        quantityMilli: 1000,
+        unitPriceMinor: fee.unitPriceMinor,
+        discountMinor: 0,
+        taxable: fee.taxable,
+        taxRateBasisPoints: fee.taxRateBasisPoints,
+        authorization: "pending",
+      });
+      await transaction.estimateLine.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          estimateRevisionId: revision.id,
+          serviceGroupKey: "shop-fee",
+          kind: "FEE",
+          description: fee.name,
+          quantityMilli: 1000,
+          unitPriceMinor: BigInt(fee.unitPriceMinor),
+          grossMinor: BigInt(calculated.grossMinor),
+          discountMinor: 0n,
+          taxable: fee.taxable,
+          taxRateBasisPoints: fee.taxRateBasisPoints,
+          taxMinor: BigInt(calculated.taxMinor),
+          totalMinor: BigInt(calculated.totalMinor),
+          position: fee.position,
+        },
+      });
     }
 
     // Recompute totals one final time.
@@ -440,6 +482,18 @@ export async function computeTotals(
     taxMinor: Number(taxMinor),
     totalMinor: Number(totalMinor),
   };
+}
+
+async function nextRevisionLinePosition(
+  transaction: TransactionalClient,
+  revisionId: string,
+): Promise<number> {
+  const latest = await transaction.estimateLine.findFirst({
+    where: { estimateRevisionId: revisionId },
+    orderBy: { position: "desc" },
+    select: { position: true },
+  });
+  return (latest?.position ?? 0) + 1;
 }
 
 async function recomputeTotals(
