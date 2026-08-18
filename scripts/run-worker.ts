@@ -7,6 +7,7 @@ import {
   InvoiceIssuedEmailHandler,
   PaymentRecordedEmailHandler,
 } from "../src/modules/invoices/invoice-email-handlers";
+import { ReviewRequestHandler } from "../src/modules/followups/review-request-handler";
 import { EventHandlerRegistry } from "../src/modules/outbox/event-handler";
 import { OutboxDispatcher } from "../src/modules/outbox/outbox-dispatcher";
 import {
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
   handlers.register(new AuthorizationRecordedEmailHandler(db));
   handlers.register(new InvoiceIssuedEmailHandler(db));
   handlers.register(new PaymentRecordedEmailHandler(db));
+  handlers.register(new ReviewRequestHandler(db));
 
   const dispatcher = new OutboxDispatcher({
     db,

@@ -174,6 +174,23 @@ export async function transitionStatus(
       },
     });
 
+    // Review request when the job fully closes.
+    if (input.targetStatus === "CLOSED") {
+      await transaction.outboxEvent.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          eventType: "work_order.closed",
+          aggregateType: "work_order",
+          aggregateId: wo.id,
+          payload: {
+            workOrderId: wo.id,
+            locationId: wo.locationId,
+          },
+        },
+      });
+    }
+
     // Tenant audit.
     await recordAudit(transaction, {
       organizationId: input.context.organizationId,
