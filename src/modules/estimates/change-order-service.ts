@@ -4,6 +4,8 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import { computeTotals, type TransactionalClient } from "@/modules/estimates/estimate-service";
 import { resolveLinkTtlHours } from "@/modules/estimates/authorization-link-service";
+import { feeLinesForPresentation } from "@/modules/taxes/shop-fee-service";
+import { calculateLine } from "@/modules/shared/money";
 
 type ChangeOrderServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
 
@@ -172,7 +174,51 @@ export async function presentChangeOrder(
     });
     if (lines.length === 0) throw new ChangeOrderFailed("empty_change_order");
 
-    const totals = await computeTotals(transaction, revision.id);
+    let totals = await computeTotals(transaction, revision.id);
+
+    // Auto-apply active shop fees scoped to change orders before sealing.
+    const feeLines = await feeLinesForPresentation(transaction, {
+      organizationId: input.context.organizationId,
+      workOrderId: revision.workOrderId,
+      revisionId: revision.id,
+      documentKind: "CHANGE_ORDER",
+      nextPosition: await nextChangeOrderLinePosition(transaction, revision.id),
+    });
+    for (const fee of feeLines) {
+      if (fee.existing) continue;
+      const calculated = calculateLine({
+        id: `fee-${fee.position}`,
+        kind: "fee",
+        quantityMilli: 1000,
+        unitPriceMinor: fee.unitPriceMinor,
+        discountMinor: 0,
+        taxable: fee.taxable,
+        taxRateBasisPoints: fee.taxRateBasisPoints,
+        authorization: "pending",
+      });
+      await transaction.estimateLine.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          estimateRevisionId: revision.id,
+          serviceGroupKey: "shop-fee",
+          kind: "FEE",
+          description: fee.name,
+          quantityMilli: 1000,
+          unitPriceMinor: BigInt(fee.unitPriceMinor),
+          grossMinor: BigInt(calculated.grossMinor),
+          discountMinor: 0n,
+          taxable: fee.taxable,
+          taxRateBasisPoints: fee.taxRateBasisPoints,
+          taxMinor: BigInt(calculated.taxMinor),
+          totalMinor: BigInt(calculated.totalMinor),
+          position: fee.position,
+        },
+      });
+    }
+
+    // Recompute totals with fee lines included.
+    totals = await computeTotals(transaction, revision.id);
 
     const update = await transaction.estimateRevision.updateMany({
       where: { id: revision.id, status: "DRAFT" },
@@ -527,6 +573,18 @@ async function pendingChangeOrderInTransaction(
     select: { id: true },
   });
   return pending !== null;
+}
+
+async function nextChangeOrderLinePosition(
+  transaction: TransactionalClient,
+  revisionId: string,
+): Promise<number> {
+  const latest = await transaction.estimateLine.findFirst({
+    where: { estimateRevisionId: revisionId },
+    orderBy: { position: "desc" },
+    select: { position: true },
+  });
+  return (latest?.position ?? 0) + 1;
 }
 
 async function loadChangeOrder(

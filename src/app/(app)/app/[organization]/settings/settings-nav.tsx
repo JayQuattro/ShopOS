@@ -16,6 +16,7 @@ export function SettingsNav({ orgId }: { orgId: string }) {
     { href: `${base}/work`, label: "Work preferences", segment: "work" },
     { href: `${base}/notifications`, label: "Notifications", segment: "notifications" },
     { href: `${base}/taxes`, label: "Taxes", segment: "taxes" },
+    { href: `${base}/fees`, label: "Fees", segment: "fees" },
     { href: `${base}/email`, label: "Email delivery", segment: "email" },
   ];
 
