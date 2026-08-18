@@ -80,6 +80,8 @@ const ids = {
   demoTransportScheduled: "00000000-0000-4000-8000-000000000997",
   demoTransportEnRoute: "00000000-0000-4000-8000-000000000998",
   demoTransportCompleted: "00000000-0000-4000-8000-000000000999",
+  demoPortalUser: "00000000-0000-4000-8000-000000000997",
+  demoPortalCredential: "00000000-0000-4000-8000-000000000998",
 } as const;
 
 async function seed(): Promise<void> {
@@ -575,649 +577,648 @@ function todayAtUtc(hour: number): Date {
 async function seedOperationalDemo(): Promise<void> {
   const existing = await db.workOrder.findUnique({ where: { id: ids.demoWorkOrder } });
   if (existing) {
-    // Newer demo slices backfill on already-seeded databases.
-    await seedFleetDemo();
-    await seedRoadsideDemo();
-    await seedTransportDemo();
-    await seedKeysDemo();
-    await seedAccountDemo();
     console.info("Operational demo data already present — skipping.");
-    return;
+  } else {
+    // A 1×1 transparent PNG standing in for a rotor photo.
+    const pngBytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=",
+      "base64",
+    );
+    const photoObjectKey = `work-orders/${ids.demoWorkOrder}/${ids.demoPhotoAttachment}/scored-rotor.png`;
+    const storageBasePath = join(process.cwd(), ".data", "demo-files");
+    await mkdir(
+      join(
+        storageBasePath,
+        ids.organization,
+        `work-orders/${ids.demoWorkOrder}/${ids.demoPhotoAttachment}`,
+      ),
+      {
+        recursive: true,
+      },
+    );
+    await writeFile(join(storageBasePath, ids.organization, photoObjectKey), pngBytes);
+
+    const baselineApprovedAt = new Date(Date.now() - 26 * 60 * 60 * 1000);
+    const changeOrderPresentedAt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+
+    await db.$transaction(async (transaction) => {
+      // Local file storage so evidence photos render out of the box.
+      await transaction.connectorInstance.upsert({
+        where: { id: ids.demoStorageConnector },
+        update: {},
+        create: {
+          id: ids.demoStorageConnector,
+          scope: "platform",
+          capability: "file_storage",
+          adapterKey: "local",
+          displayName: "Demo file storage",
+          configuration: { basePath: storageBasePath },
+          status: "active",
+        },
+      });
+
+      // Technician (Maria Chen) with the technician role.
+      await transaction.user.upsert({
+        where: { id: ids.technician },
+        update: {},
+        create: {
+          id: ids.technician,
+          email: "maria@example.test",
+          emailVerified: true,
+          displayName: "Maria Chen",
+        },
+      });
+      await transaction.organizationMembership.upsert({
+        where: { id: ids.technicianMembership },
+        update: {},
+        create: {
+          id: ids.technicianMembership,
+          organizationId: ids.organization,
+          userId: ids.technician,
+          organizationWideLocationAccess: true,
+        },
+      });
+      const technicianRole = await transaction.role.findFirst({
+        where: { organizationId: ids.organization, key: "technician" },
+        select: { id: true },
+      });
+      if (technicianRole) {
+        await transaction.membershipRole.upsert({
+          where: {
+            organizationId_membershipId_roleId: {
+              organizationId: ids.organization,
+              membershipId: ids.technicianMembership,
+              roleId: technicianRole.id,
+            },
+          },
+          update: {},
+          create: {
+            organizationId: ids.organization,
+            membershipId: ids.technicianMembership,
+            roleId: technicianRole.id,
+          },
+        });
+      }
+
+      // Demo customer and vehicle.
+      await transaction.customer.create({
+        data: {
+          id: ids.priya,
+          organizationId: ids.organization,
+          kind: "INDIVIDUAL",
+          displayName: "Priya Patel",
+          primaryEmail: "priya@example.test",
+        },
+      });
+      await transaction.asset.create({
+        data: {
+          id: ids.civic,
+          organizationId: ids.organization,
+          customerId: ids.priya,
+          displayName: "2021 Honda Civic",
+          category: "automobile",
+        },
+      });
+      await transaction.customerContact.create({
+        data: {
+          id: "00000000-0000-4000-8000-000000000811",
+          organizationId: ids.organization,
+          customerId: ids.priya,
+          name: "Priya Patel",
+          email: "priya@example.test",
+          isPrimary: true,
+        },
+      });
+
+      // The modern-flow work order: approved baseline, in progress, in Bay 2,
+      // with a pending change order awaiting the customer's decision.
+      await transaction.workOrder.create({
+        data: {
+          id: ids.demoWorkOrder,
+          organizationId: ids.organization,
+          locationId: ids.raleigh,
+          customerId: ids.priya,
+          assetId: ids.civic,
+          number: "RO-2100",
+          workType: "REPAIR",
+          status: "IN_PROGRESS",
+          customerConcern: "Grinding noise when braking; squeal at low speed.",
+          assignedTechnicianUserId: ids.technician,
+          vehicleStage: "IN_BAY",
+          bayLabel: "Bay 2",
+          promisedAt: todayAtUtc(21),
+        },
+      });
+
+      // Approved baseline estimate.
+      await transaction.estimateRevision.create({
+        data: {
+          id: ids.demoBaselineRevision,
+          organizationId: ids.organization,
+          locationId: ids.raleigh,
+          workOrderId: ids.demoWorkOrder,
+          revisionNumber: 1,
+          status: "PRESENTED",
+          documentKind: "BASELINE",
+          currency: "USD",
+          subtotalMinor: 32000n,
+          discountMinor: 0n,
+          taxMinor: 2304n,
+          totalMinor: 34304n,
+          presentedAt: baselineApprovedAt,
+          createdByUserId: ids.owner,
+        },
+      });
+      await transaction.estimateLine.createMany({
+        data: [
+          {
+            id: ids.demoBaselineLabor,
+            organizationId: ids.organization,
+            estimateRevisionId: ids.demoBaselineRevision,
+            serviceGroupKey: "brakes",
+            kind: "LABOR",
+            description: "Front brake service — pads, clean and lube slides",
+            quantityMilli: 1200,
+            unitPriceMinor: 14500n,
+            grossMinor: 17400n,
+            discountMinor: 0n,
+            taxable: true,
+            taxRateBasisPoints: 720,
+            taxMinor: 1253n,
+            totalMinor: 18653n,
+            position: 1,
+          },
+          {
+            id: ids.demoBaselinePart,
+            organizationId: ids.organization,
+            estimateRevisionId: ids.demoBaselineRevision,
+            serviceGroupKey: "brakes",
+            kind: "PART",
+            description: "Ceramic front pad set",
+            quantityMilli: 1000,
+            unitPriceMinor: 14600n,
+            grossMinor: 14600n,
+            discountMinor: 0n,
+            taxable: true,
+            taxRateBasisPoints: 720,
+            taxMinor: 1051n,
+            totalMinor: 15651n,
+            position: 2,
+          },
+        ],
+      });
+      await transaction.authorization.create({
+        data: {
+          id: ids.demoAuthorization,
+          organizationId: ids.organization,
+          estimateRevisionId: ids.demoBaselineRevision,
+          method: "CUSTOMER_LINK",
+          providedByName: "Priya Patel",
+          occurredAt: baselineApprovedAt,
+        },
+      });
+      await transaction.authorizationDecision.createMany({
+        data: [
+          {
+            authorizationId: ids.demoAuthorization,
+            organizationId: ids.organization,
+            estimateLineId: ids.demoBaselineLabor,
+            decision: "APPROVED",
+          },
+          {
+            authorizationId: ids.demoAuthorization,
+            organizationId: ids.organization,
+            estimateLineId: ids.demoBaselinePart,
+            decision: "APPROVED",
+          },
+        ],
+      });
+
+      // Inspection checklist: one flagged item that became the change order.
+      await transaction.workOrderTask.createMany({
+        data: [
+          {
+            id: ids.demoTaskFlagged,
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            workOrderId: ids.demoWorkOrder,
+            position: 1,
+            title: "Front rotors",
+            status: "NEEDS_ATTENTION",
+            outcomeNote: "Scored below minimum thickness",
+            createdByUserId: ids.owner,
+          },
+          {
+            id: ids.demoTaskPassed,
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            workOrderId: ids.demoWorkOrder,
+            position: 2,
+            title: "Tire tread depth",
+            status: "DONE",
+            createdByUserId: ids.owner,
+          },
+          {
+            id: ids.demoTaskOpen,
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            workOrderId: ids.demoWorkOrder,
+            position: 3,
+            title: "Brake fluid condition",
+            status: "OPEN",
+            createdByUserId: ids.owner,
+          },
+        ],
+      });
+
+      // Pending change order from the flagged finding.
+      await transaction.estimateRevision.create({
+        data: {
+          id: ids.demoChangeOrder,
+          organizationId: ids.organization,
+          locationId: ids.raleigh,
+          workOrderId: ids.demoWorkOrder,
+          revisionNumber: 2,
+          status: "PRESENTED",
+          documentKind: "CHANGE_ORDER",
+          changeOrderNumber: 1,
+          summaryNote: "Found during inspection: front rotors scored below minimum thickness.",
+          currency: "USD",
+          subtotalMinor: 31140n,
+          discountMinor: 0n,
+          taxMinor: 2242n,
+          totalMinor: 33382n,
+          presentedAt: changeOrderPresentedAt,
+          createdByUserId: ids.owner,
+        },
+      });
+      await transaction.estimateLine.createMany({
+        data: [
+          {
+            id: ids.demoChangeOrderPart,
+            organizationId: ids.organization,
+            estimateRevisionId: ids.demoChangeOrder,
+            serviceGroupKey: "brakes",
+            kind: "PART",
+            description: "Front rotor pair — Front rotors — Scored below minimum thickness",
+            quantityMilli: 1000,
+            unitPriceMinor: 24200n,
+            grossMinor: 24200n,
+            discountMinor: 0n,
+            taxable: true,
+            taxRateBasisPoints: 720,
+            taxMinor: 1742n,
+            totalMinor: 25942n,
+            position: 1,
+          },
+          {
+            id: ids.demoChangeOrderLabor,
+            organizationId: ids.organization,
+            estimateRevisionId: ids.demoChangeOrder,
+            serviceGroupKey: "brakes",
+            kind: "LABOR",
+            description: "Rotor replacement labor",
+            quantityMilli: 500,
+            unitPriceMinor: 14500n,
+            grossMinor: 7250n,
+            discountMinor: 0n,
+            taxable: true,
+            taxRateBasisPoints: 720,
+            taxMinor: 522n,
+            totalMinor: 7772n,
+            position: 2,
+          },
+        ],
+      });
+      await transaction.authorizationLink.create({
+        data: {
+          id: ids.demoChangeOrderLink,
+          organizationId: ids.organization,
+          estimateRevisionId: ids.demoChangeOrder,
+          token: DEMO_CHANGE_ORDER_TOKEN,
+          expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        },
+      });
+
+      // Evidence photo attached to the change order document.
+      await transaction.workOrderAttachment.create({
+        data: {
+          id: ids.demoPhotoAttachment,
+          organizationId: ids.organization,
+          workOrderId: ids.demoWorkOrder,
+          estimateRevisionId: ids.demoChangeOrder,
+          objectKey: photoObjectKey,
+          fileName: "scored-rotor.png",
+          contentType: "image/png",
+          sizeBytes: pngBytes.byteLength,
+          uploadedByUserId: ids.owner,
+        },
+      });
+
+      // Clock time: Maria has an hour and five minutes on the job so far.
+      await transaction.timeEntry.create({
+        data: {
+          id: ids.demoTimeEntry,
+          organizationId: ids.organization,
+          locationId: ids.raleigh,
+          workOrderId: ids.demoWorkOrder,
+          userId: ids.technician,
+          startedAt: new Date(Date.now() - 95 * 60 * 1000),
+          endedAt: new Date(Date.now() - 30 * 60 * 1000),
+          note: "Teardown and inspection",
+        },
+      });
+
+      // Parts: pads arrived, rotors still on the truck.
+      await transaction.partSupplier.create({
+        data: {
+          id: ids.demoSupplier,
+          organizationId: ids.organization,
+          name: "Worldpac Carolina",
+          phone: "555-0140",
+        },
+      });
+      await transaction.partOrder.create({
+        data: {
+          id: ids.demoPartOrder,
+          organizationId: ids.organization,
+          locationId: ids.raleigh,
+          workOrderId: ids.demoWorkOrder,
+          supplierId: ids.demoSupplier,
+          status: "ORDERED",
+          source: "MANUAL",
+          currency: "USD",
+          trackingNumber: "TRK-7731",
+          orderedAt: new Date(Date.now() - 20 * 60 * 60 * 1000),
+          createdByUserId: ids.owner,
+        },
+      });
+      await transaction.partOrderLine.createMany({
+        data: [
+          {
+            id: ids.demoPartLinePads,
+            organizationId: ids.organization,
+            partOrderId: ids.demoPartOrder,
+            description: "Ceramic front pad set",
+            partNumber: "PAD-101",
+            quantity: 1,
+            receivedQuantity: 1,
+            unitCostMinor: 8200n,
+          },
+          {
+            id: ids.demoPartLineRotors,
+            organizationId: ids.organization,
+            partOrderId: ids.demoPartOrder,
+            description: "Front rotor pair",
+            partNumber: "ROT-220",
+            quantity: 1,
+            receivedQuantity: 0,
+            unitCostMinor: 14100n,
+          },
+        ],
+      });
+
+      // Today's schedule at Raleigh (times UTC; Raleigh is America/New_York).
+      await transaction.appointment.createMany({
+        data: [
+          {
+            id: ids.demoAppointmentMorning,
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            customerId: ids.alex,
+            assetId: ids.subaru,
+            status: "SCHEDULED",
+            reason: "Oil change and tire rotation",
+            startAt: todayAtUtc(13),
+            endAt: todayAtUtc(14),
+            createdByUserId: ids.owner,
+          },
+          {
+            id: ids.demoAppointmentMidday,
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            customerId: ids.oakline,
+            status: "CONFIRMED",
+            reason: "Fleet van — brake inspection",
+            startAt: todayAtUtc(16),
+            endAt: todayAtUtc(17),
+            createdByUserId: ids.owner,
+          },
+          {
+            id: ids.demoAppointmentAfternoon,
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            customerId: ids.priya,
+            assetId: ids.civic,
+            workOrderId: ids.demoWorkOrder,
+            status: "CHECKED_IN",
+            reason: "Grinding noise when braking",
+            startAt: todayAtUtc(18),
+            endAt: todayAtUtc(19),
+            createdByUserId: ids.owner,
+          },
+        ],
+      });
+
+      // Service menu templates.
+      await transaction.serviceTemplate.create({
+        data: {
+          id: ids.demoOilTemplate,
+          organizationId: ids.organization,
+          name: "Oil change — synthetic",
+          notes: "Includes top-off and tire check.",
+        },
+      });
+      await transaction.serviceTemplateLine.createMany({
+        data: [
+          {
+            id: ids.demoOilLineOil,
+            organizationId: ids.organization,
+            serviceTemplateId: ids.demoOilTemplate,
+            position: 1,
+            kind: "PART",
+            serviceGroupKey: "oil",
+            description: "Synthetic oil 5W-30 (5 qt)",
+            quantityMilli: 5000,
+            unitPriceMinor: 8500n,
+            taxable: false,
+            taxRateBasisPoints: 0,
+          },
+          {
+            id: ids.demoOilLineFilter,
+            organizationId: ids.organization,
+            serviceTemplateId: ids.demoOilTemplate,
+            position: 2,
+            kind: "PART",
+            serviceGroupKey: "oil",
+            description: "Oil filter",
+            quantityMilli: 1000,
+            unitPriceMinor: 1200n,
+            taxable: false,
+            taxRateBasisPoints: 0,
+          },
+          {
+            id: ids.demoOilLineLabor,
+            organizationId: ids.organization,
+            serviceTemplateId: ids.demoOilTemplate,
+            position: 3,
+            kind: "LABOR",
+            serviceGroupKey: "oil",
+            description: "Change oil and filter",
+            quantityMilli: 500,
+            unitPriceMinor: 3500n,
+            taxable: false,
+            taxRateBasisPoints: 0,
+          },
+        ],
+      });
+      await transaction.serviceTemplateTask.createMany({
+        data: [
+          {
+            id: ids.demoOilTaskTires,
+            organizationId: ids.organization,
+            serviceTemplateId: ids.demoOilTemplate,
+            position: 1,
+            title: "Check tire pressure",
+          },
+          {
+            id: ids.demoOilTaskFluids,
+            organizationId: ids.organization,
+            serviceTemplateId: ids.demoOilTemplate,
+            position: 2,
+            title: "Top off fluids",
+          },
+        ],
+      });
+      await transaction.serviceTemplate.create({
+        data: {
+          id: ids.demoBrakeTemplate,
+          organizationId: ids.organization,
+          name: "Brake inspection",
+        },
+      });
+      await transaction.serviceTemplateTask.createMany({
+        data: [
+          {
+            id: ids.demoBrakeTask1,
+            organizationId: ids.organization,
+            serviceTemplateId: ids.demoBrakeTemplate,
+            position: 1,
+            title: "Front brake pads",
+          },
+          {
+            id: ids.demoBrakeTask2,
+            organizationId: ids.organization,
+            serviceTemplateId: ids.demoBrakeTemplate,
+            position: 2,
+            title: "Rotor thickness",
+          },
+        ],
+      });
+
+      // A narrated history so the customer tracker has a timeline.
+      await transaction.activityEvent.createMany({
+        data: [
+          {
+            id: "00000000-0000-4000-8000-000000000983",
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            workOrderId: ids.demoWorkOrder,
+            actorUserId: ids.owner,
+            eventType: "estimate.presented",
+            summary: "Estimate revision 1 presented.",
+            occurredAt: new Date(Date.now() - 27 * 60 * 60 * 1000),
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000984",
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            workOrderId: ids.demoWorkOrder,
+            actorUserId: ids.owner,
+            eventType: "authorization.recorded",
+            summary: "Authorization recorded: 2 approved, 0 declined.",
+            occurredAt: baselineApprovedAt,
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000985",
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            workOrderId: ids.demoWorkOrder,
+            actorUserId: ids.owner,
+            eventType: "work_order.status_changed",
+            summary: "Status changed from AUTHORIZED to IN_PROGRESS.",
+            data: { from: "AUTHORIZED", to: "IN_PROGRESS" },
+            occurredAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000986",
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            workOrderId: ids.demoWorkOrder,
+            actorUserId: ids.owner,
+            eventType: "parts.ordered",
+            summary: "Parts ordered from Worldpac Carolina (tracking TRK-7731).",
+            occurredAt: new Date(Date.now() - 20 * 60 * 60 * 1000),
+          },
+          {
+            id: "00000000-0000-4000-8000-000000000987",
+            organizationId: ids.organization,
+            locationId: ids.raleigh,
+            workOrderId: ids.demoWorkOrder,
+            actorUserId: ids.owner,
+            eventType: "change_order.presented",
+            summary: "Change order 1 presented for customer authorization.",
+            occurredAt: changeOrderPresentedAt,
+          },
+        ],
+      });
+
+      // Customer repair tracker link.
+      await transaction.repairTrackerLink.create({
+        data: {
+          id: ids.demoTrackerLink,
+          organizationId: ids.organization,
+          workOrderId: ids.demoWorkOrder,
+          token: DEMO_TRACKER_TOKEN,
+        },
+      });
+    });
+
+    // A real password for the demo owner (Better Auth credential account).
+    const passwordHash = await hashPassword(DEMO_PASSWORD);
+    await db.authAccount.upsert({
+      where: { id: ids.demoOwnerCredential },
+      update: { password: passwordHash },
+      create: {
+        id: ids.demoOwnerCredential,
+        userId: ids.owner,
+        accountId: ids.owner,
+        providerId: "credential",
+        password: passwordHash,
+      },
+    });
+
+    const base = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+    console.info("");
+    console.info("──────────────────────────────────────────────────────");
+    console.info("Operational demo data seeded.");
+    console.info(`Sign in:        owner@example.test / ${DEMO_PASSWORD}`);
+    console.info(`Technician:     maria@example.test (no password — use magic link)`);
+    console.info(`Customer portal: driver@example.test / ${DEMO_PASSWORD} → /portal`);
+    console.info(`Repair tracker: ${base}/track/${DEMO_TRACKER_TOKEN}`);
+    console.info(`Change order:   ${base}/authorize/${DEMO_CHANGE_ORDER_TOKEN}`);
+    console.info("──────────────────────────────────────────────────────");
   }
+
+  // Demo slices run last and are idempotent: they backfill on databases
+  // seeded before each slice existed and run cleanly right after the base
+  // demo data on a fresh database.
   await seedFleetDemo();
   await seedRoadsideDemo();
   await seedTransportDemo();
   await seedKeysDemo();
   await seedAccountDemo();
-
-  // A 1×1 transparent PNG standing in for a rotor photo.
-  const pngBytes = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=",
-    "base64",
-  );
-  const photoObjectKey = `work-orders/${ids.demoWorkOrder}/${ids.demoPhotoAttachment}/scored-rotor.png`;
-  const storageBasePath = join(process.cwd(), ".data", "demo-files");
-  await mkdir(
-    join(
-      storageBasePath,
-      ids.organization,
-      `work-orders/${ids.demoWorkOrder}/${ids.demoPhotoAttachment}`,
-    ),
-    {
-      recursive: true,
-    },
-  );
-  await writeFile(join(storageBasePath, ids.organization, photoObjectKey), pngBytes);
-
-  const baselineApprovedAt = new Date(Date.now() - 26 * 60 * 60 * 1000);
-  const changeOrderPresentedAt = new Date(Date.now() - 3 * 60 * 60 * 1000);
-
-  await db.$transaction(async (transaction) => {
-    // Local file storage so evidence photos render out of the box.
-    await transaction.connectorInstance.upsert({
-      where: { id: ids.demoStorageConnector },
-      update: {},
-      create: {
-        id: ids.demoStorageConnector,
-        scope: "platform",
-        capability: "file_storage",
-        adapterKey: "local",
-        displayName: "Demo file storage",
-        configuration: { basePath: storageBasePath },
-        status: "active",
-      },
-    });
-
-    // Technician (Maria Chen) with the technician role.
-    await transaction.user.upsert({
-      where: { id: ids.technician },
-      update: {},
-      create: {
-        id: ids.technician,
-        email: "maria@example.test",
-        emailVerified: true,
-        displayName: "Maria Chen",
-      },
-    });
-    await transaction.organizationMembership.upsert({
-      where: { id: ids.technicianMembership },
-      update: {},
-      create: {
-        id: ids.technicianMembership,
-        organizationId: ids.organization,
-        userId: ids.technician,
-        organizationWideLocationAccess: true,
-      },
-    });
-    const technicianRole = await transaction.role.findFirst({
-      where: { organizationId: ids.organization, key: "technician" },
-      select: { id: true },
-    });
-    if (technicianRole) {
-      await transaction.membershipRole.upsert({
-        where: {
-          organizationId_membershipId_roleId: {
-            organizationId: ids.organization,
-            membershipId: ids.technicianMembership,
-            roleId: technicianRole.id,
-          },
-        },
-        update: {},
-        create: {
-          organizationId: ids.organization,
-          membershipId: ids.technicianMembership,
-          roleId: technicianRole.id,
-        },
-      });
-    }
-
-    // Demo customer and vehicle.
-    await transaction.customer.create({
-      data: {
-        id: ids.priya,
-        organizationId: ids.organization,
-        kind: "INDIVIDUAL",
-        displayName: "Priya Patel",
-        primaryEmail: "priya@example.test",
-      },
-    });
-    await transaction.asset.create({
-      data: {
-        id: ids.civic,
-        organizationId: ids.organization,
-        customerId: ids.priya,
-        displayName: "2021 Honda Civic",
-        category: "automobile",
-      },
-    });
-    await transaction.customerContact.create({
-      data: {
-        id: "00000000-0000-4000-8000-000000000811",
-        organizationId: ids.organization,
-        customerId: ids.priya,
-        name: "Priya Patel",
-        email: "priya@example.test",
-        isPrimary: true,
-      },
-    });
-
-    // The modern-flow work order: approved baseline, in progress, in Bay 2,
-    // with a pending change order awaiting the customer's decision.
-    await transaction.workOrder.create({
-      data: {
-        id: ids.demoWorkOrder,
-        organizationId: ids.organization,
-        locationId: ids.raleigh,
-        customerId: ids.priya,
-        assetId: ids.civic,
-        number: "RO-2100",
-        workType: "REPAIR",
-        status: "IN_PROGRESS",
-        customerConcern: "Grinding noise when braking; squeal at low speed.",
-        assignedTechnicianUserId: ids.technician,
-        vehicleStage: "IN_BAY",
-        bayLabel: "Bay 2",
-        promisedAt: todayAtUtc(21),
-      },
-    });
-
-    // Approved baseline estimate.
-    await transaction.estimateRevision.create({
-      data: {
-        id: ids.demoBaselineRevision,
-        organizationId: ids.organization,
-        locationId: ids.raleigh,
-        workOrderId: ids.demoWorkOrder,
-        revisionNumber: 1,
-        status: "PRESENTED",
-        documentKind: "BASELINE",
-        currency: "USD",
-        subtotalMinor: 32000n,
-        discountMinor: 0n,
-        taxMinor: 2304n,
-        totalMinor: 34304n,
-        presentedAt: baselineApprovedAt,
-        createdByUserId: ids.owner,
-      },
-    });
-    await transaction.estimateLine.createMany({
-      data: [
-        {
-          id: ids.demoBaselineLabor,
-          organizationId: ids.organization,
-          estimateRevisionId: ids.demoBaselineRevision,
-          serviceGroupKey: "brakes",
-          kind: "LABOR",
-          description: "Front brake service — pads, clean and lube slides",
-          quantityMilli: 1200,
-          unitPriceMinor: 14500n,
-          grossMinor: 17400n,
-          discountMinor: 0n,
-          taxable: true,
-          taxRateBasisPoints: 720,
-          taxMinor: 1253n,
-          totalMinor: 18653n,
-          position: 1,
-        },
-        {
-          id: ids.demoBaselinePart,
-          organizationId: ids.organization,
-          estimateRevisionId: ids.demoBaselineRevision,
-          serviceGroupKey: "brakes",
-          kind: "PART",
-          description: "Ceramic front pad set",
-          quantityMilli: 1000,
-          unitPriceMinor: 14600n,
-          grossMinor: 14600n,
-          discountMinor: 0n,
-          taxable: true,
-          taxRateBasisPoints: 720,
-          taxMinor: 1051n,
-          totalMinor: 15651n,
-          position: 2,
-        },
-      ],
-    });
-    await transaction.authorization.create({
-      data: {
-        id: ids.demoAuthorization,
-        organizationId: ids.organization,
-        estimateRevisionId: ids.demoBaselineRevision,
-        method: "CUSTOMER_LINK",
-        providedByName: "Priya Patel",
-        occurredAt: baselineApprovedAt,
-      },
-    });
-    await transaction.authorizationDecision.createMany({
-      data: [
-        {
-          authorizationId: ids.demoAuthorization,
-          organizationId: ids.organization,
-          estimateLineId: ids.demoBaselineLabor,
-          decision: "APPROVED",
-        },
-        {
-          authorizationId: ids.demoAuthorization,
-          organizationId: ids.organization,
-          estimateLineId: ids.demoBaselinePart,
-          decision: "APPROVED",
-        },
-      ],
-    });
-
-    // Inspection checklist: one flagged item that became the change order.
-    await transaction.workOrderTask.createMany({
-      data: [
-        {
-          id: ids.demoTaskFlagged,
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          workOrderId: ids.demoWorkOrder,
-          position: 1,
-          title: "Front rotors",
-          status: "NEEDS_ATTENTION",
-          outcomeNote: "Scored below minimum thickness",
-          createdByUserId: ids.owner,
-        },
-        {
-          id: ids.demoTaskPassed,
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          workOrderId: ids.demoWorkOrder,
-          position: 2,
-          title: "Tire tread depth",
-          status: "DONE",
-          createdByUserId: ids.owner,
-        },
-        {
-          id: ids.demoTaskOpen,
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          workOrderId: ids.demoWorkOrder,
-          position: 3,
-          title: "Brake fluid condition",
-          status: "OPEN",
-          createdByUserId: ids.owner,
-        },
-      ],
-    });
-
-    // Pending change order from the flagged finding.
-    await transaction.estimateRevision.create({
-      data: {
-        id: ids.demoChangeOrder,
-        organizationId: ids.organization,
-        locationId: ids.raleigh,
-        workOrderId: ids.demoWorkOrder,
-        revisionNumber: 2,
-        status: "PRESENTED",
-        documentKind: "CHANGE_ORDER",
-        changeOrderNumber: 1,
-        summaryNote: "Found during inspection: front rotors scored below minimum thickness.",
-        currency: "USD",
-        subtotalMinor: 31140n,
-        discountMinor: 0n,
-        taxMinor: 2242n,
-        totalMinor: 33382n,
-        presentedAt: changeOrderPresentedAt,
-        createdByUserId: ids.owner,
-      },
-    });
-    await transaction.estimateLine.createMany({
-      data: [
-        {
-          id: ids.demoChangeOrderPart,
-          organizationId: ids.organization,
-          estimateRevisionId: ids.demoChangeOrder,
-          serviceGroupKey: "brakes",
-          kind: "PART",
-          description: "Front rotor pair — Front rotors — Scored below minimum thickness",
-          quantityMilli: 1000,
-          unitPriceMinor: 24200n,
-          grossMinor: 24200n,
-          discountMinor: 0n,
-          taxable: true,
-          taxRateBasisPoints: 720,
-          taxMinor: 1742n,
-          totalMinor: 25942n,
-          position: 1,
-        },
-        {
-          id: ids.demoChangeOrderLabor,
-          organizationId: ids.organization,
-          estimateRevisionId: ids.demoChangeOrder,
-          serviceGroupKey: "brakes",
-          kind: "LABOR",
-          description: "Rotor replacement labor",
-          quantityMilli: 500,
-          unitPriceMinor: 14500n,
-          grossMinor: 7250n,
-          discountMinor: 0n,
-          taxable: true,
-          taxRateBasisPoints: 720,
-          taxMinor: 522n,
-          totalMinor: 7772n,
-          position: 2,
-        },
-      ],
-    });
-    await transaction.authorizationLink.create({
-      data: {
-        id: ids.demoChangeOrderLink,
-        organizationId: ids.organization,
-        estimateRevisionId: ids.demoChangeOrder,
-        token: DEMO_CHANGE_ORDER_TOKEN,
-        expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
-      },
-    });
-
-    // Evidence photo attached to the change order document.
-    await transaction.workOrderAttachment.create({
-      data: {
-        id: ids.demoPhotoAttachment,
-        organizationId: ids.organization,
-        workOrderId: ids.demoWorkOrder,
-        estimateRevisionId: ids.demoChangeOrder,
-        objectKey: photoObjectKey,
-        fileName: "scored-rotor.png",
-        contentType: "image/png",
-        sizeBytes: pngBytes.byteLength,
-        uploadedByUserId: ids.owner,
-      },
-    });
-
-    // Clock time: Maria has an hour and five minutes on the job so far.
-    await transaction.timeEntry.create({
-      data: {
-        id: ids.demoTimeEntry,
-        organizationId: ids.organization,
-        locationId: ids.raleigh,
-        workOrderId: ids.demoWorkOrder,
-        userId: ids.technician,
-        startedAt: new Date(Date.now() - 95 * 60 * 1000),
-        endedAt: new Date(Date.now() - 30 * 60 * 1000),
-        note: "Teardown and inspection",
-      },
-    });
-
-    // Parts: pads arrived, rotors still on the truck.
-    await transaction.partSupplier.create({
-      data: {
-        id: ids.demoSupplier,
-        organizationId: ids.organization,
-        name: "Worldpac Carolina",
-        phone: "555-0140",
-      },
-    });
-    await transaction.partOrder.create({
-      data: {
-        id: ids.demoPartOrder,
-        organizationId: ids.organization,
-        locationId: ids.raleigh,
-        workOrderId: ids.demoWorkOrder,
-        supplierId: ids.demoSupplier,
-        status: "ORDERED",
-        source: "MANUAL",
-        currency: "USD",
-        trackingNumber: "TRK-7731",
-        orderedAt: new Date(Date.now() - 20 * 60 * 60 * 1000),
-        createdByUserId: ids.owner,
-      },
-    });
-    await transaction.partOrderLine.createMany({
-      data: [
-        {
-          id: ids.demoPartLinePads,
-          organizationId: ids.organization,
-          partOrderId: ids.demoPartOrder,
-          description: "Ceramic front pad set",
-          partNumber: "PAD-101",
-          quantity: 1,
-          receivedQuantity: 1,
-          unitCostMinor: 8200n,
-        },
-        {
-          id: ids.demoPartLineRotors,
-          organizationId: ids.organization,
-          partOrderId: ids.demoPartOrder,
-          description: "Front rotor pair",
-          partNumber: "ROT-220",
-          quantity: 1,
-          receivedQuantity: 0,
-          unitCostMinor: 14100n,
-        },
-      ],
-    });
-
-    // Today's schedule at Raleigh (times UTC; Raleigh is America/New_York).
-    await transaction.appointment.createMany({
-      data: [
-        {
-          id: ids.demoAppointmentMorning,
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          customerId: ids.alex,
-          assetId: ids.subaru,
-          status: "SCHEDULED",
-          reason: "Oil change and tire rotation",
-          startAt: todayAtUtc(13),
-          endAt: todayAtUtc(14),
-          createdByUserId: ids.owner,
-        },
-        {
-          id: ids.demoAppointmentMidday,
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          customerId: ids.oakline,
-          status: "CONFIRMED",
-          reason: "Fleet van — brake inspection",
-          startAt: todayAtUtc(16),
-          endAt: todayAtUtc(17),
-          createdByUserId: ids.owner,
-        },
-        {
-          id: ids.demoAppointmentAfternoon,
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          customerId: ids.priya,
-          assetId: ids.civic,
-          workOrderId: ids.demoWorkOrder,
-          status: "CHECKED_IN",
-          reason: "Grinding noise when braking",
-          startAt: todayAtUtc(18),
-          endAt: todayAtUtc(19),
-          createdByUserId: ids.owner,
-        },
-      ],
-    });
-
-    // Service menu templates.
-    await transaction.serviceTemplate.create({
-      data: {
-        id: ids.demoOilTemplate,
-        organizationId: ids.organization,
-        name: "Oil change — synthetic",
-        notes: "Includes top-off and tire check.",
-      },
-    });
-    await transaction.serviceTemplateLine.createMany({
-      data: [
-        {
-          id: ids.demoOilLineOil,
-          organizationId: ids.organization,
-          serviceTemplateId: ids.demoOilTemplate,
-          position: 1,
-          kind: "PART",
-          serviceGroupKey: "oil",
-          description: "Synthetic oil 5W-30 (5 qt)",
-          quantityMilli: 5000,
-          unitPriceMinor: 8500n,
-          taxable: false,
-          taxRateBasisPoints: 0,
-        },
-        {
-          id: ids.demoOilLineFilter,
-          organizationId: ids.organization,
-          serviceTemplateId: ids.demoOilTemplate,
-          position: 2,
-          kind: "PART",
-          serviceGroupKey: "oil",
-          description: "Oil filter",
-          quantityMilli: 1000,
-          unitPriceMinor: 1200n,
-          taxable: false,
-          taxRateBasisPoints: 0,
-        },
-        {
-          id: ids.demoOilLineLabor,
-          organizationId: ids.organization,
-          serviceTemplateId: ids.demoOilTemplate,
-          position: 3,
-          kind: "LABOR",
-          serviceGroupKey: "oil",
-          description: "Change oil and filter",
-          quantityMilli: 500,
-          unitPriceMinor: 3500n,
-          taxable: false,
-          taxRateBasisPoints: 0,
-        },
-      ],
-    });
-    await transaction.serviceTemplateTask.createMany({
-      data: [
-        {
-          id: ids.demoOilTaskTires,
-          organizationId: ids.organization,
-          serviceTemplateId: ids.demoOilTemplate,
-          position: 1,
-          title: "Check tire pressure",
-        },
-        {
-          id: ids.demoOilTaskFluids,
-          organizationId: ids.organization,
-          serviceTemplateId: ids.demoOilTemplate,
-          position: 2,
-          title: "Top off fluids",
-        },
-      ],
-    });
-    await transaction.serviceTemplate.create({
-      data: {
-        id: ids.demoBrakeTemplate,
-        organizationId: ids.organization,
-        name: "Brake inspection",
-      },
-    });
-    await transaction.serviceTemplateTask.createMany({
-      data: [
-        {
-          id: ids.demoBrakeTask1,
-          organizationId: ids.organization,
-          serviceTemplateId: ids.demoBrakeTemplate,
-          position: 1,
-          title: "Front brake pads",
-        },
-        {
-          id: ids.demoBrakeTask2,
-          organizationId: ids.organization,
-          serviceTemplateId: ids.demoBrakeTemplate,
-          position: 2,
-          title: "Rotor thickness",
-        },
-      ],
-    });
-
-    // A narrated history so the customer tracker has a timeline.
-    await transaction.activityEvent.createMany({
-      data: [
-        {
-          id: "00000000-0000-4000-8000-000000000983",
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          workOrderId: ids.demoWorkOrder,
-          actorUserId: ids.owner,
-          eventType: "estimate.presented",
-          summary: "Estimate revision 1 presented.",
-          occurredAt: new Date(Date.now() - 27 * 60 * 60 * 1000),
-        },
-        {
-          id: "00000000-0000-4000-8000-000000000984",
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          workOrderId: ids.demoWorkOrder,
-          actorUserId: ids.owner,
-          eventType: "authorization.recorded",
-          summary: "Authorization recorded: 2 approved, 0 declined.",
-          occurredAt: baselineApprovedAt,
-        },
-        {
-          id: "00000000-0000-4000-8000-000000000985",
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          workOrderId: ids.demoWorkOrder,
-          actorUserId: ids.owner,
-          eventType: "work_order.status_changed",
-          summary: "Status changed from AUTHORIZED to IN_PROGRESS.",
-          data: { from: "AUTHORIZED", to: "IN_PROGRESS" },
-          occurredAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        },
-        {
-          id: "00000000-0000-4000-8000-000000000986",
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          workOrderId: ids.demoWorkOrder,
-          actorUserId: ids.owner,
-          eventType: "parts.ordered",
-          summary: "Parts ordered from Worldpac Carolina (tracking TRK-7731).",
-          occurredAt: new Date(Date.now() - 20 * 60 * 60 * 1000),
-        },
-        {
-          id: "00000000-0000-4000-8000-000000000987",
-          organizationId: ids.organization,
-          locationId: ids.raleigh,
-          workOrderId: ids.demoWorkOrder,
-          actorUserId: ids.owner,
-          eventType: "change_order.presented",
-          summary: "Change order 1 presented for customer authorization.",
-          occurredAt: changeOrderPresentedAt,
-        },
-      ],
-    });
-
-    // Customer repair tracker link.
-    await transaction.repairTrackerLink.create({
-      data: {
-        id: ids.demoTrackerLink,
-        organizationId: ids.organization,
-        workOrderId: ids.demoWorkOrder,
-        token: DEMO_TRACKER_TOKEN,
-      },
-    });
-  });
-
-  // A real password for the demo owner (Better Auth credential account).
-  const passwordHash = await hashPassword(DEMO_PASSWORD);
-  await db.authAccount.upsert({
-    where: { id: ids.demoOwnerCredential },
-    update: { password: passwordHash },
-    create: {
-      id: ids.demoOwnerCredential,
-      userId: ids.owner,
-      accountId: ids.owner,
-      providerId: "credential",
-      password: passwordHash,
-    },
-  });
-
-  const base = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
-  console.info("");
-  console.info("──────────────────────────────────────────────────────");
-  console.info("Operational demo data seeded.");
-  console.info(`Sign in:        owner@example.test / ${DEMO_PASSWORD}`);
-  console.info(`Technician:     maria@example.test (no password — use magic link)`);
-  console.info(`Repair tracker: ${base}/track/${DEMO_TRACKER_TOKEN}`);
-  console.info(`Change order:   ${base}/authorize/${DEMO_CHANGE_ORDER_TOKEN}`);
-  console.info("──────────────────────────────────────────────────────");
+  await seedPortalDemo();
 }
 
 /** Roadside demo calls; idempotent so re-seeding older databases backfills. */
@@ -1425,6 +1426,44 @@ async function seedAccountDemo(): Promise<void> {
   await db.workOrder.updateMany({
     where: { id: ids.demoWorkOrder, poNumber: null },
     data: { poNumber: "PO-2026-118" },
+  });
+}
+
+/** Customer portal login linked to the demo customer (Priya). */
+async function seedPortalDemo(): Promise<void> {
+  const existing = await db.customer.findFirst({
+    where: { id: ids.priya },
+    select: { portalUserId: true },
+  });
+  if (existing?.portalUserId) return;
+
+  await db.user.upsert({
+    where: { id: ids.demoPortalUser },
+    update: {},
+    create: {
+      id: ids.demoPortalUser,
+      email: "driver@example.test",
+      emailVerified: true,
+      displayName: "Priya Patel",
+    },
+  });
+
+  const passwordHash = await hashPassword(DEMO_PASSWORD);
+  await db.authAccount.upsert({
+    where: { id: ids.demoPortalCredential },
+    update: { password: passwordHash },
+    create: {
+      id: ids.demoPortalCredential,
+      userId: ids.demoPortalUser,
+      accountId: ids.demoPortalUser,
+      providerId: "credential",
+      password: passwordHash,
+    },
+  });
+
+  await db.customer.update({
+    where: { id: ids.priya },
+    data: { portalUserId: ids.demoPortalUser },
   });
 }
 
