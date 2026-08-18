@@ -80,7 +80,9 @@ export async function listCustomerBalances(
   const invoices = await input.db.invoice.findMany({
     where: {
       organizationId: input.context.organizationId,
-      status: "ISSUED",
+      // Outstanding money lives on issued and partially paid invoices; PAID
+      // and VOID carry nothing and DRAFT hasn't been presented.
+      status: { in: ["ISSUED", "PARTIALLY_PAID"] },
       issuedAt: { lte: asOf },
     },
     select: {
@@ -196,7 +198,7 @@ export async function buildCustomerStatement(
     db.invoice.findMany({
       where: {
         organizationId,
-        status: "ISSUED",
+        status: { in: ["ISSUED", "PARTIALLY_PAID"] },
         issuedAt: { lte: asOf },
         workOrder: { customerId: customer.id },
       },
@@ -215,7 +217,7 @@ export async function buildCustomerStatement(
         organizationId,
         receivedAt: { lte: asOf },
         invoice: {
-          status: "ISSUED",
+          status: { in: ["ISSUED", "PARTIALLY_PAID"] },
           workOrder: { customerId: customer.id },
         },
       },
