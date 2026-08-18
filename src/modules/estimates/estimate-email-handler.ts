@@ -6,6 +6,7 @@ import type { EventHandler, EventHandlerInput } from "@/modules/outbox/event-han
 import { getAuthConfig } from "@/modules/identity/config";
 import { sendTransactionalEmail } from "@/modules/integrations/email/transactional-email";
 import { getAuthorizedTotals } from "@/modules/estimates/change-order-service";
+import { sendCustomerSms } from "@/modules/integrations/sms/sms-service";
 
 export const ESTIMATE_PRESENTED_EVENT = "estimate.presented";
 
@@ -238,6 +239,31 @@ export class EstimatePresentedEmailHandler implements EventHandler {
       expiresAt = link.expiresAt;
     }
 
+    // Text the decision link when the customer has a phone and SMS is
+    // configured (ADR 0008 resolution; failures never block the email).
+    const woRow = await this.db.workOrder.findFirst({
+      where: { id: workOrderId, organizationId },
+      select: {
+        customerId: true,
+        customer: {
+          select: {
+            primaryPhone: true,
+            contacts: {
+              where: { phone: { not: null } },
+              orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+              take: 1,
+              select: { phone: true },
+            },
+          },
+        },
+      },
+    });
+    const smsPhone = woRow?.customer.contacts[0]?.phone ?? woRow?.customer.primaryPhone ?? null;
+    let smsBody: string | null = null;
+    if (autoApplied) {
+      smsBody = null; // No decision needed for auto-applied credits.
+    }
+
     let email: Readonly<{ subject: string; text: string }>;
     if (revision.documentKind === "CHANGE_ORDER") {
       const totals = await getAuthorizedTotals(this.db, { organizationId, workOrderId });
@@ -278,6 +304,36 @@ export class EstimatePresentedEmailHandler implements EventHandler {
       subject: email.subject,
       text: email.text,
     });
+
+    // Text the approval link when possible; failure to send never blocks the
+    // event (the email already carried the link).
+    if (smsPhone && !autoApplied && authorizeUrl) {
+      try {
+        await sendCustomerSms({
+          db: this.db,
+          context: {
+            actorId: woRow!.customerId, // system send; customer-scoped conversation
+            organizationId,
+            membershipId: "00000000-0000-4000-8000-000000000000",
+            requestId: input.event.id,
+            organizationWideLocationAccess: true,
+            allowedLocationIds: new Set<string>(),
+            permissions: new Set(["customers.write"] as const),
+          } as import("@/modules/tenancy/policy").TenantContext,
+          customerId: woRow!.customerId,
+          to: smsPhone,
+          body: `${
+            revision.documentKind === "CHANGE_ORDER"
+              ? `Additional work found on ${revision.workOrder.number}.`
+              : `Estimate ready for ${revision.workOrder.number}.`
+          } Approve or decline: ${authorizeUrl}`,
+          workOrderId,
+        });
+      } catch {
+        // Not configured or invalid number — the email is the carrier of record.
+      }
+    }
+    void smsBody;
 
     // The URL (and therefore token) must never appear in activity summaries.
     await this.recordActivity({
