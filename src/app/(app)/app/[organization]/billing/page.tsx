@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/shopos/page-header";
 import { db } from "@/db/client";
-import { formatMoney } from "@/i18n/formatters";
+import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listCustomerBalances } from "@/modules/billing/ar-service";
+import { listOpenDeposits } from "@/modules/billing/deposit-service";
 import { AccountToggle } from "./account-toggle";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,9 @@ export default async function BillingPage({
 
   // Balances need money sight; the page degrades to the account list without it.
   const canSeeMoney = context.permissions.has("payments.record");
-  const balances = canSeeMoney ? await listCustomerBalances({ db, context }) : [];
+  const [balances, openDeposits] = canSeeMoney
+    ? await Promise.all([listCustomerBalances({ db, context }), listOpenDeposits({ db, context })])
+    : [[], []];
 
   const accountCustomers = await db.customer.findMany({
     where: { organizationId: context.organizationId, isAccountCustomer: true, archivedAt: null },
@@ -148,6 +151,47 @@ export default async function BillingPage({
           </CardContent>
         </Card>
       )}
+
+      {canSeeMoney && openDeposits.length > 0 ? (
+        <Card>
+          <CardContent className="p-0">
+            <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
+              Held deposits — money taken before invoicing
+            </p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-4 py-3 font-medium">Taken</th>
+                  <th className="px-4 py-3 font-medium">Job</th>
+                  <th className="px-4 py-3 font-medium">Customer</th>
+                  <th className="px-4 py-3 font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {openDeposits.map((deposit) => (
+                  <tr key={deposit.id} className="border-b border-border/60 hover:bg-muted/30">
+                    <td className="px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground">
+                      {formatDateTime(deposit.receivedAt, "UTC", "en-US")}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/app/${orgId}/work-orders/${deposit.workOrderId}`}
+                        className="font-mono text-link underline-offset-4 hover:underline"
+                      >
+                        {deposit.workOrderNumber}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">{deposit.customerName}</td>
+                    <td className="px-4 py-3 font-mono tabular-nums">
+                      {money(deposit.amountMinor, deposit.currency)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardContent className="p-0">

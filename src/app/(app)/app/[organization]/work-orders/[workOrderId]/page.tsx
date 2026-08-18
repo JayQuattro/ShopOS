@@ -22,6 +22,7 @@ import { QualityCheckCard } from "./quality-check-card";
 import { PartsPanel } from "./parts-panel";
 import { LoanerPanel } from "./loaner-panel";
 import { SubletPanel } from "./sublet-panel";
+import { DepositPanel } from "./deposit-panel";
 import { TrackerLinkCard } from "./tracker-link-card";
 import { ApplyTemplateCard } from "./apply-template-card";
 
@@ -373,6 +374,13 @@ export default async function WorkOrderDetailPage({
       />
 
       <SubletPanel workOrderId={wo.id} canWrite={context.permissions.has("work_orders.write")} />
+
+      <DepositPanel
+        orgId={context.organizationId}
+        workOrderId={wo.id}
+        hasInvoice={wo.invoice !== null}
+        canRecordMoney={context.permissions.has("payments.record")}
+      />
 
       <TrackerLinkCard
         workOrderId={wo.id}

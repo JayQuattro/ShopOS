@@ -220,6 +220,7 @@ model User {
   portalCustomers       Customer[]                        @relation("CustomerPortalUser")
   openedCashDrawers     CashDrawerSession[]               @relation("CashDrawerOpenedBy")
   closedCashDrawers     CashDrawerSession[]               @relation("CashDrawerClosedBy")
+  recordedDeposits      Deposit[]                         @relation("DepositRecordedBy")
   drivenTransportJobs   TransportJob[]                    @relation("TransportDriver")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
@@ -311,6 +312,7 @@ model Organization {
   serviceCalls        ServiceCall[]
   transportJobs       TransportJob[]
   cashDrawerSessions CashDrawerSession[]
+  deposits            Deposit[]
   businessHours       LocationBusinessHour[]
   shopFees            ShopFee[]
   partOrders         PartOrder[]
@@ -384,6 +386,7 @@ model Location {
   serviceCalls   ServiceCall[]
   transportJobs  TransportJob[]
   cashDrawerSessions CashDrawerSession[]
+  deposits         Deposit[]
 
   @@unique([organizationId, code], map: "locations_org_code_unique")
   @@unique([organizationId, id], map: "locations_org_id_unique")
@@ -912,6 +915,7 @@ model WorkOrder {
   activityEvents    ActivityEvent[]
   serviceCalls      ServiceCall[]
   transportJobs     TransportJob[]
+  deposits           Deposit[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
   @@unique([organizationId, locationId, id], map: "work_orders_org_location_id_unique")
@@ -1355,6 +1359,33 @@ model CashDrawerSession {
   @@unique([organizationId, id], map: "cash_drawer_org_id_unique")
   @@index([organizationId, locationId, status], map: "cash_drawer_org_location_status_idx")
   @@map("cash_drawer_sessions")
+}
+
+model Deposit {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  locationId       String    @map("location_id") @db.Uuid
+  workOrderId      String    @map("work_order_id") @db.Uuid
+  amountMinor      BigInt    @map("amount_minor")
+  currency         String    @db.VarChar(3)
+  method           PaymentMethod
+  reference        String?   @db.VarChar(160)
+  receivedAt       DateTime  @map("received_at") @db.Timestamptz(6)
+  recordedByUserId String    @map("recorded_by_user_id") @db.Uuid
+  appliedInvoiceId String?   @map("applied_invoice_id") @db.Uuid
+  appliedAt        DateTime? @map("applied_at") @db.Timestamptz(6)
+  note             String?
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location         Location  @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  workOrder        WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict)
+  recordedBy       User      @relation("DepositRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "deposits_org_id_unique")
+  @@index([organizationId, workOrderId], map: "deposits_org_work_order_idx")
+  @@index([organizationId, appliedAt], map: "deposits_org_open_idx")
+  @@map("deposits")
 }
 
 model MaintenanceSchedule {

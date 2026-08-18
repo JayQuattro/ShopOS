@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -1222,6 +1223,7 @@ async function seedOperationalDemo(): Promise<void> {
   await seedAccountDemo();
   await seedPortalDemo();
   await seedDrawerDemo();
+  await seedDepositDemo();
 }
 
 /** Roadside demo calls; idempotent so re-seeding older databases backfills. */
@@ -1429,6 +1431,30 @@ async function seedAccountDemo(): Promise<void> {
   await db.workOrder.updateMany({
     where: { id: ids.demoWorkOrder, poNumber: null },
     data: { poNumber: "PO-2026-118" },
+  });
+}
+
+/** A held deposit from this morning's drop-off. */
+async function seedDepositDemo(): Promise<void> {
+  const existing = await db.deposit.findFirst({
+    where: { workOrderId: ids.motorcycleWorkOrder },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  await db.deposit.create({
+    data: {
+      id: randomUUID(),
+      organizationId: ids.organization,
+      locationId: ids.durham,
+      workOrderId: ids.motorcycleWorkOrder,
+      amountMinor: 50_00n,
+      currency: "USD",
+      method: "CASH",
+      receivedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      recordedByUserId: ids.owner,
+      note: "Left at drop-off for the next service.",
+    },
   });
 }
 
