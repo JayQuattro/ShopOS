@@ -247,6 +247,69 @@ describe("declined work follow-up (#152)", { skip: shouldSkip }, () => {
     expect(items).toHaveLength(0);
   });
 
+  it("re-quotes a declined line into a draft change order at its original price", async () => {
+    const { listDeclinedWork, reQuoteDeclinedLine } =
+      await import("@/modules/followups/declined-work-service");
+    const seedData = await seedWithDeclinedLine("IN_PROGRESS");
+
+    // Give the WO an approved baseline so change orders are allowed (the seed
+    // already records an APPROVED decision on the approved line, satisfying
+    // the baseline-approval gate).
+    const items = await listDeclinedWork({ db: dbModule.db, context: seedData.context() });
+    expect(items).toHaveLength(1);
+
+    const result = await reQuoteDeclinedLine({
+      db: dbModule.db,
+      context: seedData.context(),
+      decisionId: items[0]!.decisionId,
+    });
+    expect(result.changeOrderNumber).toBe(1);
+    expect(result.presented).toBe(false);
+
+    const revision = await dbModule.db.estimateRevision.findUnique({
+      where: { id: result.revisionId },
+      include: { lines: true },
+    });
+    expect(revision?.documentKind).toBe("CHANGE_ORDER");
+    expect(revision?.status).toBe("DRAFT");
+    expect(revision?.lines).toHaveLength(1);
+    expect(revision?.lines[0]?.description).toBe("Alignment");
+    expect(revision?.lines[0]?.unitPriceMinor).toBe(8000n);
+    expect(revision?.lines[0]?.totalMinor).toBe(8000n);
+
+    // The presented variant flows through the standard change-order lifecycle.
+    const second = await seedWithDeclinedLine("IN_PROGRESS");
+    const items2 = await listDeclinedWork({ db: dbModule.db, context: second.context() });
+    const presentedResult = await reQuoteDeclinedLine({
+      db: dbModule.db,
+      context: second.context(),
+      decisionId: items2[0]!.decisionId,
+      present: true,
+    });
+    expect(presentedResult.presented).toBe(true);
+    const presentedRevision = await dbModule.db.estimateRevision.findUnique({
+      where: { id: presentedResult.revisionId },
+    });
+    expect(presentedRevision?.status).toBe("PRESENTED");
+  });
+
+  it("refuses re-quotes on foreign decisions", async () => {
+    const { listDeclinedWork, reQuoteDeclinedLine } =
+      await import("@/modules/followups/declined-work-service");
+    const seedA = await seedWithDeclinedLine("IN_PROGRESS");
+    const seedB = await seedWithDeclinedLine("IN_PROGRESS");
+    const itemsB = await listDeclinedWork({ db: dbModule.db, context: seedB.context() });
+
+    await expect(
+      reQuoteDeclinedLine({
+        db: dbModule.db,
+        context: seedA.context(),
+        decisionId: itemsB[0]!.decisionId,
+      }),
+    ).rejects.toMatchObject({ reason: "decision_not_found" });
+    void seedA;
+  });
+
   it("stays tenant-scoped", async () => {
     const { listDeclinedWork } = await import("@/modules/followups/declined-work-service");
     const seedA = await seedWithDeclinedLine("IN_PROGRESS");

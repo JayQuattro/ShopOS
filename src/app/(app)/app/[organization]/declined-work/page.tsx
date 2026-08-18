@@ -7,6 +7,7 @@ import { db } from "@/db/client";
 import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listDeclinedWork } from "@/modules/followups/declined-work-service";
+import { DeclinedWorkActions } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -98,12 +99,18 @@ export default async function DeclinedWorkPage({
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <Link
-                          href={`/app/${context.organizationId}/customers/${item.customerId}`}
-                          className="text-link underline-offset-4 hover:underline"
-                        >
-                          Profile
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/app/${context.organizationId}/customers/${item.customerId}`}
+                            className="text-link underline-offset-4 hover:underline"
+                          >
+                            Profile
+                          </Link>
+                          <DeclinedWorkActions
+                            decisionId={encodeURIComponent(item.decisionId)}
+                            description={item.description}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}
