@@ -264,15 +264,21 @@ export class WorkOrderNotFound extends Error {
  * highest existing number for the org and incrementing.
  */
 async function generateWorkOrderNumber(db: PrismaClient, organizationId: string): Promise<string> {
+  const org = await db.organization.findUnique({
+    where: { id: organizationId },
+    select: { workOrderNumberPrefix: true },
+  });
+  const prefix = org?.workOrderNumberPrefix ?? "RO-";
+
   const latest = await db.workOrder.findFirst({
     where: { organizationId },
     orderBy: { number: "desc" },
     select: { number: true },
   });
 
-  if (!latest) return "RO-1001";
+  if (!latest) return `${prefix}1001`;
 
   const match = latest.number.match(/(\d+)$/);
   const nextNum = match ? parseInt(match[1]!, 10) + 1 : 1001;
-  return `RO-${nextNum}`;
+  return `${prefix}${nextNum}`;
 }

@@ -20,8 +20,20 @@ export class AuthorizationLinkFailed extends Error {
   }
 }
 
-/** Lifetime of authorization links issued by presentation and resend flows. */
+/** Fallback lifetime of authorization links (organization setting overrides). */
 export const AUTHORIZATION_LINK_TTL_HOURS = 72;
+
+/** The organization's configured link lifetime, defaulting to 72h. */
+export async function resolveLinkTtlHours(
+  db: Pick<import("@/generated/prisma/client").PrismaClient, "organization">,
+  organizationId: string,
+): Promise<number> {
+  const organization = await db.organization.findUnique({
+    where: { id: organizationId },
+    select: { authorizationLinkTtlHours: true },
+  });
+  return organization?.authorizationLinkTtlHours ?? AUTHORIZATION_LINK_TTL_HOURS;
+}
 
 const DEFAULT_TTL_HOURS = AUTHORIZATION_LINK_TTL_HOURS;
 

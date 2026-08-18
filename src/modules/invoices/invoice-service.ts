@@ -437,15 +437,21 @@ async function generateInvoiceNumber(
   transaction: TransactionalClient,
   organizationId: string,
 ): Promise<string> {
+  const org = await transaction.organization.findUnique({
+    where: { id: organizationId },
+    select: { invoiceNumberPrefix: true },
+  });
+  const prefix = org?.invoiceNumberPrefix ?? "INV-";
+
   const latest = await transaction.invoice.findFirst({
     where: { organizationId },
     orderBy: { number: "desc" },
     select: { number: true },
   });
 
-  if (!latest) return "INV-1001";
+  if (!latest) return `${prefix}1001`;
 
   const match = latest.number.match(/(\d+)$/);
   const nextNum = match ? parseInt(match[1]!, 10) + 1 : 1001;
-  return `INV-${nextNum}`;
+  return `${prefix}${nextNum}`;
 }

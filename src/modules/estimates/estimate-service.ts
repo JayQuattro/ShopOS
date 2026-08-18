@@ -4,7 +4,7 @@ import type { PrismaClient, PricedLineKind } from "@/generated/prisma/client";
 import { calculateLine, currencyCode, type PricedLineInput } from "@/modules/shared/money";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import { transitionStatus } from "@/modules/work-orders/work-order-service";
-import { AUTHORIZATION_LINK_TTL_HOURS } from "@/modules/estimates/authorization-link-service";
+import { resolveLinkTtlHours } from "@/modules/estimates/authorization-link-service";
 
 export type TransactionalClient = Omit<
   PrismaClient,
@@ -266,7 +266,8 @@ export async function presentRevision(
       data: { revokedAt: new Date() },
     });
 
-    // Auto-issue the customer authorization link for this revision.
+    // Auto-issue the customer authorization link for this revision (org TTL).
+    const ttlHours = await resolveLinkTtlHours(transaction, input.context.organizationId);
     const token = randomBytes(32).toString("base64url");
     await transaction.authorizationLink.create({
       data: {
@@ -274,7 +275,7 @@ export async function presentRevision(
         organizationId: input.context.organizationId,
         estimateRevisionId: revision.id,
         token,
-        expiresAt: new Date(Date.now() + AUTHORIZATION_LINK_TTL_HOURS * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000),
       },
     });
 
