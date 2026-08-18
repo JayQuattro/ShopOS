@@ -9,6 +9,11 @@ import {
 } from "../src/modules/invoices/invoice-email-handlers";
 import { EventHandlerRegistry } from "../src/modules/outbox/event-handler";
 import { OutboxDispatcher } from "../src/modules/outbox/outbox-dispatcher";
+import {
+  findNoShows,
+  findRemindersDue,
+  sendAppointmentReminder,
+} from "../src/modules/appointments/appointment-reminder-service";
 
 /**
  * Background worker entrypoint.
@@ -48,8 +53,40 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
   process.on("SIGINT", () => void shutdown("SIGINT"));
 
+  // Appointment reminder sweep: day-before reminders and no-show nudges,
+  // once every 10 minutes. Failures never stop the dispatcher.
+  const reminderTimer = setInterval(
+    () => {
+      void (async () => {
+        const now = new Date();
+        const [reminders, noShows] = await Promise.all([
+          findRemindersDue(db, now),
+          findNoShows(db, now),
+        ]);
+        for (const target of reminders) {
+          const org = await db.organization.findUnique({
+            where: { id: target.organizationId },
+            select: { name: true },
+          });
+          await sendAppointmentReminder(db, target, "reminder", org?.name ?? "your shop");
+        }
+        for (const target of noShows) {
+          const org = await db.organization.findUnique({
+            where: { id: target.organizationId },
+            select: { name: true },
+          });
+          await sendAppointmentReminder(db, target, "no_show", org?.name ?? "your shop");
+        }
+      })().catch((error: unknown) => {
+        console.error("[worker] reminder sweep failed", error);
+      });
+    },
+    10 * 60 * 1000,
+  );
+
   console.info(`[worker] outbox dispatcher started (poll=${pollIntervalMs}ms, batch=${batchSize})`);
   dispatcher.start();
+  void reminderTimer;
 }
 
 main().catch((error: unknown) => {
