@@ -23,6 +23,8 @@ type Template = {
   tasks: Array<{ id: string; title: string }>;
 };
 
+type TaxRateOption = { id: string; name: string; rateBasisPoints: number };
+
 type DraftLine = {
   kind: "LABOR" | "PART" | "FEE";
   description: string;
@@ -51,6 +53,7 @@ export function ServiceMenuManager({ canWrite }: { canWrite: boolean }) {
   const [name, setName] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([{ ...emptyLine }]);
   const [taskTitles, setTaskTitles] = useState("");
+  const [taxRates, setTaxRates] = useState<TaxRateOption[]>([]);
 
   async function load() {
     const res = await fetch("/api/service-templates");
@@ -59,6 +62,27 @@ export function ServiceMenuManager({ canWrite }: { canWrite: boolean }) {
       setTemplates(data.templates ?? []);
     }
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const ratesRes = await fetch("/api/tax-rates");
+          if (ratesRes.ok && !cancelled) {
+            const data = await ratesRes.json();
+            setTaxRates(data.rates ?? []);
+          }
+        } catch {
+          // Optional picker chrome.
+        }
+      })();
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,7 +130,10 @@ export function ServiceMenuManager({ canWrite }: { canWrite: boolean }) {
             quantityMilli: Number(line.quantityMilli) || 1000,
             unitPriceMinor: Math.round(Number(line.unitPriceMinor || 0) * 100),
             taxable: line.taxable,
-            taxRateBasisPoints: line.taxable ? Number(line.taxRateBasisPoints) || 0 : 0,
+            taxRateBasisPoints:
+              line.taxable && line.taxRateBasisPoints !== "custom"
+                ? Number(line.taxRateBasisPoints) || 0
+                : 0,
           })),
           tasks: validTasks.map((title) => ({ title })),
         }),
@@ -244,10 +271,33 @@ export function ServiceMenuManager({ canWrite }: { canWrite: boolean }) {
                     />
                     Tax
                   </label>
-                  {line.taxable ? (
+                  {line.taxable && taxRates.length > 0 ? (
+                    <select
+                      value={line.taxRateBasisPoints}
+                      onChange={(e) =>
+                        setLines((prev) =>
+                          prev.map((l, i) =>
+                            i === index ? { ...l, taxRateBasisPoints: e.target.value } : l,
+                          ),
+                        )
+                      }
+                      className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
+                      title="Named tax rates from Settings → Taxes; Custom for basis points"
+                    >
+                      <option value="0">Default (shop)</option>
+                      {taxRates.map((rate) => (
+                        <option key={rate.id} value={String(rate.rateBasisPoints)}>
+                          {rate.name}
+                        </option>
+                      ))}
+                      <option value="custom">Custom…</option>
+                    </select>
+                  ) : null}
+                  {line.taxable &&
+                  (taxRates.length === 0 || line.taxRateBasisPoints === "custom") ? (
                     <Input
                       type="number"
-                      value={line.taxRateBasisPoints}
+                      value={line.taxRateBasisPoints === "custom" ? "" : line.taxRateBasisPoints}
                       onChange={(e) =>
                         setLines((prev) =>
                           prev.map((l, i) =>

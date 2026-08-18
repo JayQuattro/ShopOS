@@ -70,6 +70,21 @@ enum ChangeOrderCreditPolicy {
   @@map("change_order_credit_policy")
 }
 
+enum ShopFeeCalculation {
+  FLAT           @map("flat")
+  PERCENT_OF_LABOR @map("percent_of_labor")
+
+  @@map("shop_fee_calculation")
+}
+
+enum ShopFeeAppliesTo {
+  BASELINE     @map("baseline")
+  CHANGE_ORDER @map("change_order")
+  BOTH         @map("both")
+
+  @@map("shop_fee_applies_to")
+}
+
 enum PaperSize {
   LETTER @map("letter")
   A4     @map("a4")
@@ -284,6 +299,8 @@ model Organization {
   serviceTemplateTasks ServiceTemplateTask[]
   inventoryItems      InventoryItem[]
   locationBays        LocationBay[]
+  taxRates            TaxRate[]
+  shopFees            ShopFee[]
   partOrders         PartOrder[]
   partOrderLines    PartOrderLine[]
   estimateRevisions   EstimateRevision[]
@@ -1006,6 +1023,45 @@ model SmsMessage {
 
   @@index([organizationId, conversationId, createdAt], map: "sms_messages_org_conversation_idx")
   @@map("sms_messages")
+}
+
+model TaxRate {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  name             String   @db.VarChar(120)
+  rateBasisPoints  Int      @map("rate_basis_points")
+  active           Boolean  @default(true)
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "tax_rates_org_id_unique")
+  @@unique([organizationId, name], map: "tax_rates_org_name_unique")
+  @@index([organizationId, active, sortOrder], map: "tax_rates_org_active_idx")
+  @@map("tax_rates")
+}
+
+model ShopFee {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String             @map("organization_id") @db.Uuid
+  name                String             @db.VarChar(120)
+  calculation         ShopFeeCalculation
+  amountMinor         BigInt             @default(0) @map("amount_minor")
+  rateBasisPoints     Int                @default(0) @map("rate_basis_points")
+  maxAmountMinor      BigInt?            @map("max_amount_minor")
+  taxable             Boolean            @default(false)
+  taxRateBasisPoints  Int                @default(0) @map("tax_rate_basis_points")
+  appliesTo           ShopFeeAppliesTo   @default(BOTH) @map("applies_to")
+  active              Boolean            @default(true)
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "shop_fees_org_id_unique")
+  @@unique([organizationId, name], map: "shop_fees_org_name_unique")
+  @@index([organizationId, active], map: "shop_fees_org_active_idx")
+  @@map("shop_fees")
 }
 
 model InventoryItem {
