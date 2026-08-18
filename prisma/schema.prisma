@@ -300,6 +300,7 @@ model Organization {
   inventoryItems      InventoryItem[]
   locationBays        LocationBay[]
   taxRates            TaxRate[]
+  businessHours       LocationBusinessHour[]
   shopFees            ShopFee[]
   partOrders         PartOrder[]
   partOrderLines    PartOrderLine[]
@@ -361,6 +362,9 @@ model Location {
   workOrders     WorkOrder[]
   appointments   Appointment[]
   bays           LocationBay[]
+  businessHours  LocationBusinessHour[]
+  slotMinutes    Int        @default(60) @map("slot_minutes")
+  bookingCapacity Int       @default(1) @map("booking_capacity")
   estimates      EstimateRevision[]
   invoices       Invoice[]
   payments       Payment[]
@@ -1082,6 +1086,24 @@ model InventoryItem {
   @@unique([organizationId, partNumber], map: "inventory_items_org_part_number_unique")
   @@index([organizationId], map: "inventory_items_org_low_stock_idx")
   @@map("inventory_items")
+}
+
+model LocationBusinessHour {
+  /// Day of week using JS getDay convention: 0 = Sunday … 6 = Saturday.
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  locationId     String   @map("location_id") @db.Uuid
+  weekday        Int
+  openMinute     Int      @map("open_minute")
+  closeMinute    Int      @map("close_minute")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location       Location @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id], map: "location_business_hours_org_id_unique")
+  @@unique([organizationId, locationId, weekday], map: "location_business_hours_org_location_weekday_unique")
+  @@map("location_business_hours")
 }
 
 model LocationBay {
