@@ -217,6 +217,7 @@ model User {
   qcPassedWorkOrders   WorkOrder[]                       @relation("WorkOrderQcPassedBy")
   assistingWorkOrders   WorkOrderTechnician[]             @relation("WorkOrderAssistingTechnician")
   assignedServiceCalls  ServiceCall[]                     @relation("ServiceCallTechnician")
+  drivenTransportJobs   TransportJob[]                    @relation("TransportDriver")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
   timeEntries            TimeEntry[]                       @relation("TimeEntryWorker")
@@ -305,6 +306,7 @@ model Organization {
   loanerCheckouts     LoanerCheckout[]
   subletWorks         SubletWork[]
   serviceCalls        ServiceCall[]
+  transportJobs       TransportJob[]
   businessHours       LocationBusinessHour[]
   shopFees            ShopFee[]
   partOrders         PartOrder[]
@@ -376,6 +378,7 @@ model Location {
   activityEvents ActivityEvent[]
   auditEvents    AuditEvent[]
   serviceCalls   ServiceCall[]
+  transportJobs  TransportJob[]
 
   @@unique([organizationId, code], map: "locations_org_code_unique")
   @@unique([organizationId, id], map: "locations_org_id_unique")
@@ -708,6 +711,7 @@ model Customer {
   addresses             CustomerAddress[]
   smsConversations      SmsConversation[]
   serviceCalls          ServiceCall[]
+  transportJobs         TransportJob[]
 
   @@unique([organizationId, id], map: "customers_org_id_unique")
   @@index([organizationId, displayName], map: "customers_org_name_idx")
@@ -788,6 +792,8 @@ model Asset {
   appointments     Appointment[]
   workOrderAssets   WorkOrderAsset[]
   serviceCalls      ServiceCall[]
+  transportCustomerJobs TransportJob[] @relation("TransportCustomerAsset")
+  transportFleetJobs    TransportJob[] @relation("TransportFleetAsset")
   isFleetVehicle    Boolean           @default(false) @map("is_fleet_vehicle")
 
   @@unique([organizationId, id], map: "assets_org_id_unique")
@@ -892,6 +898,7 @@ model WorkOrder {
   assistingTechnicians WorkOrderTechnician[]
   activityEvents    ActivityEvent[]
   serviceCalls      ServiceCall[]
+  transportJobs     TransportJob[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
   @@unique([organizationId, locationId, id], map: "work_orders_org_location_id_unique")
@@ -1247,6 +1254,66 @@ model ServiceCall {
   @@index([organizationId, assignedTechnicianUserId], map: "service_calls_org_technician_idx")
   @@index([organizationId, fleetAssetId], map: "service_calls_org_fleet_asset_idx")
   @@map("service_calls")
+}
+
+enum TransportKind {
+  PICKUP    @map("pickup")
+  DELIVERY  @map("delivery")
+
+  @@map("transport_kind")
+}
+
+enum TransportStatus {
+  SCHEDULED @map("scheduled")
+  EN_ROUTE  @map("en_route")
+  COMPLETED @map("completed")
+  CANCELLED @map("cancelled")
+
+  @@map("transport_status")
+}
+
+model TransportJob {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  locationId        String            @map("location_id") @db.Uuid
+  customerId        String            @map("customer_id") @db.Uuid
+  assetId           String?           @map("asset_id") @db.Uuid
+  workOrderId       String?           @map("work_order_id") @db.Uuid
+  kind              TransportKind
+  status            TransportStatus   @default(SCHEDULED)
+  scheduledAt       DateTime?         @map("scheduled_at") @db.Timestamptz(6)
+  contactPhone      String            @map("contact_phone") @db.VarChar(32)
+  addressLine1      String            @map("address_line1")
+  addressLine2      String?           @map("address_line2")
+  city              String            @db.VarChar(120)
+  stateProvince     String            @map("state_province") @db.VarChar(80)
+  postalCode        String            @map("postal_code") @db.VarChar(20)
+  lat               Float?
+  lng               Float?
+  geocodedFormatted String?           @map("geocoded_formatted")
+  driverUserId      String?           @map("driver_user_id") @db.Uuid
+  fleetAssetId      String?           @map("fleet_asset_id") @db.Uuid
+  etaSeconds        Int?              @map("eta_seconds")
+  distanceMeters    Int?              @map("distance_meters")
+  note              String?
+  startedAt         DateTime?         @map("started_at") @db.Timestamptz(6)
+  completedAt       DateTime?         @map("completed_at") @db.Timestamptz(6)
+  cancelledAt       DateTime?         @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason      String?           @map("cancel_reason")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location          Location          @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  customer          Customer          @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
+  asset             Asset?            @relation("TransportCustomerAsset", fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+  workOrder         WorkOrder?        @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict)
+  driver            User?             @relation("TransportDriver", fields: [driverUserId], references: [id], onDelete: Restrict)
+  fleetAsset        Asset?            @relation("TransportFleetAsset", fields: [organizationId, fleetAssetId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "transport_jobs_org_id_unique")
+  @@index([organizationId, locationId, status], map: "transport_jobs_org_location_status_idx")
+  @@index([organizationId, driverUserId], map: "transport_jobs_org_driver_idx")
+  @@map("transport_jobs")
 }
 
 model MaintenanceSchedule {

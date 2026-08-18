@@ -77,6 +77,9 @@ const ids = {
   demoFleetCustomer: "00000000-0000-4000-8000-000000000994",
   demoFleetTruck: "00000000-0000-4000-8000-000000000995",
   demoFleetVan: "00000000-0000-4000-8000-000000000996",
+  demoTransportScheduled: "00000000-0000-4000-8000-000000000997",
+  demoTransportEnRoute: "00000000-0000-4000-8000-000000000998",
+  demoTransportCompleted: "00000000-0000-4000-8000-000000000999",
 } as const;
 
 async function seed(): Promise<void> {
@@ -575,11 +578,13 @@ async function seedOperationalDemo(): Promise<void> {
     // Newer demo slices backfill on already-seeded databases.
     await seedFleetDemo();
     await seedRoadsideDemo();
+    await seedTransportDemo();
     console.info("Operational demo data already present — skipping.");
     return;
   }
   await seedFleetDemo();
   await seedRoadsideDemo();
+  await seedTransportDemo();
 
   // A 1×1 transparent PNG standing in for a rotor photo.
   const pngBytes = Buffer.from(
@@ -1329,6 +1334,69 @@ async function seedFleetDemo(): Promise<void> {
       plateJurisdiction: "NC",
       lastKnownMileage: 61_045,
     },
+  });
+}
+
+/** Pickup & delivery demo runs; idempotent backfill. */
+async function seedTransportDemo(): Promise<void> {
+  const existing = await db.transportJob.findUnique({ where: { id: ids.demoTransportScheduled } });
+  if (existing) return;
+
+  await db.transportJob.createMany({
+    data: [
+      {
+        id: ids.demoTransportScheduled,
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        customerId: ids.oakline,
+        kind: "PICKUP",
+        status: "SCHEDULED",
+        contactPhone: "+1-919-555-0141",
+        addressLine1: "2606 Hillsborough St",
+        city: "Raleigh",
+        stateProvince: "NC",
+        postalCode: "27608",
+        scheduledAt: new Date(Date.now() + 90 * 60 * 1000),
+        note: "Keys with the concierge desk.",
+      },
+      {
+        id: ids.demoTransportEnRoute,
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        customerId: ids.priya,
+        assetId: ids.civic,
+        kind: "DELIVERY",
+        status: "EN_ROUTE",
+        contactPhone: "+1-919-555-0177",
+        addressLine1: "4509 Durham Western Blvd",
+        city: "Durham",
+        stateProvince: "NC",
+        postalCode: "27707",
+        driverUserId: ids.technician,
+        fleetAssetId: ids.demoFleetVan,
+        startedAt: new Date(Date.now() - 15 * 60 * 1000),
+        etaSeconds: 1020,
+        distanceMeters: 12_500,
+        note: "Drop at the side gate; call on arrival.",
+      },
+      {
+        id: ids.demoTransportCompleted,
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        customerId: ids.alex,
+        assetId: ids.subaru,
+        kind: "PICKUP",
+        status: "COMPLETED",
+        contactPhone: "+1-919-555-0199",
+        addressLine1: "105 Brooks Ave",
+        city: "Raleigh",
+        stateProvince: "NC",
+        postalCode: "27609",
+        driverUserId: ids.technician,
+        startedAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
+        completedAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
+      },
+    ],
   });
 }
 
