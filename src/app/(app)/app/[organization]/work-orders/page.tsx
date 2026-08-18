@@ -10,10 +10,13 @@ import { WorkOrderCreateForm } from "./work-order-create-form";
 
 export default async function WorkOrdersPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organization: string }>;
+  searchParams: Promise<{ new?: string }>;
 }) {
   const { organization } = await params;
+  const { new: wantsNew } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
@@ -82,6 +85,7 @@ export default async function WorkOrdersPage({
         actions={
           canCreate ? (
             <WorkOrderCreateForm
+              startOpen={wantsNew === "1"}
               customers={customers as { id: string; displayName: string }[]}
               assets={assets as { id: string; displayName: string }[]}
               locations={(locations as { id: string; name: string }[]).map((l) => ({

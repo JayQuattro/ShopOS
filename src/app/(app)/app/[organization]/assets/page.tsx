@@ -39,8 +39,8 @@ export default async function AssetsPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Assets"
-        description="Serviced vehicles, equipment, and customer-owned items."
+        title="Vehicles"
+        description="Customer vehicles, equipment, and anything else you service."
         breadcrumbs={[{ label: "Assets" }]}
       />
 
