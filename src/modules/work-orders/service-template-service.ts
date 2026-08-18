@@ -4,6 +4,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import type { TransactionalClient } from "@/modules/estimates/estimate-service";
 import { addLine, createDraftRevision } from "@/modules/estimates/estimate-service";
 import { addTask } from "@/modules/work-orders/task-service";
+import { createChangeOrder } from "@/modules/estimates/change-order-service";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 
 export type TemplateServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
@@ -353,4 +354,60 @@ async function recordActivity(
       summary: input.summary,
     },
   });
+}
+
+/**
+ * Adds one template line to the work order's draft change order (creating
+ * the draft when none exists) — the one-tap canned recommendation from a
+ * flagged inspection item. The change-order guards apply unchanged.
+ */
+export async function applyTemplateLineToChangeOrder(
+  input: TemplateServiceInput & { workOrderId: string; templateLineId: string },
+): Promise<Readonly<{ revisionId: string; changeOrderNumber: number }>> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.write",
+  );
+
+  const line = await input.db.serviceTemplateLine.findFirst({
+    where: {
+      id: input.templateLineId,
+      organizationId: input.context.organizationId,
+    },
+    select: {
+      kind: true,
+      serviceGroupKey: true,
+      description: true,
+      quantityMilli: true,
+      unitPriceMinor: true,
+      taxable: true,
+      taxRateBasisPoints: true,
+    },
+  });
+  if (!line) throw new ServiceTemplateFailed("template_not_found");
+
+  const created = await createChangeOrder({
+    db: input.db,
+    context: input.context,
+    workOrderId: input.workOrderId,
+    note: "Recommended work from inspection.",
+  });
+
+  await addLine({
+    db: input.db,
+    context: input.context,
+    revisionId: created.revisionId,
+    kind: line.kind,
+    serviceGroupKey: line.serviceGroupKey,
+    description: line.description,
+    quantityMilli: line.quantityMilli,
+    unitPriceMinor: Number(line.unitPriceMinor),
+    discountMinor: 0,
+    taxable: line.taxable,
+    taxRateBasisPoints: line.taxRateBasisPoints,
+    position: 1,
+  });
+
+  return { revisionId: created.revisionId, changeOrderNumber: created.changeOrderNumber };
 }
