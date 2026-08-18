@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+type TemplateLine = {
+  id: string;
+  description: string;
+  unitPriceMinor: string;
+  templateName: string;
+};
+
 type Task = {
   id: string;
   position: number;
@@ -33,9 +40,11 @@ export function TaskPanel({
   canWrite: boolean;
 }) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [templateLines, setTemplateLines] = useState<TemplateLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
 
   const coConvertible =
@@ -48,6 +57,38 @@ export function TaskPanel({
       setTasks(data.tasks ?? []);
     }
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const templatesRes = await fetch("/api/service-templates");
+          if (templatesRes.ok && !cancelled) {
+            const data = await templatesRes.json();
+            const lines: TemplateLine[] = [];
+            for (const template of data.templates ?? []) {
+              for (const line of template.lines ?? []) {
+                lines.push({
+                  id: line.id,
+                  description: line.description,
+                  unitPriceMinor: line.unitPriceMinor,
+                  templateName: template.name,
+                });
+              }
+            }
+            setTemplateLines(lines);
+          }
+        } catch {
+          // Template recommendations are optional chrome.
+        }
+      })();
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [workOrderId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,6 +207,35 @@ export function TaskPanel({
   }
 
   const flagged = tasks.filter((task) => task.status === "NEEDS_ATTENTION");
+  const [recFor, setRecFor] = useState<string | null>(null);
+
+  async function recommend(templateLine: TemplateLine) {
+    if (!recFor) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/work-orders/${workOrderId}/apply-template-line`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateLineId: templateLine.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const messages: Record<string, string> = {
+          change_order_pending_exists: "Resolve the pending change order first.",
+          work_order_not_authorized: "Change orders need an authorized work order.",
+        };
+        throw new Error(messages[data.error] ?? "Could not add the recommendation.");
+      }
+      setRecFor(null);
+      setNotice?.(null);
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not add the recommendation.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <Card>
@@ -185,6 +255,11 @@ export function TaskPanel({
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {notice ? (
+          <Alert variant="info">
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        ) : null}
         {error ? (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -260,9 +335,23 @@ export function TaskPanel({
                           variant="outline"
                           size="sm"
                           disabled={pending}
-                          onClick={() => void setStatus(task, "NEEDS_ATTENTION")}
+                          onClick={() =>
+                            void setStatus(task, "NEEDS_ATTENTION").then(() =>
+                              setRecFor(recFor === task.id ? null : task.id),
+                            )
+                          }
                         >
                           Flag
+                        </Button>
+                      ) : null}
+                      {task.status === "NEEDS_ATTENTION" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={pending}
+                          onClick={() => setRecFor(recFor === task.id ? null : task.id)}
+                        >
+                          {recFor === task.id ? "Close" : "Recommend"}
                         </Button>
                       ) : null}
                       {task.status !== "SKIPPED" && task.status !== "DONE" ? (
@@ -282,6 +371,31 @@ export function TaskPanel({
             ))}
           </ul>
         )}
+
+        {recFor && templateLines.length > 0 ? (
+          <div className="rounded-md border border-border p-3">
+            <p className="mb-2 text-sm font-medium">
+              Add priced work for this finding (creates a draft change order):
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {templateLines.map((line) => (
+                <button
+                  key={line.id}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void recommend(line)}
+                  className="rounded-full border border-border px-3 py-1 text-xs transition-colors hover:border-primary/50 hover:bg-muted"
+                  title={`${line.templateName} — $${(Number(line.unitPriceMinor) / 100).toFixed(2)}`}
+                >
+                  {line.description} · ${(Number(line.unitPriceMinor) / 100).toFixed(2)}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Or use “Create change order from flagged” above to bundle everything.
+            </p>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
