@@ -200,6 +200,16 @@ export default async function WorkOrderDetailPage({
               bayLabel={wo.bayLabel}
               canWrite={context.permissions.has("work_orders.write")}
             />
+            <p className="mt-3 text-xs text-muted-foreground">
+              Key: {wo.keyTag ? <span className="font-mono">{wo.keyTag}</span> : "no tag"}
+              {wo.keyLocation ? ` · ${wo.keyLocation}` : ""} ·{" "}
+              <Link
+                href={`/app/${context.organizationId}/keys`}
+                className="text-link underline-offset-4 hover:underline"
+              >
+                key board
+              </Link>
+            </p>
           </CardContent>
         </Card>
       </div>

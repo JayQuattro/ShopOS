@@ -13,6 +13,8 @@ export const dynamic = "force-dynamic";
 const updateSchema = z.object({
   customerConcern: z.string().trim().min(1).max(2000).optional(),
   promisedAt: z.string().datetime().nullable().optional(),
+  keyTag: z.string().trim().max(40).nullable().optional(),
+  keyLocation: z.string().trim().max(80).nullable().optional(),
 });
 
 export async function GET(
@@ -58,6 +60,8 @@ export async function PATCH(
       ...(parsed.data.promisedAt !== undefined
         ? { promisedAt: parsed.data.promisedAt ? new Date(parsed.data.promisedAt) : null }
         : {}),
+      ...(parsed.data.keyTag !== undefined ? { keyTag: parsed.data.keyTag } : {}),
+      ...(parsed.data.keyLocation !== undefined ? { keyLocation: parsed.data.keyLocation } : {}),
     });
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
