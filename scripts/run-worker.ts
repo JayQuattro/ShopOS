@@ -15,6 +15,7 @@ import {
   findRemindersDue,
   sendAppointmentReminder,
 } from "../src/modules/appointments/appointment-reminder-service";
+import { findDueForReminders, sendPmReminder } from "../src/modules/assets/maintenance-service";
 
 /**
  * Background worker entrypoint.
@@ -78,6 +79,15 @@ async function main(): Promise<void> {
             select: { name: true },
           });
           await sendAppointmentReminder(db, target, "no_show", org?.name ?? "your shop");
+        }
+        // Preventive maintenance due reminders (30-day anti-spam per schedule).
+        const pmTargets = await findDueForReminders(db, now);
+        for (const target of pmTargets) {
+          const org = await db.organization.findUnique({
+            where: { id: target.organizationId },
+            select: { name: true },
+          });
+          await sendPmReminder(db, target, org?.name ?? "your shop");
         }
       })().catch((error: unknown) => {
         console.error("[worker] reminder sweep failed", error);
