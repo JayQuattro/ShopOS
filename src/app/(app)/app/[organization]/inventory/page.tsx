@@ -6,6 +6,7 @@ import { formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listItems } from "@/modules/inventory/inventory-service";
 import { InventoryForm } from "./inventory-form";
+import { ReorderPanel } from "./reorder-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,8 @@ export default async function InventoryPage({
           <Badge variant="destructive">{lowItems.length} at or below reorder point</Badge>
         ) : null}
       </div>
+
+      <ReorderPanel canWrite={context.permissions.has("work_orders.write")} />
 
       <Card>
         <CardContent className="p-0">
