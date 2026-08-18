@@ -194,6 +194,7 @@ export type RepairTrackerView = Readonly<{
   workOrderNumber: string;
   customerName: string;
   statusLabel: string;
+  contactPhone: string | null;
   readyForPickup: boolean;
   awaitingApproval: boolean;
   awaitingParts: boolean;
@@ -229,8 +230,8 @@ export async function buildRepairTrackerView(
       number: true,
       status: true,
       vehicleStage: true,
+      organization: { select: { name: true, contactPhone: true } },
       customer: { select: { displayName: true } },
-      organization: { select: { name: true } },
       invoice: {
         select: { number: true, status: true, currency: true, totalMinor: true, paidMinor: true },
       },
@@ -294,6 +295,7 @@ export async function buildRepairTrackerView(
 
   return {
     organizationName: workOrder.organization.name,
+    contactPhone: workOrder.organization.contactPhone,
     workOrderNumber: workOrder.number,
     customerName: workOrder.customer.displayName,
     statusLabel: friendlyWorkOrderStatus(workOrder.status),

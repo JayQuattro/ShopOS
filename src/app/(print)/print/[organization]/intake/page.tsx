@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { formatDate } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { resolvePaperSize } from "@/modules/organizations/paper-size";
+import { orgContactLine } from "@/modules/organizations/org-contact";
 import { PrintButton } from "@/components/print/print-button";
 import { PrintFrame, PrintSection } from "@/components/print/print-frame";
 
@@ -37,6 +38,12 @@ export default async function IntakePrintPage({
     select: {
       name: true,
       defaultPaperSize: true,
+      contactPhone: true,
+      contactEmail: true,
+      addressLine1: true,
+      city: true,
+      stateProvince: true,
+      postalCode: true,
       locations: { where: { active: true }, orderBy: { code: "asc" }, select: { name: true } },
     },
   });
@@ -50,6 +57,7 @@ export default async function IntakePrintPage({
       <PrintFrame
         organizationName={org.name}
         locationName={org.locations.map((location) => location.name).join(" · ")}
+        contactLine={orgContactLine(org)}
         title="Intake form"
         subtitle={formatDate(new Date(), "UTC", "en-US")}
       >
