@@ -1,6 +1,15 @@
 "use client";
 
-import { Building2, Users, Wrench, Package, ClipboardList, Settings, Truck } from "lucide-react";
+import {
+  Building2,
+  Users,
+  Wrench,
+  Package,
+  ClipboardList,
+  Settings,
+  Truck,
+  Car,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -114,6 +123,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           href: `${baseHref}/roadside`,
           icon: Truck,
           permission: "work_orders.read",
+        },
+        {
+          label: "Fleet",
+          href: `${baseHref}/fleet`,
+          icon: Car,
+          permission: "assets.read",
         },
       ],
     },
