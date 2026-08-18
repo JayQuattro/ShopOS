@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { resolvePaperSize } from "@/modules/organizations/paper-size";
+import { orgContactLine } from "@/modules/organizations/org-contact";
 import { PrintButton } from "@/components/print/print-button";
 import { PrintFrame, PrintKV, PrintSection } from "@/components/print/print-frame";
 
@@ -33,7 +34,18 @@ export default async function InvoicePrintPage({
       totalMinor: true,
       paidMinor: true,
       issuedAt: true,
-      organization: { select: { name: true, defaultPaperSize: true } },
+      organization: {
+        select: {
+          name: true,
+          defaultPaperSize: true,
+          contactPhone: true,
+          contactEmail: true,
+          addressLine1: true,
+          city: true,
+          stateProvince: true,
+          postalCode: true,
+        },
+      },
       location: { select: { name: true } },
       workOrder: {
         select: {
@@ -65,6 +77,7 @@ export default async function InvoicePrintPage({
     <>
       <PrintButton paper={paper} />
       <PrintFrame
+        contactLine={orgContactLine(invoice.organization)}
         organizationName={invoice.organization.name}
         locationName={invoice.location.name}
         title="Invoice"

@@ -9,6 +9,7 @@ import { formatDateTime, formatMoney } from "@/i18n/formatters";
 
 type TrackerView = {
   organizationName: string;
+  contactPhone: string | null;
   workOrderNumber: string;
   customerName: string;
   statusLabel: string;
@@ -186,7 +187,21 @@ export default function RepairTrackerPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          This page updates as work progresses. Questions? Call {view.organizationName}.
+          This page updates as work progresses. Questions?{" "}
+          {view.contactPhone ? (
+            <>
+              Call{" "}
+              <a
+                href={`tel:${view.contactPhone}`}
+                className="text-link underline-offset-4 hover:underline"
+              >
+                {view.contactPhone}
+              </a>
+              .
+            </>
+          ) : (
+            <>Contact {view.organizationName}.</>
+          )}
         </p>
       </div>
     </div>

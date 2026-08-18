@@ -19,6 +19,7 @@ const PAPER_CSS: Readonly<
 export function PrintFrame({
   organizationName,
   locationName,
+  contactLine,
   title,
   subtitle,
   paper = "LETTER",
@@ -26,6 +27,8 @@ export function PrintFrame({
 }: Readonly<{
   organizationName: string;
   locationName?: string | null;
+  /** Shop contact/address line rendered under the letterhead name. */
+  contactLine?: string | null;
   title: string;
   subtitle?: string;
   paper?: PaperSizeValue;
@@ -44,6 +47,9 @@ export function PrintFrame({
             <div>
               <p className="text-xl font-bold tracking-tight">{organizationName}</p>
               {locationName ? <p className="text-sm text-neutral-600">{locationName}</p> : null}
+              {contactLine ? (
+                <p className="mt-0.5 text-xs text-neutral-500">{contactLine}</p>
+              ) : null}
             </div>
             <div className="text-right">
               <p className="text-lg font-semibold uppercase tracking-wide">{title}</p>
