@@ -258,6 +258,7 @@ model Organization {
   serviceTemplates   ServiceTemplate[]
   serviceTemplateLines ServiceTemplateLine[]
   serviceTemplateTasks ServiceTemplateTask[]
+  inventoryItems      InventoryItem[]
   partOrders         PartOrder[]
   partOrderLines    PartOrderLine[]
   estimateRevisions   EstimateRevision[]
@@ -979,6 +980,26 @@ model SmsMessage {
 
   @@index([organizationId, conversationId, createdAt], map: "sms_messages_org_conversation_idx")
   @@map("sms_messages")
+}
+
+model InventoryItem {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  partNumber      String   @map("part_number") @db.VarChar(120)
+  name            String   @db.VarChar(220)
+  quantityOnHand  Int      @default(0) @map("quantity_on_hand")
+  reorderPoint    Int      @default(0) @map("reorder_point")
+  unitCostMinor   BigInt   @default(0) @map("unit_cost_minor")
+  currency        String   @default("USD") @db.VarChar(3)
+  binLocation     String?  @map("bin_location") @db.VarChar(80)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "inventory_items_org_id_unique")
+  @@unique([organizationId, partNumber], map: "inventory_items_org_part_number_unique")
+  @@index([organizationId], map: "inventory_items_org_low_stock_idx")
+  @@map("inventory_items")
 }
 
 model MaintenanceSchedule {

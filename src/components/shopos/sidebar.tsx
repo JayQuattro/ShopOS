@@ -92,6 +92,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           permission: "customers.read",
         },
         {
+          label: "Inventory",
+          href: `${baseHref}/inventory`,
+          icon: ClipboardList,
+          permission: "work_orders.read",
+        },
+        {
           label: "Reports",
           href: `${baseHref}/reports`,
           icon: ClipboardList,
