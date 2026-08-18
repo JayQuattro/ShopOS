@@ -788,10 +788,12 @@ model Asset {
   appointments     Appointment[]
   workOrderAssets   WorkOrderAsset[]
   serviceCalls      ServiceCall[]
+  isFleetVehicle    Boolean           @default(false) @map("is_fleet_vehicle")
 
   @@unique([organizationId, id], map: "assets_org_id_unique")
   @@index([organizationId, customerId], map: "assets_org_customer_idx")
   @@index([organizationId, displayName], map: "assets_org_name_idx")
+  @@index([organizationId, isFleetVehicle], map: "assets_org_fleet_idx")
   @@map("assets")
 }
 

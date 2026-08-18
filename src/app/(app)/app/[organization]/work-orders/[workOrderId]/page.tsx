@@ -8,6 +8,7 @@ import { db } from "@/db/client";
 import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listAssignableTechnicians } from "@/modules/work-orders/assignment-service";
+import { listLoanerCandidates } from "@/modules/assets/fleet-service";
 import { AssignmentSelect } from "./assignment-select";
 import { VehicleCard } from "./vehicle-card";
 import { EstimatePanel } from "./estimate-panel";
@@ -85,22 +86,10 @@ export default async function WorkOrderDetailPage({
 
   const technicians = wo ? await listAssignableTechnicians({ db, context }) : [];
 
-  // Loaner candidates: shop-owned vehicles — assets not belonging to any
-  // customer of this work order. Practical v1: all assets owned by an internal
-  // customer named after the org, or any asset the shop created; surfaced as
-  // org-assets whose customer is the organization's own record when that
-  // convention exists. Until then, offer assets not tied to this WO's customer.
+  // Loaner candidates: fleet vehicles when the shop has marked any; otherwise
+  // the heuristic fallback (active assets not tied to this WO's customer).
   const loanerAssets = wo
-    ? await db.asset.findMany({
-        where: {
-          organizationId: context.organizationId,
-          status: "ACTIVE",
-          customerId: { not: wo.customer.id },
-        },
-        select: { id: true, displayName: true },
-        take: 50,
-        orderBy: { displayName: "asc" },
-      })
+    ? await listLoanerCandidates({ db, context, excludeCustomerId: wo.customer.id })
     : [];
 
   if (!wo) {

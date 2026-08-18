@@ -74,6 +74,9 @@ const ids = {
   demoRoadsideRequested: "00000000-0000-4000-8000-000000000991",
   demoRoadsideDispatched: "00000000-0000-4000-8000-000000000992",
   demoRoadsideCompleted: "00000000-0000-4000-8000-000000000993",
+  demoFleetCustomer: "00000000-0000-4000-8000-000000000994",
+  demoFleetTruck: "00000000-0000-4000-8000-000000000995",
+  demoFleetVan: "00000000-0000-4000-8000-000000000996",
 } as const;
 
 async function seed(): Promise<void> {
@@ -570,10 +573,12 @@ async function seedOperationalDemo(): Promise<void> {
   const existing = await db.workOrder.findUnique({ where: { id: ids.demoWorkOrder } });
   if (existing) {
     // Newer demo slices backfill on already-seeded databases.
+    await seedFleetDemo();
     await seedRoadsideDemo();
     console.info("Operational demo data already present — skipping.");
     return;
   }
+  await seedFleetDemo();
   await seedRoadsideDemo();
 
   // A 1×1 transparent PNG standing in for a rotor photo.
@@ -1267,6 +1272,63 @@ async function seedRoadsideDemo(): Promise<void> {
         completedAt: new Date(Date.now() - 4 * 60 * 60 * 1000 + 26 * 60 * 1000),
       },
     ],
+  });
+
+  // The dispatched tire change rides the fleet truck when it exists.
+  await db.serviceCall.updateMany({
+    where: { id: ids.demoRoadsideDispatched, fleetAssetId: null },
+    data: { fleetAssetId: ids.demoFleetTruck },
+  });
+}
+
+/** Fleet demo vehicles; idempotent so re-seeding older databases backfills. */
+async function seedFleetDemo(): Promise<void> {
+  const existing = await db.asset.findUnique({ where: { id: ids.demoFleetTruck } });
+  if (existing) return;
+
+  await db.customer.create({
+    data: {
+      id: ids.demoFleetCustomer,
+      organizationId: ids.organization,
+      kind: "BUSINESS",
+      displayName: "Shop Fleet (internal)",
+    },
+  });
+  await db.asset.createMany({
+    data: [
+      {
+        id: ids.demoFleetTruck,
+        organizationId: ids.organization,
+        customerId: ids.demoFleetCustomer,
+        displayName: "Service Truck 1",
+        category: "truck",
+        isFleetVehicle: true,
+      },
+      {
+        id: ids.demoFleetVan,
+        organizationId: ids.organization,
+        customerId: ids.demoFleetCustomer,
+        displayName: "Loaner Van",
+        category: "van",
+        isFleetVehicle: true,
+      },
+    ],
+  });
+  await db.automotiveAssetProfile.create({
+    data: {
+      assetId: ids.demoFleetTruck,
+      licensePlate: "SHOP-1",
+      plateJurisdiction: "NC",
+      lastKnownMileage: 88_214,
+    },
+  });
+  await db.automotiveAssetProfile.create({
+    data: {
+      assetId: ids.demoFleetVan,
+      licensePlate: "SHOP-2",
+      plateJurisdiction: "NC",
+      lastKnownMileage: 61_045,
+    },
   });
 }
 
