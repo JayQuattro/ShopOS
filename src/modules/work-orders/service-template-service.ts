@@ -274,9 +274,24 @@ export async function applyServiceTemplateToWorkOrder(
       revisionId = created.revisionId;
     }
 
+    // Shop defaults (settings): template labor lines priced at zero inherit
+    // the org's labor rate; taxable lines with no explicit rate inherit the
+    // org's default tax rate.
+    const org = await input.db.organization.findUnique({
+      where: { id: input.context.organizationId },
+      select: { defaultLaborRateMinor: true, defaultTaxRateBasisPoints: true },
+    });
     let position = await nextLinePosition(input.db, revisionId);
     for (const line of template.lines) {
       position += 1;
+      const unitPriceMinor =
+        line.kind === "LABOR" && Number(line.unitPriceMinor) === 0 && org
+          ? Number(org.defaultLaborRateMinor)
+          : Number(line.unitPriceMinor);
+      const taxRateBasisPoints =
+        line.taxable && line.taxRateBasisPoints === 0 && org
+          ? org.defaultTaxRateBasisPoints
+          : line.taxRateBasisPoints;
       await addLine({
         db: input.db,
         context: input.context,
@@ -285,10 +300,10 @@ export async function applyServiceTemplateToWorkOrder(
         serviceGroupKey: line.serviceGroupKey,
         description: line.description,
         quantityMilli: line.quantityMilli,
-        unitPriceMinor: Number(line.unitPriceMinor),
+        unitPriceMinor,
         discountMinor: 0,
         taxable: line.taxable,
-        taxRateBasisPoints: line.taxRateBasisPoints,
+        taxRateBasisPoints,
         position,
       });
     }
