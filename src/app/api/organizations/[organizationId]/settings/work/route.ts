@@ -41,6 +41,7 @@ const updateSchema = z.object({
   invoiceNumberPrefix: z.string().trim().min(1).max(12),
   defaultLaborRateMinor: z.number().int().min(0),
   defaultTaxRateBasisPoints: z.number().int().min(0).max(10000),
+  reviewUrl: z.string().trim().url().max(2048).nullable(),
 });
 
 export async function PUT(

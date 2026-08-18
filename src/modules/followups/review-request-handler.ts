@@ -42,7 +42,7 @@ export class ReviewRequestHandler implements EventHandler {
             },
           },
         },
-        organization: { select: { name: true, notifyReviewRequests: true } },
+        organization: { select: { name: true, notifyReviewRequests: true, reviewUrl: true } },
         trackerLink: { select: { token: true, revokedAt: true } },
       },
     });
@@ -72,13 +72,29 @@ export class ReviewRequestHandler implements EventHandler {
         } as import("@/modules/tenancy/policy").TenantContext,
         customerId: workOrder.customerId,
         to: phone,
-        body: `Thanks for choosing ${workOrder.organization.name}! If we earned it, a quick review means the world${trackerUrl ? ` — see your service summary: ${trackerUrl}` : ""}.`,
+        body: buildReviewBody(
+          workOrder.organization.name,
+          workOrder.organization.reviewUrl,
+          trackerUrl,
+        ),
         workOrderId,
       });
     } catch {
       // No SMS configured — the closed invoice email already exists; complete.
     }
   }
+}
+
+/** The review ask: configured review page first, tracker summary as fallback. */
+function buildReviewBody(
+  organizationName: string,
+  reviewUrl: string | null,
+  trackerUrl: string | null,
+): string {
+  if (reviewUrl) {
+    return `Thanks for choosing ${organizationName}! A quick review means the world: ${reviewUrl}`;
+  }
+  return `Thanks for choosing ${organizationName}! If we earned it, a quick review means the world${trackerUrl ? ` — see your service summary: ${trackerUrl}` : ""}.`;
 }
 
 function readString(data: Readonly<Record<string, unknown>>, key: string): string | null {

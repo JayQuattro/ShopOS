@@ -17,6 +17,7 @@ type WorkPreferences = {
   invoiceNumberPrefix: string;
   defaultLaborRateMinor: number;
   defaultTaxRateBasisPoints: number;
+  reviewUrl: string | null;
 };
 
 const CREDIT_POLICY_HELP: Record<WorkPreferences["changeOrderCreditPolicy"], string> = {
@@ -334,6 +335,30 @@ export function WorkPreferencesForm() {
                     : prev,
                 )
               }
+              disabled={pending}
+            />
+          </label>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Review link</CardTitle>
+          <CardDescription>
+            Your Google / Yelp review page, linked in the thank-you text when a job closes. Leave
+            empty to link the service summary instead.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <label className="grid gap-1 text-sm font-medium">
+            Review page URL
+            <Input
+              type="url"
+              value={preferences.reviewUrl ?? ""}
+              onChange={(e) =>
+                setPreferences((prev) => (prev ? { ...prev, reviewUrl: e.target.value } : prev))
+              }
+              placeholder="https://g.page/your-shop"
               disabled={pending}
             />
           </label>
