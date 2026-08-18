@@ -52,3 +52,7 @@ export class NoOpEventHandler implements EventHandler {
     }
   }
 }
+
+/** Event types emitted by the appointment reminder sweep. */
+export const APPOINTMENT_REMINDER_EVENT = "appointment.reminder_due";
+export const APPOINTMENT_NOSHOW_EVENT = "appointment.no_show";
