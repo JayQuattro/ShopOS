@@ -268,6 +268,7 @@ model Organization {
   notifyAppointmentReminders Boolean                  @default(true) @map("notify_appointment_reminders")
   notifyPmReminders      Boolean                      @default(true) @map("notify_pm_reminders")
   notifyReviewRequests   Boolean                      @default(true) @map("notify_review_requests")
+  reviewUrl              String?                      @map("review_url") @db.VarChar(2048)
   defaultLaborRateMinor  BigInt                       @default(0) @map("default_labor_rate_minor")
   defaultTaxRateBasisPoints Int                       @default(0) @map("default_tax_rate_basis_points")
   invoiceLinePolicy   InvoiceLinePolicy                @default(APPROVED_ONLY) @map("invoice_line_policy")

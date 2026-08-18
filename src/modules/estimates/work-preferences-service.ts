@@ -13,12 +13,17 @@ export type WorkPreferences = Readonly<{
   invoiceNumberPrefix: string;
   defaultLaborRateMinor: number;
   defaultTaxRateBasisPoints: number;
+  reviewUrl: string | null;
 }>;
 
 export class WorkPreferencesFailed extends Error {
   constructor(
     public readonly reason:
-      "organization_not_found" | "invalid_link_ttl" | "invalid_prefix" | "invalid_rates",
+      | "organization_not_found"
+      | "invalid_link_ttl"
+      | "invalid_prefix"
+      | "invalid_rates"
+      | "invalid_review_url",
   ) {
     super("The work preferences operation could not be completed.");
     this.name = "WorkPreferencesFailed";
@@ -47,6 +52,7 @@ export async function getWorkPreferences(
       invoiceNumberPrefix: true,
       defaultLaborRateMinor: true,
       defaultTaxRateBasisPoints: true,
+      reviewUrl: true,
     },
   });
   if (!organization) throw new WorkPreferencesFailed("organization_not_found");
@@ -61,6 +67,7 @@ export async function getWorkPreferences(
     invoiceNumberPrefix: organization.invoiceNumberPrefix,
     defaultLaborRateMinor: Number(organization.defaultLaborRateMinor),
     defaultTaxRateBasisPoints: organization.defaultTaxRateBasisPoints,
+    reviewUrl: organization.reviewUrl,
   };
 }
 
@@ -97,6 +104,9 @@ export async function updateWorkPreferences(
   ) {
     throw new WorkPreferencesFailed("invalid_rates");
   }
+  if (preferences.reviewUrl && !/^https?:\/\//.test(preferences.reviewUrl.trim())) {
+    throw new WorkPreferencesFailed("invalid_review_url");
+  }
 
   await db.$transaction(async (transaction) => {
     const update = await transaction.organization.updateMany({
@@ -111,6 +121,7 @@ export async function updateWorkPreferences(
         invoiceNumberPrefix: preferences.invoiceNumberPrefix.trim(),
         defaultLaborRateMinor: BigInt(preferences.defaultLaborRateMinor),
         defaultTaxRateBasisPoints: preferences.defaultTaxRateBasisPoints,
+        reviewUrl: preferences.reviewUrl ? preferences.reviewUrl.trim() : null,
       },
     });
     if (update.count !== 1) throw new WorkPreferencesFailed("organization_not_found");

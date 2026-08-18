@@ -205,6 +205,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
       invoiceNumberPrefix: "INV-",
       defaultLaborRateMinor: 0,
       defaultTaxRateBasisPoints: 0,
+      reviewUrl: null,
     });
   });
 
@@ -222,6 +223,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
       invoiceNumberPrefix: "IN-",
       defaultLaborRateMinor: 14500,
       defaultTaxRateBasisPoints: 720,
+      reviewUrl: null,
     });
 
     const preferences = await getWorkPreferences(dbModule.db, context());
@@ -235,6 +237,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
       invoiceNumberPrefix: "IN-",
       defaultLaborRateMinor: 14500,
       defaultTaxRateBasisPoints: 720,
+      reviewUrl: null,
     });
 
     const audit = await dbModule.db.auditEvent.findFirst({
@@ -262,6 +265,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
         invoiceNumberPrefix: "INV-",
         defaultLaborRateMinor: 0,
         defaultTaxRateBasisPoints: 0,
+        reviewUrl: null,
       }),
     ).rejects.toThrow();
   });
@@ -285,6 +289,7 @@ describe("work preferences gate effects (#163)", { skip: shouldSkip }, () => {
       invoiceNumberPrefix: "INV-",
       defaultLaborRateMinor: 0,
       defaultTaxRateBasisPoints: 0,
+      reviewUrl: null,
     });
 
     const { revisionId } = await createDraftRevision({
@@ -320,6 +325,7 @@ describe("work preferences gate effects (#163)", { skip: shouldSkip }, () => {
       invoiceNumberPrefix: "BILL-",
       defaultLaborRateMinor: 0,
       defaultTaxRateBasisPoints: 0,
+      reviewUrl: null,
     });
 
     const repository = new WorkOrderRepository({ db: dbModule.db, context });

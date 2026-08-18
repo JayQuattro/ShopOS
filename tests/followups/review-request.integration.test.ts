@@ -133,6 +133,45 @@ async function seedClosableWorkOrder(phone: string | null) {
 }
 
 describe("review requests on close (#158)", { skip: shouldSkip }, () => {
+  it("links the configured review page when set", async () => {
+    const { transitionStatus } = await import("@/modules/work-orders/work-order-service");
+    const { ReviewRequestHandler } = await import("@/modules/followups/review-request-handler");
+    const { getConsoleSmsAdapter } = await import("@/modules/integrations/sms/sms-adapters");
+    getConsoleSmsAdapter().sent.length = 0;
+    const seedData = await seedClosableWorkOrder("+15550321");
+
+    await dbModule.db.organization.update({
+      where: { id: seedData.orgId },
+      data: { reviewUrl: "https://g.page/example-shop/review" },
+    });
+
+    await transitionStatus({
+      db: dbModule.db,
+      context: seedData.context(),
+      workOrderId: seedData.workOrderId,
+      targetStatus: "CLOSED",
+    });
+    const event = await dbModule.db.outboxEvent.findFirst({
+      where: { organizationId: seedData.orgId, eventType: "work_order.closed" },
+    });
+    await new ReviewRequestHandler(dbModule.db).handle({
+      event: {
+        id: event!.id,
+        type: "work_order.closed",
+        organizationId: seedData.orgId,
+        aggregateType: "work_order",
+        aggregateId: seedData.workOrderId,
+        occurredAt: event!.occurredAt,
+        data: (event!.payload ?? {}) as Record<string, unknown>,
+      },
+      tenant: { organizationId: seedData.orgId, requestId: "test", organizationStatus: "ACTIVE" },
+    });
+
+    expect(getConsoleSmsAdapter().sent).toHaveLength(1);
+    expect(getConsoleSmsAdapter().sent[0]?.body).toContain("https://g.page/example-shop/review");
+    expect(getConsoleSmsAdapter().sent[0]?.body).not.toContain("/track/");
+  });
+
   it("enqueues a review event on the CLOSED transition and the handler texts the customer", async () => {
     const { transitionStatus } = await import("@/modules/work-orders/work-order-service");
     const { ReviewRequestHandler } = await import("@/modules/followups/review-request-handler");
