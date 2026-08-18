@@ -79,6 +79,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           icon: ClipboardList,
           permission: "work_orders.read",
         },
+        {
+          label: "Declined work",
+          href: `${baseHref}/declined-work`,
+          icon: ClipboardList,
+          permission: "work_orders.read",
+        },
       ],
     },
     {
