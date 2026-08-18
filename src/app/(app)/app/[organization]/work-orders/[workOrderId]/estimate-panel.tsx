@@ -10,6 +10,8 @@ import { formatMoney } from "@/i18n/formatters";
 import { AttachmentPanel } from "./attachment-panel";
 import { AuthorizationRecorder } from "./authorization-recorder";
 
+type TaxRateOption = { id: string; name: string; rateBasisPoints: number };
+
 export type Revision = {
   id: string;
   revisionNumber: number;
@@ -59,6 +61,7 @@ export function EstimatePanel({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [taxRates, setTaxRates] = useState<TaxRateOption[]>([]);
 
   const selectedRev = revisions.find((r) => r.id === selectedRevId);
   const isDraft = selectedRev?.status === "DRAFT";
@@ -79,6 +82,27 @@ export function EstimatePanel({
     } finally {
       setLoadingLines(false);
     }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch("/api/tax-rates");
+          if (res.ok && !cancelled) {
+            const data = await res.json();
+            setTaxRates(data.rates ?? []);
+          }
+        } catch {
+          // Rate picker is optional chrome; raw bps entry still works.
+        }
+      })();
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -253,7 +277,8 @@ export function EstimatePanel({
           unitPriceMinor: unitPrice,
           discountMinor: 0,
           taxable: !lineCredit && parseInt(lineTaxRate, 10) > 0,
-          taxRateBasisPoints: lineCredit ? 0 : parseInt(lineTaxRate, 10) || 0,
+          taxRateBasisPoints:
+            lineCredit || lineTaxRate === "custom" ? 0 : parseInt(lineTaxRate, 10) || 0,
           position: lines.length + 1,
         }),
       });
@@ -398,14 +423,33 @@ export function EstimatePanel({
                 onChange={(e) => setLinePrice(e.target.value)}
                 className="w-28"
               />
-              <Input
-                type="number"
-                placeholder="Tax bps"
-                value={lineTaxRate}
-                onChange={(e) => setLineTaxRate(e.target.value)}
-                className="w-20"
-                disabled={lineCredit}
-              />
+              {taxRates.length > 0 ? (
+                <select
+                  value={lineTaxRate}
+                  onChange={(e) => setLineTaxRate(e.target.value)}
+                  disabled={lineCredit || pending}
+                  className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
+                  title="Tax rate (named rates from Settings → Taxes; Custom for a basis-points value)"
+                >
+                  <option value="0">No tax</option>
+                  {taxRates.map((rate) => (
+                    <option key={rate.id} value={String(rate.rateBasisPoints)}>
+                      {rate.name} ({(rate.rateBasisPoints / 100).toFixed(3)}%)
+                    </option>
+                  ))}
+                  <option value="custom">Custom…</option>
+                </select>
+              ) : null}
+              {taxRates.length === 0 || lineTaxRate === "custom" ? (
+                <Input
+                  type="number"
+                  placeholder="Tax bps"
+                  value={lineTaxRate === "custom" ? "" : lineTaxRate}
+                  onChange={(e) => setLineTaxRate(e.target.value)}
+                  className="w-20"
+                  disabled={lineCredit}
+                />
+              ) : null}
               {isChangeOrder ? (
                 <label className="flex items-center gap-2 text-sm">
                   <input
