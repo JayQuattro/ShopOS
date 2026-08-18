@@ -216,6 +216,7 @@ model User {
   assignedWorkOrders    WorkOrder[]                       @relation("WorkOrderTechnician")
   qcPassedWorkOrders   WorkOrder[]                       @relation("WorkOrderQcPassedBy")
   assistingWorkOrders   WorkOrderTechnician[]             @relation("WorkOrderAssistingTechnician")
+  assignedServiceCalls  ServiceCall[]                     @relation("ServiceCallTechnician")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
   timeEntries            TimeEntry[]                       @relation("TimeEntryWorker")
@@ -303,6 +304,7 @@ model Organization {
   taxRates            TaxRate[]
   loanerCheckouts     LoanerCheckout[]
   subletWorks         SubletWork[]
+  serviceCalls        ServiceCall[]
   businessHours       LocationBusinessHour[]
   shopFees            ShopFee[]
   partOrders         PartOrder[]
@@ -373,6 +375,7 @@ model Location {
   payments       Payment[]
   activityEvents ActivityEvent[]
   auditEvents    AuditEvent[]
+  serviceCalls   ServiceCall[]
 
   @@unique([organizationId, code], map: "locations_org_code_unique")
   @@unique([organizationId, id], map: "locations_org_id_unique")
@@ -704,6 +707,7 @@ model Customer {
   contacts              CustomerContact[]
   addresses             CustomerAddress[]
   smsConversations      SmsConversation[]
+  serviceCalls          ServiceCall[]
 
   @@unique([organizationId, id], map: "customers_org_id_unique")
   @@index([organizationId, displayName], map: "customers_org_name_idx")
@@ -783,6 +787,7 @@ model Asset {
   loanerCheckouts   LoanerCheckout[]
   appointments     Appointment[]
   workOrderAssets   WorkOrderAsset[]
+  serviceCalls      ServiceCall[]
 
   @@unique([organizationId, id], map: "assets_org_id_unique")
   @@index([organizationId, customerId], map: "assets_org_customer_idx")
@@ -884,6 +889,7 @@ model WorkOrder {
   smsMessages         SmsMessage[]
   assistingTechnicians WorkOrderTechnician[]
   activityEvents    ActivityEvent[]
+  serviceCalls      ServiceCall[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
   @@unique([organizationId, locationId, id], map: "work_orders_org_location_id_unique")
@@ -1171,6 +1177,74 @@ model SubletWork {
   @@unique([organizationId, id], map: "sublet_works_org_id_unique")
   @@index([organizationId, workOrderId], map: "sublet_works_org_wo_idx")
   @@map("sublet_works")
+}
+
+enum ServiceCallKind {
+  JUMPSTART        @map("jumpstart")
+  TIRE_CHANGE      @map("tire_change")
+  FUEL_DELIVERY    @map("fuel_delivery")
+  LOCKOUT          @map("lockout")
+  BATTERY          @map("battery")
+  TOW_COORDINATION @map("tow_coordination")
+  MOBILE_REPAIR    @map("mobile_repair")
+  OTHER            @map("other")
+
+  @@map("service_call_kind")
+}
+
+enum ServiceCallStatus {
+  REQUESTED  @map("requested")
+  DISPATCHED @map("dispatched")
+  EN_ROUTE   @map("en_route")
+  ON_SCENE   @map("on_scene")
+  COMPLETED  @map("completed")
+  CANCELLED  @map("cancelled")
+
+  @@map("service_call_status")
+}
+
+model ServiceCall {
+  id                        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId            String            @map("organization_id") @db.Uuid
+  locationId                String            @map("location_id") @db.Uuid
+  customerId                String            @map("customer_id") @db.Uuid
+  kind                      ServiceCallKind
+  status                    ServiceCallStatus @default(REQUESTED)
+  contactPhone              String            @map("contact_phone") @db.VarChar(32)
+  addressLine1              String            @map("address_line1")
+  addressLine2              String?           @map("address_line2")
+  city                      String            @db.VarChar(120)
+  stateProvince             String            @map("state_province") @db.VarChar(80)
+  postalCode                String            @map("postal_code") @db.VarChar(20)
+  lat                       Float?
+  lng                       Float?
+  geocodedFormatted         String?           @map("geocoded_formatted")
+  assignedTechnicianUserId  String?           @map("assigned_technician_user_id") @db.Uuid
+  fleetAssetId              String?           @map("fleet_asset_id") @db.Uuid
+  note                      String?
+  etaSeconds                Int?              @map("eta_seconds")
+  distanceMeters            Int?              @map("distance_meters")
+  workOrderId               String?           @map("work_order_id") @db.Uuid
+  dispatchedAt              DateTime?         @map("dispatched_at") @db.Timestamptz(6)
+  enRouteAt                 DateTime?         @map("en_route_at") @db.Timestamptz(6)
+  onSceneAt                 DateTime?         @map("on_scene_at") @db.Timestamptz(6)
+  completedAt               DateTime?         @map("completed_at") @db.Timestamptz(6)
+  cancelledAt               DateTime?         @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason              String?           @map("cancel_reason")
+  createdAt                 DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization              Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location                  Location          @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  customer                  Customer          @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
+  assignedTechnician        User?             @relation("ServiceCallTechnician", fields: [assignedTechnicianUserId], references: [id], onDelete: Restrict)
+  fleetAsset                Asset?            @relation(fields: [organizationId, fleetAssetId], references: [organizationId, id], onDelete: Restrict)
+  workOrder                 WorkOrder?        @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "service_calls_org_id_unique")
+  @@index([organizationId, locationId, status], map: "service_calls_org_location_status_idx")
+  @@index([organizationId, assignedTechnicianUserId], map: "service_calls_org_technician_idx")
+  @@index([organizationId, fleetAssetId], map: "service_calls_org_fleet_asset_idx")
+  @@map("service_calls")
 }
 
 model MaintenanceSchedule {

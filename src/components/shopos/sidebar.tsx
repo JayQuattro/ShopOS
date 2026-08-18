@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Users, Wrench, Package, ClipboardList, Settings } from "lucide-react";
+import { Building2, Users, Wrench, Package, ClipboardList, Settings, Truck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -107,6 +107,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           label: "Declined work",
           href: `${baseHref}/declined-work`,
           icon: ClipboardList,
+          permission: "work_orders.read",
+        },
+        {
+          label: "Roadside",
+          href: `${baseHref}/roadside`,
+          icon: Truck,
           permission: "work_orders.read",
         },
       ],
