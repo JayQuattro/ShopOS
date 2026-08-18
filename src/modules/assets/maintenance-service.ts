@@ -301,9 +301,16 @@ export async function findDueForReminders(
     take: 500,
   });
 
-  const remindCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const orgs = await db.organization.findMany({
+    where: { notifyPmReminders: true, status: "ACTIVE" },
+    select: { id: true, pmReminderCooldownDays: true },
+  });
+  const cooldownByOrg = new Map(orgs.map((org) => [org.id, org.pmReminderCooldownDays]));
   const targets: DueSweepTarget[] = [];
   for (const row of rows) {
+    if (!cooldownByOrg.has(row.organizationId)) continue; // disabled or inactive
+    const cooldown = cooldownByOrg.get(row.organizationId)!;
+    const remindCutoff = new Date(now.getTime() - cooldown * 24 * 60 * 60 * 1000);
     const phone = row.asset.customer.primaryPhone;
     if (!phone) continue;
     if (row.lastRemindedAt && row.lastRemindedAt > remindCutoff) continue;

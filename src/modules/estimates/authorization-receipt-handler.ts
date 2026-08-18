@@ -92,7 +92,7 @@ export class AuthorizationRecordedEmailHandler implements EventHandler {
         documentKind: true,
         changeOrderNumber: true,
         currency: true,
-        organization: { select: { name: true } },
+        organization: { select: { name: true, notifyDecisionReceiptEmail: true } },
         workOrder: { select: { number: true } },
         lines: {
           select: {
@@ -104,6 +104,7 @@ export class AuthorizationRecordedEmailHandler implements EventHandler {
       },
     });
     if (!revision) throw new Error("revision not found for receipt");
+    if (!revision.organization.notifyDecisionReceiptEmail) return; // disabled by settings
 
     const approved: ReceiptLine[] = [];
     const declined: ReceiptLine[] = [];

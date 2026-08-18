@@ -186,10 +186,11 @@ export class EstimatePresentedEmailHandler implements EventHandler {
             },
           },
         },
-        organization: { select: { name: true } },
+        organization: { select: { name: true, notifyEstimateEmail: true } },
       },
     });
     if (!revision) throw new Error("estimate revision not found for notification");
+    if (!revision.organization.notifyEstimateEmail) return; // disabled by settings
 
     const recipient =
       revision.workOrder.customer.contacts[0]?.email ??
