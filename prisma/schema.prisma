@@ -698,6 +698,7 @@ model Customer {
   organizationReference String?      @map("organization_reference") @db.VarChar(64)
   primaryEmail          String?      @map("primary_email") @db.VarChar(320)
   primaryPhone          String?      @map("primary_phone") @db.VarChar(40)
+  isAccountCustomer     Boolean      @default(false) @map("is_account_customer")
   internalNotes         String?      @map("internal_notes")
   customerFacingNotes   String?      @map("customer_facing_notes")
   archivedAt            DateTime?    @map("archived_at") @db.Timestamptz(6)
@@ -715,6 +716,7 @@ model Customer {
 
   @@unique([organizationId, id], map: "customers_org_id_unique")
   @@index([organizationId, displayName], map: "customers_org_name_idx")
+  @@index([organizationId, isAccountCustomer], map: "customers_org_account_idx")
   @@map("customers")
 }
 
@@ -876,6 +878,7 @@ model WorkOrder {
   bayLabel          String?            @map("bay_label") @db.VarChar(60)
   keyTag            String?            @map("key_tag") @db.VarChar(40)
   keyLocation       String?            @map("key_location") @db.VarChar(80)
+  poNumber          String?            @map("po_number") @db.VarChar(60)
   completedAt       DateTime?          @map("completed_at") @db.Timestamptz(6)
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)

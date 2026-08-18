@@ -580,6 +580,7 @@ async function seedOperationalDemo(): Promise<void> {
     await seedRoadsideDemo();
     await seedTransportDemo();
     await seedKeysDemo();
+    await seedAccountDemo();
     console.info("Operational demo data already present — skipping.");
     return;
   }
@@ -587,6 +588,7 @@ async function seedOperationalDemo(): Promise<void> {
   await seedRoadsideDemo();
   await seedTransportDemo();
   await seedKeysDemo();
+  await seedAccountDemo();
 
   // A 1×1 transparent PNG standing in for a rotor photo.
   const pngBytes = Buffer.from(
@@ -1411,6 +1413,18 @@ async function seedKeysDemo(): Promise<void> {
   await db.workOrder.updateMany({
     where: { id: ids.motorcycleWorkOrder, keyTag: null },
     data: { keyTag: "K-103", keyLocation: "Lockbox B" },
+  });
+}
+
+/** Account-billing demo: one business on account with a PO reference. */
+async function seedAccountDemo(): Promise<void> {
+  await db.customer.updateMany({
+    where: { id: ids.oakline, isAccountCustomer: false },
+    data: { isAccountCustomer: true },
+  });
+  await db.workOrder.updateMany({
+    where: { id: ids.demoWorkOrder, poNumber: null },
+    data: { poNumber: "PO-2026-118" },
   });
 }
 

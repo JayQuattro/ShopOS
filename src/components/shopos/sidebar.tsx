@@ -11,6 +11,7 @@ import {
   Car,
   ArrowLeftRight,
   KeyRound,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -143,6 +144,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           href: `${baseHref}/keys`,
           icon: KeyRound,
           permission: "work_orders.read",
+        },
+        {
+          label: "Billing",
+          href: `${baseHref}/billing`,
+          icon: Wallet,
+          permission: "customers.read",
         },
       ],
     },
