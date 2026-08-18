@@ -11,12 +11,14 @@ export function WorkOrderCreateForm({
   customers,
   assets,
   locations,
+  startOpen = false,
 }: {
   customers: Option[];
   assets: Option[];
   locations: Option[];
+  startOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [customerId, setCustomerId] = useState("");
   const [assetId, setAssetId] = useState("");
   const [locationId, setLocationId] = useState("");
@@ -57,6 +59,14 @@ export function WorkOrderCreateForm({
 
   if (!open) {
     return <Button onClick={() => setOpen(true)}>New work order</Button>;
+  }
+
+  function collapse() {
+    setOpen(false);
+    // Drop ?new=1 so a refresh doesn't force the form back open.
+    if (startOpen && window.location.search.includes("new=1")) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
   }
 
   return (
@@ -131,7 +141,7 @@ export function WorkOrderCreateForm({
         <Button type="submit" disabled={pending}>
           Create work order
         </Button>
-        <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+        <Button type="button" variant="outline" onClick={collapse} disabled={pending}>
           Cancel
         </Button>
       </div>
