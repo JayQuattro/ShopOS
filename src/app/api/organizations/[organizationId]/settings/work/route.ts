@@ -39,6 +39,8 @@ const updateSchema = z.object({
   authorizationLinkTtlHours: z.number().int().min(1).max(720),
   workOrderNumberPrefix: z.string().trim().min(1).max(12),
   invoiceNumberPrefix: z.string().trim().min(1).max(12),
+  defaultLaborRateMinor: z.number().int().min(0),
+  defaultTaxRateBasisPoints: z.number().int().min(0).max(10000),
 });
 
 export async function PUT(

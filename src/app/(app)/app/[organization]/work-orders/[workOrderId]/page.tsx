@@ -186,6 +186,7 @@ export default async function WorkOrderDetailPage({
             <p className="text-xs text-muted-foreground">Vehicle</p>
             <VehicleCard
               workOrderId={wo.id}
+              locationId={wo.locationId}
               stage={wo.vehicleStage}
               bayLabel={wo.bayLabel}
               canWrite={context.permissions.has("work_orders.write")}

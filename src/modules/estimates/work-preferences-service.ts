@@ -11,11 +11,14 @@ export type WorkPreferences = Readonly<{
   authorizationLinkTtlHours: number;
   workOrderNumberPrefix: string;
   invoiceNumberPrefix: string;
+  defaultLaborRateMinor: number;
+  defaultTaxRateBasisPoints: number;
 }>;
 
 export class WorkPreferencesFailed extends Error {
   constructor(
-    public readonly reason: "organization_not_found" | "invalid_link_ttl" | "invalid_prefix",
+    public readonly reason:
+      "organization_not_found" | "invalid_link_ttl" | "invalid_prefix" | "invalid_rates",
   ) {
     super("The work preferences operation could not be completed.");
     this.name = "WorkPreferencesFailed";
@@ -42,6 +45,8 @@ export async function getWorkPreferences(
       authorizationLinkTtlHours: true,
       workOrderNumberPrefix: true,
       invoiceNumberPrefix: true,
+      defaultLaborRateMinor: true,
+      defaultTaxRateBasisPoints: true,
     },
   });
   if (!organization) throw new WorkPreferencesFailed("organization_not_found");
@@ -54,6 +59,8 @@ export async function getWorkPreferences(
     authorizationLinkTtlHours: organization.authorizationLinkTtlHours,
     workOrderNumberPrefix: organization.workOrderNumberPrefix,
     invoiceNumberPrefix: organization.invoiceNumberPrefix,
+    defaultLaborRateMinor: Number(organization.defaultLaborRateMinor),
+    defaultTaxRateBasisPoints: organization.defaultTaxRateBasisPoints,
   };
 }
 
@@ -81,6 +88,15 @@ export async function updateWorkPreferences(
       throw new WorkPreferencesFailed("invalid_prefix");
     }
   }
+  if (
+    !Number.isSafeInteger(preferences.defaultLaborRateMinor) ||
+    preferences.defaultLaborRateMinor < 0 ||
+    !Number.isSafeInteger(preferences.defaultTaxRateBasisPoints) ||
+    preferences.defaultTaxRateBasisPoints < 0 ||
+    preferences.defaultTaxRateBasisPoints > 10000
+  ) {
+    throw new WorkPreferencesFailed("invalid_rates");
+  }
 
   await db.$transaction(async (transaction) => {
     const update = await transaction.organization.updateMany({
@@ -93,6 +109,8 @@ export async function updateWorkPreferences(
         authorizationLinkTtlHours: preferences.authorizationLinkTtlHours,
         workOrderNumberPrefix: preferences.workOrderNumberPrefix.trim(),
         invoiceNumberPrefix: preferences.invoiceNumberPrefix.trim(),
+        defaultLaborRateMinor: BigInt(preferences.defaultLaborRateMinor),
+        defaultTaxRateBasisPoints: preferences.defaultTaxRateBasisPoints,
       },
     });
     if (update.count !== 1) throw new WorkPreferencesFailed("organization_not_found");

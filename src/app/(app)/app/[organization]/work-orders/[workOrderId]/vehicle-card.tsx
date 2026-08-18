@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,20 +16,46 @@ const STAGES: ReadonlyArray<{ value: string; label: string }> = [
   { value: "PICKED_UP", label: "Picked up" },
 ];
 
+type Bay = { id: string; name: string };
+
 export function VehicleCard({
   workOrderId,
+  locationId,
   stage,
   bayLabel,
   canWrite,
 }: {
   workOrderId: string;
+  locationId: string;
   stage: string | null;
   bayLabel: string | null;
   canWrite: boolean;
 }) {
   const [selectedStage, setSelectedStage] = useState(stage ?? "");
   const [bay, setBay] = useState(bayLabel ?? "");
+  const [bays, setBays] = useState<Bay[]>([]);
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/locations/${locationId}/bays`);
+          if (res.ok && !cancelled) {
+            const data = await res.json();
+            setBays(data.bays ?? []);
+          }
+        } catch {
+          // Bay suggestions are optional chrome.
+        }
+      })();
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [locationId]);
 
   const dirty = selectedStage !== (stage ?? "") || bay !== (bayLabel ?? "");
 
@@ -69,10 +95,18 @@ export function VehicleCard({
         <Input
           value={bay}
           onChange={(e) => setBay(e.target.value)}
-          placeholder="Spot (Bay 2, Lift 3…)"
+          placeholder={bays.length > 0 ? "Spot" : "Spot (Bay 2, Lift 3…)"}
+          list="shopos-bays"
           disabled={!canWrite || pending}
           className="text-sm"
         />
+        {bays.length > 0 ? (
+          <datalist id="shopos-bays">
+            {bays.map((option) => (
+              <option key={option.id} value={option.name} />
+            ))}
+          </datalist>
+        ) : null}
         {canWrite ? (
           <Button size="sm" variant="outline" onClick={save} disabled={pending || !dirty}>
             {pending ? "…" : "Save"}

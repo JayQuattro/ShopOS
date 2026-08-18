@@ -253,6 +253,8 @@ model Organization {
   notifyAppointmentReminders Boolean                  @default(true) @map("notify_appointment_reminders")
   notifyPmReminders      Boolean                      @default(true) @map("notify_pm_reminders")
   notifyReviewRequests   Boolean                      @default(true) @map("notify_review_requests")
+  defaultLaborRateMinor  BigInt                       @default(0) @map("default_labor_rate_minor")
+  defaultTaxRateBasisPoints Int                       @default(0) @map("default_tax_rate_basis_points")
   invoiceLinePolicy   InvoiceLinePolicy                @default(APPROVED_ONLY) @map("invoice_line_policy")
   subscriptionState   SubscriptionState                @default(UNMANAGED) @map("subscription_state")
   createdAt           DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -281,6 +283,7 @@ model Organization {
   serviceTemplateLines ServiceTemplateLine[]
   serviceTemplateTasks ServiceTemplateTask[]
   inventoryItems      InventoryItem[]
+  locationBays        LocationBay[]
   partOrders         PartOrder[]
   partOrderLines    PartOrderLine[]
   estimateRevisions   EstimateRevision[]
@@ -340,6 +343,7 @@ model Location {
   homeAssets     Asset[]
   workOrders     WorkOrder[]
   appointments   Appointment[]
+  bays           LocationBay[]
   estimates      EstimateRevision[]
   invoices       Invoice[]
   payments       Payment[]
@@ -1022,6 +1026,22 @@ model InventoryItem {
   @@unique([organizationId, partNumber], map: "inventory_items_org_part_number_unique")
   @@index([organizationId], map: "inventory_items_org_low_stock_idx")
   @@map("inventory_items")
+}
+
+model LocationBay {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  locationId     String   @map("location_id") @db.Uuid
+  name           String   @db.VarChar(80)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location       Location @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id], map: "location_bays_org_id_unique")
+  @@unique([organizationId, locationId, name], map: "location_bays_org_location_name_unique")
+  @@index([organizationId, locationId, active], map: "location_bays_org_location_active_idx")
+  @@map("location_bays")
 }
 
 model MaintenanceSchedule {

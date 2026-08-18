@@ -15,6 +15,8 @@ type WorkPreferences = {
   authorizationLinkTtlHours: number;
   workOrderNumberPrefix: string;
   invoiceNumberPrefix: string;
+  defaultLaborRateMinor: number;
+  defaultTaxRateBasisPoints: number;
 };
 
 const CREDIT_POLICY_HELP: Record<WorkPreferences["changeOrderCreditPolicy"], string> = {
@@ -281,6 +283,58 @@ export function WorkPreferencesForm() {
               }
               disabled={pending}
               maxLength={12}
+            />
+          </label>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Rates</CardTitle>
+          <CardDescription>
+            Shop defaults applied when template lines carry no explicit pricing.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm font-medium">
+            Labor rate (per hour)
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              value={(preferences.defaultLaborRateMinor / 100).toFixed(2)}
+              onChange={(e) =>
+                setPreferences((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        defaultLaborRateMinor: Math.round((Number(e.target.value) || 0) * 100),
+                      }
+                    : prev,
+                )
+              }
+              disabled={pending}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Tax rate (%)
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              value={(preferences.defaultTaxRateBasisPoints / 100).toFixed(1)}
+              onChange={(e) =>
+                setPreferences((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        defaultTaxRateBasisPoints: Math.round((Number(e.target.value) || 0) * 100),
+                      }
+                    : prev,
+                )
+              }
+              disabled={pending}
             />
           </label>
         </CardContent>
