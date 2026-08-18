@@ -19,6 +19,8 @@ import { TimePanel } from "./time-panel";
 import { TaskPanel } from "./task-panel";
 import { QualityCheckCard } from "./quality-check-card";
 import { PartsPanel } from "./parts-panel";
+import { LoanerPanel } from "./loaner-panel";
+import { SubletPanel } from "./sublet-panel";
 import { TrackerLinkCard } from "./tracker-link-card";
 import { ApplyTemplateCard } from "./apply-template-card";
 
@@ -82,6 +84,24 @@ export default async function WorkOrderDetailPage({
   });
 
   const technicians = wo ? await listAssignableTechnicians({ db, context }) : [];
+
+  // Loaner candidates: shop-owned vehicles — assets not belonging to any
+  // customer of this work order. Practical v1: all assets owned by an internal
+  // customer named after the org, or any asset the shop created; surfaced as
+  // org-assets whose customer is the organization's own record when that
+  // convention exists. Until then, offer assets not tied to this WO's customer.
+  const loanerAssets = wo
+    ? await db.asset.findMany({
+        where: {
+          organizationId: context.organizationId,
+          status: "ACTIVE",
+          customerId: { not: wo.customer.id },
+        },
+        select: { id: true, displayName: true },
+        take: 50,
+        orderBy: { displayName: "asc" },
+      })
+    : [];
 
   if (!wo) {
     return (
@@ -343,6 +363,17 @@ export default async function WorkOrderDetailPage({
       />
 
       <PartsPanel workOrderId={wo.id} canWrite={context.permissions.has("work_orders.write")} />
+
+      <LoanerPanel
+        workOrderId={wo.id}
+        loanerAssets={loanerAssets.map((asset) => ({
+          id: asset.id,
+          displayName: asset.displayName,
+        }))}
+        canWrite={context.permissions.has("work_orders.write")}
+      />
+
+      <SubletPanel workOrderId={wo.id} canWrite={context.permissions.has("work_orders.write")} />
 
       <TrackerLinkCard
         workOrderId={wo.id}

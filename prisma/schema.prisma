@@ -301,6 +301,8 @@ model Organization {
   inventoryItems      InventoryItem[]
   locationBays        LocationBay[]
   taxRates            TaxRate[]
+  loanerCheckouts     LoanerCheckout[]
+  subletWorks         SubletWork[]
   businessHours       LocationBusinessHour[]
   shopFees            ShopFee[]
   partOrders         PartOrder[]
@@ -778,6 +780,7 @@ model Asset {
   maintenanceSchedules MaintenanceSchedule[]
   equipmentProfile  EquipmentAssetProfile?
   workOrders        WorkOrder[]
+  loanerCheckouts   LoanerCheckout[]
   appointments     Appointment[]
   workOrderAssets   WorkOrderAsset[]
 
@@ -876,6 +879,8 @@ model WorkOrder {
   tasks              WorkOrderTask[]
   partOrders         PartOrder[]
   trackerLink        RepairTrackerLink?
+  loanerCheckouts    LoanerCheckout[]
+  subletWorks        SubletWork[]
   smsMessages         SmsMessage[]
   assistingTechnicians WorkOrderTechnician[]
   activityEvents    ActivityEvent[]
@@ -1121,6 +1126,51 @@ model LocationBay {
   @@unique([organizationId, locationId, name], map: "location_bays_org_location_name_unique")
   @@index([organizationId, locationId, active], map: "location_bays_org_location_active_idx")
   @@map("location_bays")
+}
+
+model LoanerCheckout {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  locationId     String    @map("location_id") @db.Uuid
+  workOrderId    String    @map("work_order_id") @db.Uuid
+  assetId        String    @map("asset_id") @db.Uuid
+  checkedOutAt   DateTime  @default(now()) @map("checked_out_at") @db.Timestamptz(6)
+  checkedInAt    DateTime? @map("checked_in_at") @db.Timestamptz(6)
+  outMileage     Int?      @map("out_mileage")
+  inMileage      Int?      @map("in_mileage")
+  note           String?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workOrder      WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  asset          Asset @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "loaner_checkouts_org_id_unique")
+  @@index([organizationId, assetId], map: "loaner_checkouts_org_open_idx")
+  @@map("loaner_checkouts")
+}
+
+model SubletWork {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  locationId     String    @map("location_id") @db.Uuid
+  workOrderId    String    @map("work_order_id") @db.Uuid
+  vendorName     String    @map("vendor_name") @db.VarChar(180)
+  description    String
+  status         String    @default("sent") @db.VarChar(32)
+  quotedMinor    BigInt?   @map("quoted_minor")
+  actualMinor    BigInt?   @map("actual_minor")
+  sentAt         DateTime  @default(now()) @map("sent_at") @db.Timestamptz(6)
+  returnedAt     DateTime? @map("returned_at") @db.Timestamptz(6)
+  note           String?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workOrder      WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id], map: "sublet_works_org_id_unique")
+  @@index([organizationId, workOrderId], map: "sublet_works_org_wo_idx")
+  @@map("sublet_works")
 }
 
 model MaintenanceSchedule {
