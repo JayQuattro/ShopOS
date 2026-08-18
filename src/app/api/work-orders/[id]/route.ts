@@ -15,6 +15,7 @@ const updateSchema = z.object({
   promisedAt: z.string().datetime().nullable().optional(),
   keyTag: z.string().trim().max(40).nullable().optional(),
   keyLocation: z.string().trim().max(80).nullable().optional(),
+  poNumber: z.string().trim().max(60).nullable().optional(),
 });
 
 export async function GET(
@@ -62,6 +63,7 @@ export async function PATCH(
         : {}),
       ...(parsed.data.keyTag !== undefined ? { keyTag: parsed.data.keyTag } : {}),
       ...(parsed.data.keyLocation !== undefined ? { keyLocation: parsed.data.keyLocation } : {}),
+      ...(parsed.data.poNumber !== undefined ? { poNumber: parsed.data.poNumber } : {}),
     });
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

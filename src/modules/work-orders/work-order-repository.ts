@@ -234,6 +234,7 @@ export class WorkOrderRepository {
       promisedAt?: Date | null;
       keyTag?: string | null;
       keyLocation?: string | null;
+      poNumber?: string | null;
     }>,
   ): Promise<void> {
     assertTenantAccess(
@@ -247,6 +248,7 @@ export class WorkOrderRepository {
     if (fields.promisedAt !== undefined) data.promisedAt = fields.promisedAt;
     if (fields.keyTag !== undefined) data.keyTag = fields.keyTag;
     if (fields.keyLocation !== undefined) data.keyLocation = fields.keyLocation;
+    if (fields.poNumber !== undefined) data.poNumber = fields.poNumber;
 
     if (Object.keys(data).length === 0) return;
 

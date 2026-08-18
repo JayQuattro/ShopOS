@@ -7,6 +7,7 @@ import { SummaryCard } from "@/components/shopos/states";
 import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { AccountToggle } from "../../billing/account-toggle";
 import { ContactForm } from "./contact-form";
 import { AddressForm } from "./address-form";
 import { CustomerEditForm } from "./customer-edit-form";
@@ -120,7 +121,7 @@ export default async function CustomerDetailPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title={customer.displayName}
-        description={`${customer.kind.toLowerCase()} customer`}
+        description={`${customer.kind.toLowerCase()} customer${customer.isAccountCustomer ? " · billed on account" : ""}`}
         breadcrumbs={[
           { label: "Customers", href: `/app/${context.organizationId}/customers` },
           { label: customer.displayName },
@@ -152,6 +153,22 @@ export default async function CustomerDetailPage({
 
       <div className="grid gap-4 sm:grid-cols-3">
         <SummaryCard label="Visits" value={String(visitCount)} />
+        <SummaryCard
+          label="Billing"
+          value={
+            context.permissions.has("customers.write") ? (
+              <AccountToggle
+                orgId={context.organizationId}
+                customerId={customer.id}
+                isAccount={customer.isAccountCustomer}
+              />
+            ) : customer.isAccountCustomer ? (
+              "On account"
+            ) : (
+              "Pay at pickup"
+            )
+          }
+        />
         <SummaryCard
           label="Lifetime invoiced"
           value={
