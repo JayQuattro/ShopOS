@@ -80,6 +80,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           permission: "work_orders.read",
         },
         {
+          label: "Work board",
+          href: `${baseHref}/board`,
+          icon: ClipboardList,
+          permission: "work_orders.read",
+        },
+        {
           label: "Messages",
           href: `${baseHref}/messages`,
           icon: ClipboardList,

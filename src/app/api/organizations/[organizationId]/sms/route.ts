@@ -14,11 +14,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   request: Request,
-  context: { params: Promise<{ organization: string }> },
+  context: { params: Promise<{ organizationId: string }> },
 ): Promise<Response> {
   try {
-    const { organization } = await context.params;
-    const tenantContext = await getRequestContext(organization);
+    const { organizationId } = await context.params;
+    const tenantContext = await getRequestContext(organizationId);
     const conversationId = new URL(request.url).searchParams.get("conversationId");
 
     if (conversationId) {
@@ -62,7 +62,7 @@ const sendSchema = z.object({
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ organization: string }> },
+  context: { params: Promise<{ organizationId: string }> },
 ): Promise<Response> {
   let body: unknown;
   try {
@@ -77,8 +77,8 @@ export async function POST(
   }
 
   try {
-    const { organization } = await context.params;
-    const tenantContext = await getRequestContext(organization);
+    const { organizationId } = await context.params;
+    const tenantContext = await getRequestContext(organizationId);
     const result = await sendCustomerSms({
       db,
       context: tenantContext,
