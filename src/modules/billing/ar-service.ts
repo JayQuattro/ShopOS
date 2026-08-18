@@ -167,18 +167,35 @@ export async function getCustomerStatement(
     "payments.record",
   );
 
-  const asOf = input.asOf ?? new Date();
+  return buildCustomerStatement(
+    input.db,
+    input.context.organizationId,
+    input.customerId,
+    input.asOf ?? new Date(),
+  );
+}
 
-  const customer = await input.db.customer.findFirst({
-    where: { id: input.customerId, organizationId: input.context.organizationId },
+/**
+ * Statement core shared by staff (tenant-permissioned) and the customer
+ * portal (identity-linked). Callers must have already proven the viewer's
+ * right to see this customer's money.
+ */
+export async function buildCustomerStatement(
+  db: PrismaClient,
+  organizationId: string,
+  customerId: string,
+  asOf: Date,
+): Promise<CustomerStatement | null> {
+  const customer = await db.customer.findFirst({
+    where: { id: customerId, organizationId },
     select: { id: true, displayName: true, isAccountCustomer: true },
   });
   if (!customer) throw new ArFailed("customer_not_found");
 
   const [invoices, payments] = await Promise.all([
-    input.db.invoice.findMany({
+    db.invoice.findMany({
       where: {
-        organizationId: input.context.organizationId,
+        organizationId,
         status: "ISSUED",
         issuedAt: { lte: asOf },
         workOrder: { customerId: customer.id },
@@ -193,9 +210,9 @@ export async function getCustomerStatement(
         workOrder: { select: { number: true, poNumber: true } },
       },
     }),
-    input.db.payment.findMany({
+    db.payment.findMany({
       where: {
-        organizationId: input.context.organizationId,
+        organizationId,
         receivedAt: { lte: asOf },
         invoice: {
           status: "ISSUED",

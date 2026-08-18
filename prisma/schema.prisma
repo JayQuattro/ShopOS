@@ -217,6 +217,7 @@ model User {
   qcPassedWorkOrders   WorkOrder[]                       @relation("WorkOrderQcPassedBy")
   assistingWorkOrders   WorkOrderTechnician[]             @relation("WorkOrderAssistingTechnician")
   assignedServiceCalls  ServiceCall[]                     @relation("ServiceCallTechnician")
+  portalCustomers       Customer[]                        @relation("CustomerPortalUser")
   drivenTransportJobs   TransportJob[]                    @relation("TransportDriver")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
@@ -699,12 +700,14 @@ model Customer {
   primaryEmail          String?      @map("primary_email") @db.VarChar(320)
   primaryPhone          String?      @map("primary_phone") @db.VarChar(40)
   isAccountCustomer     Boolean      @default(false) @map("is_account_customer")
+  portalUserId          String?      @map("portal_user_id") @db.Uuid
   internalNotes         String?      @map("internal_notes")
   customerFacingNotes   String?      @map("customer_facing_notes")
   archivedAt            DateTime?    @map("archived_at") @db.Timestamptz(6)
   createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  portalUser            User?        @relation("CustomerPortalUser", fields: [portalUserId], references: [id], onDelete: SetNull)
   assets                Asset[]
   workOrders            WorkOrder[]
   appointments          Appointment[]
@@ -717,6 +720,7 @@ model Customer {
   @@unique([organizationId, id], map: "customers_org_id_unique")
   @@index([organizationId, displayName], map: "customers_org_name_idx")
   @@index([organizationId, isAccountCustomer], map: "customers_org_account_idx")
+  @@index([portalUserId], map: "customers_portal_user_idx")
   @@map("customers")
 }
 

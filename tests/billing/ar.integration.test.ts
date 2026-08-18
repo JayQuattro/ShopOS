@@ -343,7 +343,7 @@ describe("accounts receivable (#179)", { skip: shouldSkip }, () => {
         id: randomUUID(),
         organizationId: seed.orgId,
         locationId: seed.locationId,
-        invoiceId: invoiceS1.id,
+        invoiceId: invoiceS1!.id,
         amountMinor: 100_00n,
         currency: "USD",
         method: "CARD_EXTERNAL",
@@ -353,7 +353,7 @@ describe("accounts receivable (#179)", { skip: shouldSkip }, () => {
       },
     });
     await dbModule.db.invoice.update({
-      where: { id: invoiceS1.id },
+      where: { id: invoiceS1!.id },
       data: { paidMinor: 100_00n },
     });
 
