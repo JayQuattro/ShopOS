@@ -202,6 +202,7 @@ model User {
   qcPassedWorkOrders   WorkOrder[]                       @relation("WorkOrderQcPassedBy")
   assistingWorkOrders   WorkOrderTechnician[]             @relation("WorkOrderAssistingTechnician")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
+  sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
   timeEntries            TimeEntry[]                       @relation("TimeEntryWorker")
   createdTasks           WorkOrderTask[]                @relation("TaskCreatedBy")
   createdPartOrders       PartOrder[]                    @relation("PartOrderCreatedBy")
@@ -250,6 +251,8 @@ model Organization {
   workOrderTasks     WorkOrderTask[]
   partSuppliers      PartSupplier[]
   repairTrackerLinks  RepairTrackerLink[]
+  smsConversations   SmsConversation[]
+  smsMessages        SmsMessage[]
   workOrderTechnicians WorkOrderTechnician[]
   serviceTemplates   ServiceTemplate[]
   serviceTemplateLines ServiceTemplateLine[]
@@ -648,6 +651,7 @@ model Customer {
   appointments          Appointment[]
   contacts              CustomerContact[]
   addresses             CustomerAddress[]
+  smsConversations      SmsConversation[]
 
   @@unique([organizationId, id], map: "customers_org_id_unique")
   @@index([organizationId, displayName], map: "customers_org_name_idx")
@@ -820,6 +824,7 @@ model WorkOrder {
   tasks              WorkOrderTask[]
   partOrders         PartOrder[]
   trackerLink        RepairTrackerLink?
+  smsMessages         SmsMessage[]
   assistingTechnicians WorkOrderTechnician[]
   activityEvents    ActivityEvent[]
 
@@ -933,6 +938,44 @@ model WorkOrderTechnician {
   @@unique([workOrderId, userId], map: "work_order_technicians_unique")
   @@index([organizationId, workOrderId], map: "work_order_technicians_org_wo_idx")
   @@map("work_order_technicians")
+}
+
+model SmsConversation {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  customerId     String    @map("customer_id") @db.Uuid
+  customerPhone  String    @map("customer_phone") @db.VarChar(40)
+  lastMessageAt  DateTime? @map("last_message_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  customer       Customer @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Cascade)
+  messages       SmsMessage[]
+
+  @@unique([organizationId, id], map: "sms_conversations_org_id_unique")
+  @@unique([organizationId, customerId, customerPhone], map: "sms_conversations_org_customer_phone_unique")
+  @@index([organizationId, lastMessageAt], map: "sms_conversations_org_last_message_idx")
+  @@map("sms_conversations")
+}
+
+model SmsMessage {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  conversationId    String   @map("conversation_id") @db.Uuid
+  direction         String   @db.VarChar(16)
+  body              String
+  status            String   @default("sent") @db.VarChar(32)
+  providerMessageId String?  @map("provider_message_id") @db.VarChar(180)
+  workOrderId       String?  @map("work_order_id") @db.Uuid
+  sentByUserId      String?  @map("sent_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  conversation      SmsConversation @relation(fields: [organizationId, conversationId], references: [organizationId, id], onDelete: Cascade)
+  workOrder         WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  sentBy            User? @relation("SmsSentBy", fields: [sentByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, conversationId, createdAt], map: "sms_messages_org_conversation_idx")
+  @@map("sms_messages")
 }
 
 model RepairTrackerLink {
