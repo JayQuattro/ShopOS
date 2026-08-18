@@ -7,6 +7,7 @@ import { db } from "@/db/client";
 import { formatDate, formatDateTime } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listAppointmentsInRange } from "@/modules/appointments/appointment-service";
+import { getBusinessHours } from "@/modules/organizations/business-hours-service";
 import { AppointmentActions } from "./appointment-actions";
 import { AppointmentCreateForm } from "./appointment-create-form";
 
@@ -81,6 +82,18 @@ export default async function SchedulePage({
   const date = dateParam && isValidDateStr(dateParam) ? dateParam : today;
   const { from, to } = dayBounds(date, timeZone);
 
+  const hoursConfig = locations[0]
+    ? await getBusinessHours(db, context, locations[0].id).catch(() => null)
+    : null;
+  const weekdayOf = (instant: Date) => {
+    const fmt = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" });
+    const name = fmt.formatToParts(instant).find((p) => p.type === "weekday")?.value ?? "";
+    return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(name);
+  };
+  const todayWindow = hoursConfig?.hours.find((w) => w.weekday === weekdayOf(from));
+  const minutesToHHMM = (minute: number) =>
+    `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+
   const [appointments, customers, assets] = await Promise.all([
     listAppointmentsInRange({ db, context, from, to }),
     canWrite
@@ -148,6 +161,12 @@ export default async function SchedulePage({
         </div>
         <p className="text-sm font-medium">
           {formatDate(from, timeZone, "en-US", { weekday: "long", month: "long", day: "numeric" })}
+          {todayWindow
+            ? ` · open ${minutesToHHMM(todayWindow.openMinute)}–${minutesToHHMM(todayWindow.closeMinute)}`
+            : ""}
+          {hoursConfig && hoursConfig.bookingCapacity > 0
+            ? ` · capacity ${hoursConfig.bookingCapacity}`
+            : ""}
         </p>
       </div>
 

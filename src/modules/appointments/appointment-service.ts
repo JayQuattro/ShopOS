@@ -4,6 +4,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import type { TransactionalClient } from "@/modules/estimates/estimate-service";
 import { WorkOrderRepository } from "@/modules/work-orders/work-order-repository";
+import { assertWithinBookingRules } from "@/modules/organizations/business-hours-service";
 
 export type AppointmentServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
 
@@ -85,6 +86,14 @@ export async function createAppointment(
     ]);
     if (!customer) throw new AppointmentFailed("customer_not_found");
     if (!location) throw new AppointmentFailed("location_not_found");
+
+    // Business hours + capacity (settings); unconfigured locations are
+    // unrestricted, so existing shops keep working.
+    await assertWithinBookingRules(transaction, input.context, {
+      locationId: input.locationId,
+      startAt: input.startAt,
+      endAt: input.endAt,
+    });
 
     // A nested tenant check: the asset must belong to this customer in this org.
     if (input.assetId) {
