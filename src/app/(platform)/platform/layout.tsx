@@ -56,6 +56,12 @@ export default async function PlatformLayout({ children }: { children: ReactNode
                   >
                     Storage
                   </Link>
+                  <Link
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                    href="/platform/settings/maps"
+                  >
+                    Maps
+                  </Link>
                 </>
               ) : null}
             </nav>
