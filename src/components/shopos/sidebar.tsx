@@ -9,6 +9,7 @@ import {
   Settings,
   Truck,
   Car,
+  ArrowLeftRight,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -129,6 +130,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
           href: `${baseHref}/fleet`,
           icon: Car,
           permission: "assets.read",
+        },
+        {
+          label: "Pickup & delivery",
+          href: `${baseHref}/logistics`,
+          icon: ArrowLeftRight,
+          permission: "work_orders.read",
         },
       ],
     },
