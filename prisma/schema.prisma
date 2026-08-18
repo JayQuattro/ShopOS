@@ -251,6 +251,7 @@ model Organization {
   workOrderTasks     WorkOrderTask[]
   partSuppliers      PartSupplier[]
   repairTrackerLinks  RepairTrackerLink[]
+  maintenanceSchedules MaintenanceSchedule[]
   smsConversations   SmsConversation[]
   smsMessages        SmsMessage[]
   workOrderTechnicians WorkOrderTechnician[]
@@ -725,6 +726,7 @@ model Asset {
   customer          Customer                @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
   homeLocation      Location?               @relation(fields: [organizationId, homeLocationId], references: [organizationId, id], onDelete: Restrict)
   automotiveProfile AutomotiveAssetProfile?
+  maintenanceSchedules MaintenanceSchedule[]
   equipmentProfile  EquipmentAssetProfile?
   workOrders        WorkOrder[]
   appointments     Appointment[]
@@ -737,8 +739,9 @@ model Asset {
 }
 
 model AutomotiveAssetProfile {
-  assetId           String  @id @map("asset_id") @db.Uuid
-  vin               String? @db.VarChar(32)
+  assetId           String   @id @map("asset_id") @db.Uuid
+  lastKnownMileage  Int?     @map("last_known_mileage")
+  vin               String?  @db.VarChar(32)
   licensePlate      String? @map("license_plate") @db.VarChar(32)
   plateJurisdiction String? @map("plate_jurisdiction") @db.VarChar(32)
   trim              String? @db.VarChar(120)
@@ -976,6 +979,28 @@ model SmsMessage {
 
   @@index([organizationId, conversationId, createdAt], map: "sms_messages_org_conversation_idx")
   @@map("sms_messages")
+}
+
+model MaintenanceSchedule {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  assetId             String    @map("asset_id") @db.Uuid
+  name                String    @db.VarChar(120)
+  intervalMiles       Int?      @map("interval_miles")
+  intervalMonths      Int?      @map("interval_months")
+  lastServicedAt      DateTime? @map("last_serviced_at") @db.Timestamptz(6)
+  lastServicedMileage Int?      @map("last_serviced_mileage")
+  lastRemindedAt      DateTime? @map("last_reminded_at") @db.Timestamptz(6)
+  active              Boolean   @default(true)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  asset               Asset @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id], map: "maintenance_schedules_org_id_unique")
+  @@unique([organizationId, assetId, name], map: "maintenance_schedules_org_asset_name_unique")
+  @@index([organizationId, active], map: "maintenance_schedules_org_active_idx")
+  @@map("maintenance_schedules")
 }
 
 model RepairTrackerLink {

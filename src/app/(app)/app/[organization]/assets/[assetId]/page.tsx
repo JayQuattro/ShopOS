@@ -6,6 +6,7 @@ import { SummaryCard } from "@/components/shopos/states";
 import { PageHeader } from "@/components/shopos/page-header";
 import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
+import { MaintenancePanel } from "./maintenance-panel";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 
 export default async function AssetDetailPage({
@@ -142,6 +143,12 @@ export default async function AssetDetailPage({
           </CardContent>
         </Card>
       ) : null}
+
+      <MaintenancePanel
+        assetId={asset.id}
+        isAutomobile={asset.category === "automobile"}
+        canWrite={context.permissions.has("assets.write")}
+      />
 
       <Card>
         <CardHeader>
