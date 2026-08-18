@@ -88,11 +88,12 @@ export class InvoiceIssuedEmailHandler implements EventHandler {
         number: true,
         currency: true,
         totalMinor: true,
-        organization: { select: { name: true } },
+        organization: { select: { name: true, notifyInvoiceEmail: true } },
         workOrder: { select: { number: true } },
       },
     });
     if (!invoice) throw new Error("invoice not found for notification");
+    if (!invoice.organization.notifyInvoiceEmail) return; // disabled by settings
 
     const email = buildInvoiceIssuedEmail({
       organizationName: invoice.organization.name,
@@ -138,7 +139,7 @@ export class PaymentRecordedEmailHandler implements EventHandler {
         currency: true,
         totalMinor: true,
         paidMinor: true,
-        organization: { select: { name: true } },
+        organization: { select: { name: true, notifyPaymentReceiptEmail: true } },
         workOrder: { select: { number: true } },
         payments: {
           orderBy: { receivedAt: "desc" },
@@ -148,6 +149,7 @@ export class PaymentRecordedEmailHandler implements EventHandler {
       },
     });
     if (!invoice) throw new Error("invoice not found for receipt");
+    if (!invoice.organization.notifyPaymentReceiptEmail) return; // disabled by settings
 
     const payment = invoice.payments[0];
     if (!payment) throw new Error("payment not found for receipt");

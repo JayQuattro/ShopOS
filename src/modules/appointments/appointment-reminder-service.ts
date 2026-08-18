@@ -37,16 +37,37 @@ function hasPhone(candidate: Candidate): boolean {
   return Boolean(candidate.customer.primaryPhone);
 }
 
-/** Appointments starting tomorrow that need a reminder text. */
+/** Appointments inside the org's reminder lead window that need a text. */
 export async function findRemindersDue(
   db: PrismaClient,
   now: Date,
 ): Promise<readonly ReminderTarget[]> {
-  const from = new Date(now.getTime() + 20 * 60 * 60 * 1000);
-  const to = new Date(now.getTime() + 32 * 60 * 60 * 1000);
+  const orgs = await db.organization.findMany({
+    where: { notifyAppointmentReminders: true, status: "ACTIVE" },
+    select: { id: true, appointmentReminderLeadHours: true },
+  });
+  const targets: ReminderTarget[] = [];
+  for (const org of orgs) {
+    // A ±6h band around the lead time, so a 24h setting still catches the
+    // sweep even if the worker was down for a few hours.
+    const center = org.appointmentReminderLeadHours;
+    const from = new Date(now.getTime() + (center - 6) * 60 * 60 * 1000);
+    const to = new Date(now.getTime() + (center + 6) * 60 * 60 * 1000);
+    const orgTargets = await remindersForWindow(db, from, to, org.id);
+    targets.push(...orgTargets);
+  }
+  return targets;
+}
 
+async function remindersForWindow(
+  db: PrismaClient,
+  from: Date,
+  to: Date,
+  organizationId: string,
+): Promise<readonly ReminderTarget[]> {
   const appointments = await db.appointment.findMany({
     where: {
+      organizationId,
       status: { in: ["SCHEDULED", "CONFIRMED"] },
       startAt: { gte: from, lte: to },
     },
@@ -78,10 +99,26 @@ export async function findRemindersDue(
 
 /** Appointments still SCHEDULED/CONFIRMED well past their start: no-shows. */
 export async function findNoShows(db: PrismaClient, now: Date): Promise<readonly ReminderTarget[]> {
-  const cutoff = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+  const orgs = await db.organization.findMany({
+    where: { notifyAppointmentReminders: true, status: "ACTIVE" },
+    select: { id: true, noShowCutoffHours: true },
+  });
+  const targets: ReminderTarget[] = [];
+  for (const org of orgs) {
+    const cutoff = new Date(now.getTime() - org.noShowCutoffHours * 60 * 60 * 1000);
+    targets.push(...(await noShowsForWindow(db, cutoff, org.id)));
+  }
+  return targets;
+}
 
+async function noShowsForWindow(
+  db: PrismaClient,
+  cutoff: Date,
+  organizationId: string,
+): Promise<readonly ReminderTarget[]> {
   const appointments = await db.appointment.findMany({
     where: {
+      organizationId,
       status: { in: ["SCHEDULED", "CONFIRMED"] },
       startAt: { lt: cutoff },
     },

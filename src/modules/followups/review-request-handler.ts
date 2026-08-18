@@ -42,11 +42,12 @@ export class ReviewRequestHandler implements EventHandler {
             },
           },
         },
-        organization: { select: { name: true } },
+        organization: { select: { name: true, notifyReviewRequests: true } },
         trackerLink: { select: { token: true, revokedAt: true } },
       },
     });
     if (!workOrder) throw new Error("work order not found for review request");
+    if (!workOrder.organization.notifyReviewRequests) return; // disabled by settings
 
     const phone = workOrder.customer.contacts[0]?.phone ?? workOrder.customer.primaryPhone;
     if (!phone) return; // Nothing to text — complete.
