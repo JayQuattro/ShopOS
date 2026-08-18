@@ -82,6 +82,8 @@ const ids = {
   demoTransportCompleted: "00000000-0000-4000-8000-000000000999",
   demoPortalUser: "00000000-0000-4000-8000-000000000997",
   demoPortalCredential: "00000000-0000-4000-8000-000000000998",
+  demoDrawerClosed: "00000000-0000-4000-8000-000000000996",
+  demoDrawerOpen: "00000000-0000-4000-8000-000000000995",
 } as const;
 
 async function seed(): Promise<void> {
@@ -1219,6 +1221,7 @@ async function seedOperationalDemo(): Promise<void> {
   await seedKeysDemo();
   await seedAccountDemo();
   await seedPortalDemo();
+  await seedDrawerDemo();
 }
 
 /** Roadside demo calls; idempotent so re-seeding older databases backfills. */
@@ -1426,6 +1429,47 @@ async function seedAccountDemo(): Promise<void> {
   await db.workOrder.updateMany({
     where: { id: ids.demoWorkOrder, poNumber: null },
     data: { poNumber: "PO-2026-118" },
+  });
+}
+
+/** Cash drawer demo: a closed session from yesterday and today's open drawer. */
+async function seedDrawerDemo(): Promise<void> {
+  const existing = await db.cashDrawerSession.findUnique({ where: { id: ids.demoDrawerClosed } });
+  if (existing) return;
+
+  const yesterdayClose = new Date(Date.now() - 26 * 60 * 60 * 1000);
+  const yesterdayOpen = new Date(yesterdayClose.getTime() - 8 * 60 * 60 * 1000);
+  await db.cashDrawerSession.createMany({
+    data: [
+      {
+        id: ids.demoDrawerClosed,
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        currency: "USD",
+        openingFloatMinor: 200_00,
+        status: "closed",
+        methodTotals: { CASH: 421_50, CARD_EXTERNAL: 1_284_00 },
+        countedCashMinor: 619_00,
+        expectedCashMinor: 621_50,
+        overShortMinor: -250,
+        openedByUserId: ids.owner,
+        openedAt: yesterdayOpen,
+        closedByUserId: ids.owner,
+        closedAt: yesterdayClose,
+        note: "Short $2.50 — checked under the mat, not there.",
+      },
+      {
+        id: ids.demoDrawerOpen,
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        currency: "USD",
+        openingFloatMinor: 200_00,
+        status: "open",
+        openedByUserId: ids.owner,
+        openedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+        note: "Morning float from the safe.",
+      },
+    ],
   });
 }
 
