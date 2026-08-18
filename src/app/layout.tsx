@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import Script from "next/script";
 import { cookies } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
@@ -44,15 +43,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       data-density={density}
       suppressHydrationWarning
     >
+      <head>
+        {/* Pre-hydration theme bootstrap. Rendered with dangerouslySetInnerHTML
+            in <head>: the browser executes it while parsing the initial HTML,
+            and React skips diffing inline <head> script contents — so it never
+            re-executes or warns on client navigations the way next/script and
+            raw body scripts do. */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
+      </head>
       <body>
-        {/* Runs before hydration to prevent theme flash; next/script keeps it
-            out of the client-rendered tree (a raw <script> there never
-            executes and React 19 warns about it). */}
-        <Script
-          id="shopos-theme-bootstrap"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
-        />
         <NextIntlClientProvider locale={resolvedLocale} messages={messages}>
           {children}
         </NextIntlClientProvider>

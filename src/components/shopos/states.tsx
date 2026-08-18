@@ -136,7 +136,8 @@ export function SummaryCard({ label, value, className }: SummaryCardProps) {
     <Card className={className}>
       <CardContent className="py-4">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="font-medium">{value}</p>
+        {/* div (not p) so callers may pass block content such as links/rows */}
+        <div className="font-medium">{value}</div>
       </CardContent>
     </Card>
   );
