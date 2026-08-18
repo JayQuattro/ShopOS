@@ -71,6 +71,9 @@ const ids = {
   demoPhotoAttachment: "00000000-0000-4000-8000-000000000971",
   demoStorageConnector: "00000000-0000-4000-8000-000000000981",
   demoOwnerCredential: "00000000-0000-4000-8000-000000000982",
+  demoRoadsideRequested: "00000000-0000-4000-8000-000000000991",
+  demoRoadsideDispatched: "00000000-0000-4000-8000-000000000992",
+  demoRoadsideCompleted: "00000000-0000-4000-8000-000000000993",
 } as const;
 
 async function seed(): Promise<void> {
@@ -566,9 +569,12 @@ function todayAtUtc(hour: number): Date {
 async function seedOperationalDemo(): Promise<void> {
   const existing = await db.workOrder.findUnique({ where: { id: ids.demoWorkOrder } });
   if (existing) {
+    // Newer demo slices backfill on already-seeded databases.
+    await seedRoadsideDemo();
     console.info("Operational demo data already present — skipping.");
     return;
   }
+  await seedRoadsideDemo();
 
   // A 1×1 transparent PNG standing in for a rotor photo.
   const pngBytes = Buffer.from(
@@ -1198,6 +1204,70 @@ async function seedOperationalDemo(): Promise<void> {
   console.info(`Repair tracker: ${base}/track/${DEMO_TRACKER_TOKEN}`);
   console.info(`Change order:   ${base}/authorize/${DEMO_CHANGE_ORDER_TOKEN}`);
   console.info("──────────────────────────────────────────────────────");
+}
+
+/** Roadside demo calls; idempotent so re-seeding older databases backfills. */
+async function seedRoadsideDemo(): Promise<void> {
+  const existing = await db.serviceCall.findUnique({ where: { id: ids.demoRoadsideRequested } });
+  if (existing) return;
+
+  const dispatchedAt = new Date(Date.now() - 25 * 60 * 1000);
+  await db.serviceCall.createMany({
+    data: [
+      {
+        id: ids.demoRoadsideRequested,
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        customerId: ids.oakline,
+        kind: "JUMPSTART",
+        status: "REQUESTED",
+        contactPhone: "+1-919-555-0141",
+        addressLine1: "2606 Hillsborough St",
+        city: "Raleigh",
+        stateProvince: "NC",
+        postalCode: "27608",
+        note: "Click, no crank — parking lot of the taco shop.",
+      },
+      {
+        id: ids.demoRoadsideDispatched,
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        customerId: ids.priya,
+        kind: "TIRE_CHANGE",
+        status: "EN_ROUTE",
+        contactPhone: "+1-919-555-0177",
+        addressLine1: "4509 Durham Western Blvd",
+        city: "Durham",
+        stateProvince: "NC",
+        postalCode: "27707",
+        note: "Front left flat, spare in the trunk.",
+        assignedTechnicianUserId: ids.technician,
+        dispatchedAt,
+        enRouteAt: new Date(Date.now() - 12 * 60 * 1000),
+        etaSeconds: 1020,
+        distanceMeters: 12_500,
+      },
+      {
+        id: ids.demoRoadsideCompleted,
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        customerId: ids.alex,
+        kind: "LOCKOUT",
+        status: "COMPLETED",
+        contactPhone: "+1-919-555-0199",
+        addressLine1: "105 Brooks Ave",
+        city: "Raleigh",
+        stateProvince: "NC",
+        postalCode: "27609",
+        note: "Keys locked in at the gym.",
+        assignedTechnicianUserId: ids.technician,
+        dispatchedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+        enRouteAt: new Date(Date.now() - 4 * 60 * 60 * 1000 + 6 * 60 * 1000),
+        onSceneAt: new Date(Date.now() - 4 * 60 * 60 * 1000 + 18 * 60 * 1000),
+        completedAt: new Date(Date.now() - 4 * 60 * 60 * 1000 + 26 * 60 * 1000),
+      },
+    ],
+  });
 }
 
 seed()
