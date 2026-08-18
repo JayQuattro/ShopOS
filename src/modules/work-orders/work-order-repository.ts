@@ -14,6 +14,8 @@ export type WorkOrderSummary = Readonly<{
   locationId: string;
   promisedAt: Date | null;
   completedAt: Date | null;
+  keyTag: string | null;
+  keyLocation: string | null;
   createdAt: Date;
 }>;
 
@@ -88,6 +90,8 @@ export class WorkOrderRepository {
       locationId: wo.locationId,
       promisedAt: wo.promisedAt,
       completedAt: wo.completedAt,
+      keyTag: wo.keyTag,
+      keyLocation: wo.keyLocation,
       createdAt: wo.createdAt,
       activity: wo.activityEvents.map((e) => ({
         id: e.id,
@@ -134,6 +138,8 @@ export class WorkOrderRepository {
         locationId: true,
         promisedAt: true,
         completedAt: true,
+        keyTag: true,
+        keyLocation: true,
         createdAt: true,
       },
     });
@@ -199,6 +205,8 @@ export class WorkOrderRepository {
         locationId: true,
         promisedAt: true,
         completedAt: true,
+        keyTag: true,
+        keyLocation: true,
         createdAt: true,
       },
     });
@@ -221,7 +229,12 @@ export class WorkOrderRepository {
 
   async update(
     id: string,
-    fields: Readonly<{ customerConcern?: string; promisedAt?: Date | null }>,
+    fields: Readonly<{
+      customerConcern?: string;
+      promisedAt?: Date | null;
+      keyTag?: string | null;
+      keyLocation?: string | null;
+    }>,
   ): Promise<void> {
     assertTenantAccess(
       this.deps.context,
@@ -232,6 +245,8 @@ export class WorkOrderRepository {
     const data: Record<string, unknown> = {};
     if (fields.customerConcern !== undefined) data.customerConcern = fields.customerConcern;
     if (fields.promisedAt !== undefined) data.promisedAt = fields.promisedAt;
+    if (fields.keyTag !== undefined) data.keyTag = fields.keyTag;
+    if (fields.keyLocation !== undefined) data.keyLocation = fields.keyLocation;
 
     if (Object.keys(data).length === 0) return;
 

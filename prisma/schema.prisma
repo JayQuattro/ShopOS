@@ -874,6 +874,8 @@ model WorkOrder {
   qcPassedAt            DateTime?      @map("qc_passed_at") @db.Timestamptz(6)
   vehicleStage      VehicleStage?      @map("vehicle_stage")
   bayLabel          String?            @map("bay_label") @db.VarChar(60)
+  keyTag            String?            @map("key_tag") @db.VarChar(40)
+  keyLocation       String?            @map("key_location") @db.VarChar(80)
   completedAt       DateTime?          @map("completed_at") @db.Timestamptz(6)
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)

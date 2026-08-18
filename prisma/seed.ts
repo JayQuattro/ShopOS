@@ -579,12 +579,14 @@ async function seedOperationalDemo(): Promise<void> {
     await seedFleetDemo();
     await seedRoadsideDemo();
     await seedTransportDemo();
+    await seedKeysDemo();
     console.info("Operational demo data already present — skipping.");
     return;
   }
   await seedFleetDemo();
   await seedRoadsideDemo();
   await seedTransportDemo();
+  await seedKeysDemo();
 
   // A 1×1 transparent PNG standing in for a rotor photo.
   const pngBytes = Buffer.from(
@@ -1397,6 +1399,18 @@ async function seedTransportDemo(): Promise<void> {
         completedAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
       },
     ],
+  });
+}
+
+/** Key tags for in-shop demo jobs; idempotent backfill. */
+async function seedKeysDemo(): Promise<void> {
+  await db.workOrder.updateMany({
+    where: { id: ids.demoWorkOrder, keyTag: null },
+    data: { keyTag: "K-101", keyLocation: "Hook 12" },
+  });
+  await db.workOrder.updateMany({
+    where: { id: ids.motorcycleWorkOrder, keyTag: null },
+    data: { keyTag: "K-103", keyLocation: "Lockbox B" },
   });
 }
 
