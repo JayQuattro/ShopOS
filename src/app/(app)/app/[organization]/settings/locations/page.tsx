@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { resolveRegionalSettings } from "@/modules/organizations/regional-settings";
 import { LocationRegionalRow } from "./location-regional-row";
+import { HolidaysManager } from "./holidays-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -57,22 +58,28 @@ export default async function LocationsSettingsPage({
       />
       <div className="grid gap-4">
         {locations.map((location, index) => (
-          <LocationRegionalRow
-            key={location.id}
-            organizationId={context.organizationId}
-            location={{
-              id: location.id,
-              name: location.name,
-              code: location.code,
-              timeZone: location.timeZone,
-              currency: location.currency,
-              locale: location.locale,
-              invoiceNumberPrefix: location.invoiceNumberPrefix,
-              phoneCountry: location.phoneCountry,
-            }}
-            effectiveCurrency={effective[index]!.currency}
-            effectiveLocale={effective[index]!.locale}
-          />
+          <div key={location.id} className="grid gap-4 md:grid-cols-2">
+            <LocationRegionalRow
+              organizationId={context.organizationId}
+              location={{
+                id: location.id,
+                name: location.name,
+                code: location.code,
+                timeZone: location.timeZone,
+                currency: location.currency,
+                locale: location.locale,
+                invoiceNumberPrefix: location.invoiceNumberPrefix,
+                phoneCountry: location.phoneCountry,
+              }}
+              effectiveCurrency={effective[index]!.currency}
+              effectiveLocale={effective[index]!.locale}
+            />
+            <HolidaysManager
+              organizationId={context.organizationId}
+              locationId={location.id}
+              locationName={location.name}
+            />
+          </div>
         ))}
       </div>
     </div>

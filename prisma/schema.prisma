@@ -321,6 +321,7 @@ model Organization {
   transportJobs       TransportJob[]
   cashDrawerSessions CashDrawerSession[]
   deposits            Deposit[]
+  locationHolidays    LocationHoliday[]
   refunds             Refund[]
   eInvoiceDocuments  EInvoiceDocument[]
   businessHours       LocationBusinessHour[]
@@ -400,6 +401,7 @@ model Location {
   auditEvents    AuditEvent[]
   serviceCalls   ServiceCall[]
   transportJobs  TransportJob[]
+  holidays      LocationHoliday[]
   cashDrawerSessions CashDrawerSession[]
   deposits         Deposit[]
 
@@ -1425,6 +1427,22 @@ model EInvoiceDocument {
 
   @@unique([organizationId, invoiceId], map: "e_invoice_documents_org_invoice_unique")
   @@map("e_invoice_documents")
+}
+
+model LocationHoliday {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  locationId     String   @map("location_id") @db.Uuid
+  date           DateTime @db.Date
+  name           String   @db.VarChar(120)
+  closesAllDay   Boolean  @default(true) @map("closes_all_day")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location       Location  @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, locationId, date], map: "location_holidays_org_loc_date_unique")
+  @@map("location_holidays")
 }
 
 model Deposit {
