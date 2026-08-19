@@ -56,6 +56,7 @@ export async function refundPayment(
       processorChargeId: true,
       refunds: { select: { amountMinor: true } },
       invoice: { select: { workOrderId: true, status: true } },
+      serviceCallId: true,
     },
   });
   if (!payment) throw new RefundFailed("payment_not_found");
@@ -94,7 +95,7 @@ export async function refundPayment(
         id: randomUUID(),
         organizationId: input.context.organizationId,
         locationId: payment.locationId,
-        invoiceId: payment.invoiceId,
+        ...(payment.invoiceId ? { invoiceId: payment.invoiceId } : {}),
         paymentId: payment.id,
         amountMinor: amount,
         currency: payment.currency,
@@ -105,11 +106,15 @@ export async function refundPayment(
       },
     });
 
-    // Paid is net of refunds; status follows the net position.
-    const invoice = await transaction.invoice.findUnique({
-      where: { id: payment.invoiceId },
-      select: { id: true, totalMinor: true, paidMinor: true },
-    });
+    // Paid is net of refunds; status follows the net position. Field
+    // collections (no invoice) have nothing to adjust — the refund stands
+    // alone against the payment and the till.
+    const invoice = payment.invoiceId
+      ? await transaction.invoice.findUnique({
+          where: { id: payment.invoiceId },
+          select: { id: true, totalMinor: true, paidMinor: true },
+        })
+      : null;
     if (invoice) {
       const newPaid = invoice.paidMinor - amount;
       await transaction.invoice.update({
@@ -122,17 +127,19 @@ export async function refundPayment(
       });
     }
 
-    await transaction.activityEvent.create({
-      data: {
-        id: randomUUID(),
-        organizationId: input.context.organizationId,
-        locationId: payment.locationId,
-        workOrderId: payment.invoice.workOrderId,
-        actorUserId: input.context.actorId,
-        eventType: "payment.refunded",
-        summary: `Refund of ${amount} minor units against a ${payment.method.toLowerCase()} payment${processorRefunded ? " (via processor)" : ""}.`,
-      },
-    });
+    if (payment.invoiceId) {
+      await transaction.activityEvent.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          locationId: payment.locationId,
+          workOrderId: payment.invoice!.workOrderId,
+          actorUserId: input.context.actorId,
+          eventType: "payment.refunded",
+          summary: `Refund of ${amount} minor units against a ${payment.method.toLowerCase()} payment${processorRefunded ? " (via processor)" : ""}.`,
+        },
+      });
+    }
 
     await transaction.auditEvent.create({
       data: {
