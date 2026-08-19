@@ -275,7 +275,9 @@ describe("recording stripe checkout completion (#185)", { skip: shouldSkip }, ()
       )?.paidMinor,
     ).toBe(200_00n);
 
-    // Full remaining balance settles the invoice.
+    // A second session for the same invoice (stale-link case) records the
+    // remaining balance and settles the invoice — clamped, idempotent per
+    // session id.
     const second = await service.recordStripeCheckoutCompleted(dbModule.db, seed.orgId, {
       id: "evt_2",
       data: {
@@ -283,14 +285,34 @@ describe("recording stripe checkout completion (#185)", { skip: shouldSkip }, ()
           id: "cs_test_session_2",
           client_reference_id: seed.invoiceId,
           payment_status: "paid",
-          amount_total: 200_00,
+          amount_total: 250_00,
           currency: "usd",
         },
       },
     });
-    // The invoice's link ref is the first session; a different session id
-    // does not match the invoice and is ignored.
-    expect(second).toMatchObject({ kind: "ignored" });
+    expect(second).toMatchObject({ kind: "recorded", amountMinor: 100_00 });
+    const settled = await dbModule.db.invoice.findUnique({
+      where: { id: seed.invoiceId },
+      select: { status: true, paidMinor: true },
+    });
+    expect(settled?.status).toBe("PAID");
+    expect(settled?.paidMinor).toBe(300_00n);
+
+    // Once settled, further events for the same invoice are a no-op.
+    const third = await service.recordStripeCheckoutCompleted(dbModule.db, seed.orgId, {
+      id: "evt_3",
+      data: {
+        object: {
+          id: "cs_test_session_3",
+          client_reference_id: seed.invoiceId,
+          payment_status: "paid",
+          amount_total: 50_00,
+          currency: "usd",
+        },
+      },
+    });
+    expect(third).toMatchObject({ kind: "ignored", reason: "already_settled" });
+    expect(await dbModule.db.payment.count({ where: { invoiceId: seed.invoiceId } })).toBe(2);
   });
 
   it("ignores unpaid sessions, wrong-org invoices, and unpayable invoices", async () => {

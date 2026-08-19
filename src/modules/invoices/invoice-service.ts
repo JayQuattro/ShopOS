@@ -21,6 +21,7 @@ export class InvoiceFailed extends Error {
       | "invoice_not_issued"
       | "invoice_already_paid"
       | "invoice_voided"
+      | "invalid_tenders"
       | "payment_exceeds_balance"
       | "change_order_pending",
   ) {
@@ -431,6 +432,127 @@ export async function recordPayment(
       }
       return result;
     });
+}
+
+/**
+ * Records a split-tender payment — several methods settling one balance in a
+ * single atomic transaction (e.g. $150 card + $50 cash at pickup). Same rules
+ * as single payments: partial allowed, the combined tenders may not exceed
+ * the balance, and full settlement closes the work order.
+ */
+export async function recordPaymentTenders(
+  input: InvoiceServiceInput & {
+    invoiceId: string;
+    tenders: ReadonlyArray<
+      Readonly<{ amountMinor: number; method: PaymentMethod; reference?: string }>
+    >;
+    receivedAt?: Date;
+  },
+): Promise<Readonly<{ paymentIds: string[]; invoiceStatus: string }>> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "payments.record",
+  );
+
+  if (input.tenders.length === 0 || input.tenders.length > 10) {
+    throw new InvoiceFailed("invalid_tenders");
+  }
+  for (const tender of input.tenders) {
+    if (!Number.isSafeInteger(tender.amountMinor) || tender.amountMinor <= 0) {
+      throw new InvoiceFailed("invalid_tenders");
+    }
+  }
+
+  const result = await input.db.$transaction(async (transaction) => {
+    const invoice = await transaction.invoice.findFirst({
+      where: { id: input.invoiceId, organizationId: input.context.organizationId },
+      select: {
+        id: true,
+        totalMinor: true,
+        paidMinor: true,
+        status: true,
+        locationId: true,
+        currency: true,
+        workOrderId: true,
+      },
+    });
+    if (!invoice) throw new InvoiceFailed("invoice_not_found");
+    if (invoice.status === "DRAFT") throw new InvoiceFailed("invoice_not_issued");
+    if (invoice.status === "VOID") throw new InvoiceFailed("invoice_voided");
+
+    const balance = invoice.totalMinor - invoice.paidMinor;
+    const total = BigInt(input.tenders.reduce((sum, tender) => sum + tender.amountMinor, 0));
+    if (total > balance) {
+      throw new InvoiceFailed("payment_exceeds_balance");
+    }
+
+    const paymentIds: string[] = [];
+    for (const tender of input.tenders) {
+      const payment = await transaction.payment.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          locationId: invoice.locationId,
+          invoiceId: invoice.id,
+          amountMinor: BigInt(tender.amountMinor),
+          currency: invoice.currency,
+          method: tender.method,
+          reference: tender.reference ?? null,
+          receivedAt: input.receivedAt ?? new Date(),
+          recordedByUserId: input.context.actorId,
+        },
+      });
+      paymentIds.push(payment.id);
+
+      await transaction.activityEvent.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          locationId: invoice.locationId,
+          workOrderId: invoice.workOrderId,
+          actorUserId: input.context.actorId,
+          eventType: "payment.recorded",
+          summary: `Payment of ${tender.amountMinor} minor units recorded via ${tender.method}.`,
+        },
+      });
+
+      await transaction.outboxEvent.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          eventType: "payment.recorded",
+          aggregateType: "payment",
+          aggregateId: payment.id,
+          payload: {
+            invoiceId: invoice.id,
+            workOrderId: invoice.workOrderId,
+            locationId: invoice.locationId,
+          },
+        },
+      });
+    }
+
+    const newPaid = invoice.paidMinor + total;
+    const newStatus = newPaid >= invoice.totalMinor ? "PAID" : "PARTIALLY_PAID";
+    await transaction.invoice.update({
+      where: { id: invoice.id },
+      data: { paidMinor: newPaid, status: newStatus },
+    });
+
+    return { paymentIds, invoiceStatus: newStatus, workOrderId: invoice.workOrderId };
+  });
+
+  if (result.invoiceStatus === "PAID") {
+    await transitionStatus({
+      db: input.db,
+      context: input.context,
+      workOrderId: result.workOrderId,
+      targetStatus: "CLOSED",
+    }).catch(() => undefined);
+  }
+
+  return result;
 }
 
 async function generateInvoiceNumber(

@@ -59,23 +59,39 @@ export async function recordStripeCheckoutCompleted(
       })
     ).id;
     // Scoped from the first query: the organization comes from the verified
-    // endpoint path, never from the payload.
-    const invoice = await transaction.invoice.findFirst({
-      where: {
-        id: invoiceRef,
-        organizationId,
-        paymentLinkRef: session.id,
-      },
-      select: {
-        id: true,
-        status: true,
-        currency: true,
-        totalMinor: true,
-        paidMinor: true,
-        locationId: true,
-        workOrderId: true,
-      },
-    });
+    // endpoint path, never from the payload. Preferred match is the stored
+    // link session; the fallback covers stale links the customer paid after
+    // a newer link was issued — still org-scoped, still clamped to the
+    // balance, and still idempotent on the provider reference.
+    const invoice =
+      (await transaction.invoice.findFirst({
+        where: {
+          id: invoiceRef,
+          organizationId,
+          paymentLinkRef: session.id,
+        },
+        select: {
+          id: true,
+          status: true,
+          currency: true,
+          totalMinor: true,
+          paidMinor: true,
+          locationId: true,
+          workOrderId: true,
+        },
+      })) ??
+      (await transaction.invoice.findFirst({
+        where: { id: invoiceRef, organizationId },
+        select: {
+          id: true,
+          status: true,
+          currency: true,
+          totalMinor: true,
+          paidMinor: true,
+          locationId: true,
+          workOrderId: true,
+        },
+      }));
     if (!invoice) return { kind: "ignored", reason: "invoice_not_found" };
     if (invoice.status === "DRAFT" || invoice.status === "VOID") {
       return { kind: "ignored", reason: "invoice_not_payable" };

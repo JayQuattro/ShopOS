@@ -28,10 +28,11 @@ export function InvoicePanel({
   const [invoice, setInvoice] = useState(initialInvoice);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [paymentUrl, setPaymentUrl] = useState(initialInvoice.paymentUrl);
   const [linkPending, setLinkPending] = useState(false);
+  const [tenders, setTenders] = useState<Array<{ amount: string; method: string }>>([
+    { amount: "", method: "CASH" },
+  ]);
 
   async function createInvoice() {
     setPending(true);
@@ -114,25 +115,36 @@ export function InvoicePanel({
   }
 
   async function recordPayment() {
-    if (!invoice.id || !paymentAmount) return;
+    if (!invoice.id) return;
+    const parsed = tenders
+      .map((tender) => ({
+        amountMinor: Math.round(Number(tender.amount.trim().replace(/[$,]/g, "")) * 100),
+        method: tender.method,
+      }))
+      .filter((tender) => Number.isFinite(tender.amountMinor) && tender.amountMinor > 0);
+    if (parsed.length === 0) {
+      setError("Enter at least one tender amount, like 150.00");
+      return;
+    }
     setPending(true);
     setError(null);
     try {
       const res = await fetch(`/api/invoices/${invoice.id}/payments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amountMinor: parseInt(paymentAmount, 10),
-          method: paymentMethod,
-        }),
+        body: JSON.stringify({ tenders: parsed }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? "Failed");
+        const messages: Record<string, string> = {
+          payment_exceeds_balance: "The tenders add up to more than the balance.",
+          invalid_tenders: "Check the tender amounts.",
+        };
+        throw new Error(messages[body.error ?? ""] ?? "Failed");
       }
       const data = await res.json();
       setInvoice((prev) => ({ ...prev, status: data.invoiceStatus }));
-      setPaymentAmount("");
+      setTenders([{ amount: "", method: "CASH" }]);
       window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not record payment.");
@@ -241,28 +253,65 @@ export function InvoicePanel({
       ) : null}
 
       {(invoice.status === "ISSUED" || invoice.status === "PARTIALLY_PAID") && balance > 0 ? (
-        <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
-          <Input
-            type="number"
-            placeholder="Amount (¢)"
-            value={paymentAmount}
-            onChange={(e) => setPaymentAmount(e.target.value)}
-            className="w-32"
-          />
-          <select
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
-            className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
-          >
-            <option value="CASH">Cash</option>
-            <option value="CARD_EXTERNAL">Card</option>
-            <option value="CHECK">Check</option>
-            <option value="BANK_TRANSFER">Bank transfer</option>
-            <option value="OTHER">Other</option>
-          </select>
-          <Button size="sm" onClick={recordPayment} disabled={pending || !paymentAmount}>
-            Record payment
-          </Button>
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          {tenders.map((tender, index) => (
+            <div key={index} className="flex flex-wrap items-center gap-2">
+              <Input
+                inputMode="decimal"
+                placeholder={index === 0 ? "Amount (e.g. 150.00)" : "Amount"}
+                value={tender.amount}
+                onChange={(e) =>
+                  setTenders((prev) =>
+                    prev.map((t, i) => (i === index ? { ...t, amount: e.target.value } : t)),
+                  )
+                }
+                className="w-32 font-mono"
+                aria-label={`Tender ${index + 1} amount`}
+              />
+              <select
+                value={tender.method}
+                onChange={(e) =>
+                  setTenders((prev) =>
+                    prev.map((t, i) => (i === index ? { ...t, method: e.target.value } : t)),
+                  )
+                }
+                aria-label={`Tender ${index + 1} method`}
+                className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
+              >
+                <option value="CASH">Cash</option>
+                <option value="CARD_EXTERNAL">Card</option>
+                <option value="CHECK">Check</option>
+                <option value="BANK_TRANSFER">Bank transfer</option>
+                <option value="OTHER">Other</option>
+              </select>
+              {tenders.length > 1 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTenders((prev) => prev.filter((_, i) => i !== index))}
+                  aria-label={`Remove tender ${index + 1}`}
+                >
+                  Remove
+                </Button>
+              ) : null}
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setTenders((prev) => [...prev, { amount: "", method: "CARD_EXTERNAL" }])
+              }
+            >
+              Split — another method
+            </Button>
+            <Button size="sm" onClick={recordPayment} disabled={pending}>
+              Record payment{tenders.length > 1 ? ` (${tenders.length} tenders)` : ""}
+            </Button>
+          </div>
         </div>
       ) : null}
     </div>
