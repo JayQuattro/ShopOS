@@ -21,6 +21,7 @@ import {
   CreditCard,
   MapPin,
   KanbanSquare,
+  Sun,
   Truck,
   Users,
   Wallet,
@@ -62,6 +63,12 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
     {
       heading: "Today",
       items: [
+        {
+          label: "My day",
+          href: `${baseHref}/my-day`,
+          icon: Sun,
+          permission: "work_orders.read",
+        },
         {
           label: "Work board",
           href: `${baseHref}/board`,
