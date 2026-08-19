@@ -39,12 +39,33 @@ export async function GET(
         lines: data.lines,
         // Renderable evidence only: non-image documents are not exposed.
         attachments: attachments
-          .filter((attachment) => attachment.contentType.startsWith("image/"))
+          .filter(
+            (attachment) =>
+              attachment.contentType.startsWith("image/") && !attachment.estimateLineId,
+          )
           .map((attachment) => ({
             id: attachment.id,
             fileName: attachment.fileName,
             contentType: attachment.contentType,
           })),
+        // Line-anchored photos travel with their lines: the customer sees
+        // the scored rotor next to that line's approve button.
+        linePhotos: attachments
+          .filter(
+            (attachment) =>
+              attachment.contentType.startsWith("image/") && attachment.estimateLineId,
+          )
+          .reduce<Record<string, Array<{ id: string; fileName: string }>>>(
+            (grouped, attachment) => {
+              const key = attachment.estimateLineId!;
+              grouped[key] = [
+                ...(grouped[key] ?? []),
+                { id: attachment.id, fileName: attachment.fileName },
+              ];
+              return grouped;
+            },
+            {},
+          ),
       },
       { headers: { "Cache-Control": "no-store" } },
     );

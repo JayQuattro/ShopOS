@@ -51,6 +51,9 @@ export async function POST(
   const itemField = formData.get("inspectionItemId");
   const inspectionItemId =
     typeof itemField === "string" && itemField.length > 0 ? itemField : undefined;
+  const lineField = formData.get("estimateLineId");
+  const estimateLineId =
+    typeof lineField === "string" && lineField.length > 0 ? lineField : undefined;
 
   const body = new Uint8Array(await file.arrayBuffer());
 
@@ -63,6 +66,7 @@ export async function POST(
       workOrderId: id,
       ...(estimateRevisionId ? { estimateRevisionId } : {}),
       ...(inspectionItemId ? { inspectionItemId } : {}),
+      ...(estimateLineId ? { estimateLineId } : {}),
       fileName: file.name,
       contentType: file.type || "application/octet-stream",
       body,

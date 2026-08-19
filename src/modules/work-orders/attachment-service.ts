@@ -26,6 +26,7 @@ export type AttachmentSummary = Readonly<{
   sizeBytes: number;
   uploadedByDisplayName: string | null;
   createdAt: Date;
+  estimateLineId: string | null;
 }>;
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
@@ -69,6 +70,8 @@ export async function listAttachments(
       sizeBytes: true,
       uploadedBy: { select: { displayName: true } },
       createdAt: true,
+      estimateLineId: true,
+      inspectionItemId: true,
     },
   });
 
@@ -77,6 +80,8 @@ export async function listAttachments(
     fileName: a.fileName,
     contentType: a.contentType,
     sizeBytes: a.sizeBytes,
+    estimateLineId: a.estimateLineId,
+    inspectionItemId: a.inspectionItemId,
     uploadedByDisplayName: a.uploadedBy?.displayName ?? null,
     createdAt: a.createdAt,
   }));
@@ -91,6 +96,8 @@ export async function uploadAttachment(
     estimateRevisionId?: string;
     /** When set, the file is inspection media for one checklist row. */
     inspectionItemId?: string;
+    /** When set, the photo anchors to one estimate line (approval UX). */
+    estimateLineId?: string;
     fileName: string;
     contentType: string;
     body: Uint8Array;
@@ -138,6 +145,20 @@ export async function uploadAttachment(
     if (!item) throw new AttachmentOperationFailed("revision_not_found");
   }
 
+  // A line-scoped photo must reference a line of this work order in the
+  // same tenant (revision linkage follows the line's own revision).
+  if (input.estimateLineId) {
+    const line = await input.db.estimateLine.findFirst({
+      where: {
+        id: input.estimateLineId,
+        organizationId: input.context.organizationId,
+        revision: { workOrderId: input.workOrderId },
+      },
+      select: { id: true },
+    });
+    if (!line) throw new AttachmentOperationFailed("revision_not_found");
+  }
+
   // A document-scoped upload must reference an estimate revision of this
   // work order in the same tenant.
   if (input.estimateRevisionId) {
@@ -169,6 +190,7 @@ export async function uploadAttachment(
       workOrderId: input.workOrderId,
       estimateRevisionId: input.estimateRevisionId ?? null,
       inspectionItemId: input.inspectionItemId ?? null,
+      estimateLineId: input.estimateLineId ?? null,
       objectKey,
       fileName: input.fileName,
       contentType: input.contentType,
@@ -318,11 +340,13 @@ export async function listAttachmentsForAuthorizationLink(
       contentType: true,
       sizeBytes: true,
       createdAt: true,
+      estimateLineId: true,
     },
   });
 
   return attachments.map((a) => ({
     id: a.id,
+    estimateLineId: a.estimateLineId,
     fileName: a.fileName,
     contentType: a.contentType,
     sizeBytes: a.sizeBytes,
@@ -404,5 +428,40 @@ export async function downloadAttachmentForTrackerLink(
     objectKey: attachment.objectKey,
   });
 
+  return { fileName: attachment.fileName, contentType: attachment.contentType, body };
+}
+
+/**
+ * Public, inspection-token-scoped media download: a valid share token
+ * unlocks only media attached to that inspection's items.
+ */
+export async function downloadAttachmentForInspectionToken(
+  db: PrismaClient,
+  input: Readonly<{ token: string; attachmentId: string }>,
+): Promise<Readonly<{ fileName: string; contentType: string; body: Uint8Array }>> {
+  const inspection = await db.inspection.findFirst({
+    where: { sharedToken: input.token },
+    select: { organizationId: true, items: { select: { id: true } } },
+  });
+  if (!inspection) throw new AttachmentOperationFailed("attachment_not_found");
+
+  const itemIds = inspection.items.map((item) => item.id);
+  const attachment = await db.workOrderAttachment.findFirst({
+    where: {
+      id: input.attachmentId,
+      organizationId: inspection.organizationId,
+      inspectionItemId: { in: itemIds },
+    },
+    select: { objectKey: true, fileName: true, contentType: true },
+  });
+  if (!attachment) throw new AttachmentOperationFailed("attachment_not_found");
+
+  const storage = await resolveStorageProvider(db);
+  if (!storage) throw new AttachmentOperationFailed("storage_not_configured");
+
+  const body = await storage.get({
+    organizationId: inspection.organizationId,
+    objectKey: attachment.objectKey,
+  });
   return { fileName: attachment.fileName, contentType: attachment.contentType, body };
 }
