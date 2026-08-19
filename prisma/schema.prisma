@@ -1269,6 +1269,7 @@ model ServiceCall {
   assignedTechnician        User?             @relation("ServiceCallTechnician", fields: [assignedTechnicianUserId], references: [id], onDelete: Restrict)
   fleetAsset                Asset?            @relation(fields: [organizationId, fleetAssetId], references: [organizationId, id], onDelete: Restrict)
   workOrder                 WorkOrder?        @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict)
+  payments                  Payment[]
 
   @@unique([organizationId, id], map: "service_calls_org_id_unique")
   @@index([organizationId, locationId, status], map: "service_calls_org_location_status_idx")
@@ -1373,7 +1374,7 @@ model Refund {
   id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId   String    @map("organization_id") @db.Uuid
   locationId       String    @map("location_id") @db.Uuid
-  invoiceId        String    @map("invoice_id") @db.Uuid
+  invoiceId        String?   @map("invoice_id") @db.Uuid
   paymentId        String    @map("payment_id") @db.Uuid
   amountMinor      BigInt    @map("amount_minor")
   currency         String    @db.VarChar(3)
@@ -1384,7 +1385,7 @@ model Refund {
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   location         Location  @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
-  invoice          Invoice   @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+  invoice          Invoice?  @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
   payment          Payment   @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Restrict)
   recordedBy       User      @relation("RefundRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict)
 
@@ -1790,7 +1791,8 @@ model Payment {
   id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId   String        @map("organization_id") @db.Uuid
   locationId       String        @map("location_id") @db.Uuid
-  invoiceId        String        @map("invoice_id") @db.Uuid
+  invoiceId        String?       @map("invoice_id") @db.Uuid
+  serviceCallId    String?       @map("service_call_id") @db.Uuid
   amountMinor      BigInt        @map("amount_minor")
   currency         String        @db.VarChar(3)
   method           PaymentMethod
@@ -1802,13 +1804,15 @@ model Payment {
   createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   location         Location      @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
-  invoice          Invoice       @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+  invoice          Invoice?      @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+  serviceCall      ServiceCall?  @relation(fields: [organizationId, serviceCallId], references: [organizationId, id], onDelete: Restrict)
   refunds          Refund[]
   drawerSession    CashDrawerSession? @relation(fields: [organizationId, drawerSessionId], references: [organizationId, id], onDelete: Restrict)
   recordedBy       User          @relation("PaymentRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id], map: "payments_org_id_unique")
   @@index([organizationId, invoiceId], map: "payments_org_invoice_idx")
+  @@index([organizationId, serviceCallId], map: "payments_org_service_call_idx")
   @@map("payments")
 }
 

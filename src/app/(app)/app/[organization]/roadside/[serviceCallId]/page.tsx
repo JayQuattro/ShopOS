@@ -13,6 +13,7 @@ import {
   SERVICE_CALL_KIND_LABELS,
 } from "@/modules/service-calls/service-call-service";
 import { ServiceCallControls } from "./controls";
+import { FieldPaymentCard } from "./field-payment-card";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export default async function ServiceCallDetailPage({
   if (!call) notFound();
 
   const canWrite = context.permissions.has("work_orders.write");
+  const canCollect = context.permissions.has("payments.record");
   const [members, assets] = canWrite
     ? await Promise.all([
         db.organizationMembership.findMany({
@@ -186,14 +188,17 @@ export default async function ServiceCallDetailPage({
       </div>
 
       {canWrite ? (
-        <ServiceCallControls
-          orgId={context.organizationId}
-          callId={call.id}
-          status={call.status}
-          technicians={technicians}
-          fleetAssets={fleetAssets}
-          converted={call.workOrderId !== null}
-        />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ServiceCallControls
+            orgId={context.organizationId}
+            callId={call.id}
+            status={call.status}
+            technicians={technicians}
+            fleetAssets={fleetAssets}
+            converted={call.workOrderId !== null}
+          />
+          {canCollect ? <FieldPaymentCard orgId={context.organizationId} callId={call.id} /> : null}
+        </div>
       ) : null}
     </div>
   );

@@ -253,7 +253,7 @@ export async function buildCustomerStatement(
     ...refunds.map<Draft>((refund) => ({
       kind: "refund",
       date: refund.refundedAt,
-      label: `Refund on ${refund.invoice.number}${refund.reason ? ` — ${refund.reason}` : ""}`,
+      label: `Refund on ${refund.invoice!.number}${refund.reason ? ` — ${refund.reason}` : ""}`,
       reference: null,
       // A refund adds back to the balance, like a charge in reverse.
       amountMinor: refund.amountMinor,
@@ -270,7 +270,7 @@ export async function buildCustomerStatement(
     ...payments.map<Draft>((payment) => ({
       kind: "payment",
       date: payment.receivedAt,
-      label: `Payment (${payment.method.toLowerCase()}) on ${payment.invoice.number}`,
+      label: `Payment (${payment.method.toLowerCase()}) on ${payment.invoice!.number}`,
       reference: payment.reference,
       amountMinor: -payment.amountMinor,
       currency: payment.currency,
