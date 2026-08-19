@@ -1083,6 +1083,7 @@ model TaxRate {
   organizationId   String   @map("organization_id") @db.Uuid
   name             String   @db.VarChar(120)
   rateBasisPoints  Int      @map("rate_basis_points")
+  stackGroup       String?  @map("stack_group") @db.VarChar(60)
   active           Boolean  @default(true)
   sortOrder        Int      @default(0) @map("sort_order")
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1671,6 +1672,7 @@ model EstimateLine {
   taxRateBasisPoints     Int                     @map("tax_rate_basis_points")
   taxMinor               BigInt                  @map("tax_minor")
   taxInclusive           Boolean                 @default(false) @map("tax_inclusive")
+  taxComponents          Json                    @default("[]") @map("tax_components")
   totalMinor             BigInt                  @map("total_minor")
   authorizationRequired  Boolean                 @default(true) @map("authorization_required")
   position               Int
@@ -1785,6 +1787,7 @@ model InvoiceLine {
   taxable              Boolean
   taxRateBasisPoints   Int            @map("tax_rate_basis_points")
   taxMinor             BigInt         @map("tax_minor")
+  taxComponents        Json           @default("[]") @map("tax_components")
   taxInclusive         Boolean        @default(false) @map("tax_inclusive")
   totalMinor           BigInt         @map("total_minor")
   position             Int

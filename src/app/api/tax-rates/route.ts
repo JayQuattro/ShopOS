@@ -32,6 +32,7 @@ const bodySchema = z.discriminatedUnion("action", [
     action: z.literal("create"),
     name: z.string().trim().min(1).max(120),
     rateBasisPoints: z.number().int().min(0).max(10000),
+    stackGroup: z.string().trim().max(60).optional(),
   }),
   z.object({ action: z.literal("deactivate"), taxRateId: z.string().uuid() }),
 ]);
@@ -57,6 +58,7 @@ export async function POST(request: Request): Promise<Response> {
         context: tenantContext,
         name: parsed.data.name,
         rateBasisPoints: parsed.data.rateBasisPoints,
+        ...(parsed.data.stackGroup ? { stackGroup: parsed.data.stackGroup } : {}),
       });
       return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
     }

@@ -60,7 +60,13 @@ export default async function InvoicePrintPage({
       },
       lines: {
         orderBy: { position: "asc" },
-        select: { description: true, quantityMilli: true, unitPriceMinor: true, totalMinor: true },
+        select: {
+          description: true,
+          quantityMilli: true,
+          unitPriceMinor: true,
+          totalMinor: true,
+          taxComponents: true,
+        },
       },
       payments: {
         orderBy: { receivedAt: "asc" },
@@ -145,6 +151,26 @@ export default async function InvoicePrintPage({
                 Tax{invoice.taxInclusive ? " (included in total)" : ""}
               </span>
               <span className="tabular-nums">{money(invoice.taxMinor)}</span>
+              {(() => {
+                const components = invoice.lines
+                  .flatMap((line) =>
+                    Array.isArray(line.taxComponents)
+                      ? (line.taxComponents as Array<{ name: string; amountMinor: number }>)
+                      : [],
+                  )
+                  .reduce<Array<[string, number]>>((acc, component) => {
+                    const existing = acc.find(([name]) => name === component.name);
+                    if (existing) existing[1] += component.amountMinor;
+                    else acc.push([component.name, component.amountMinor]);
+                    return acc;
+                  }, []);
+                if (components.length < 2) return null;
+                return (
+                  <p className="col-span-2 text-right text-xs text-neutral-500">
+                    {components.map(([name, amount]) => `${name}: ${money(amount)}`).join(" · ")}
+                  </p>
+                );
+              })()}
             </div>
             <div className="flex justify-between border-t border-neutral-900 pt-1 font-bold">
               <span>Total</span>

@@ -12,6 +12,7 @@ type TaxRate = {
   id: string;
   name: string;
   rateBasisPoints: number;
+  stackGroup: string | null;
   active: boolean;
 };
 
@@ -22,6 +23,7 @@ export function TaxesManager({ canManage }: { canManage: boolean }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [stackGroup, setStackGroup] = useState("");
   const [percent, setPercent] = useState("");
 
   async function load() {
@@ -63,7 +65,12 @@ export function TaxesManager({ canManage }: { canManage: boolean }) {
       const res = await fetch("/api/tax-rates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", name: name.trim(), rateBasisPoints: bps }),
+        body: JSON.stringify({
+          action: "create",
+          name: name.trim(),
+          rateBasisPoints: bps,
+          ...(stackGroup.trim() ? { stackGroup: stackGroup.trim() } : {}),
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -74,6 +81,7 @@ export function TaxesManager({ canManage }: { canManage: boolean }) {
         throw new Error(messages[data.error] ?? "Could not create the rate.");
       }
       setName("");
+      setStackGroup("");
       setPercent("");
       await load();
     } catch (e) {
@@ -132,6 +140,16 @@ export function TaxesManager({ canManage }: { canManage: boolean }) {
               required
               disabled={pending}
               className="w-24"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Stack group (optional)
+            <Input
+              value={stackGroup}
+              onChange={(e) => setStackGroup(e.target.value)}
+              placeholder="canada — rates sharing a group apply together"
+              disabled={pending}
+              className="w-64"
             />
           </label>
           <Button type="submit" size="sm" disabled={pending || !name.trim() || percent === ""}>

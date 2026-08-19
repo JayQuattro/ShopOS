@@ -18,6 +18,7 @@ const addLineSchema = z.object({
   discountMinor: z.number().int().min(0).default(0),
   taxable: z.boolean(),
   taxRateBasisPoints: z.number().int().min(0),
+  taxRateId: z.string().uuid().optional(),
   position: z.number().int().min(1),
 });
 
@@ -93,6 +94,7 @@ export async function POST(
       discountMinor: parsed.data.discountMinor,
       taxable: parsed.data.taxable,
       taxRateBasisPoints: parsed.data.taxRateBasisPoints,
+      ...(parsed.data.taxRateId ? { taxRateId: parsed.data.taxRateId } : {}),
       position: parsed.data.position,
     });
     return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });

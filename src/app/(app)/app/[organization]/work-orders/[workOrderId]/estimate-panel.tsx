@@ -257,7 +257,7 @@ export function EstimatePanel({
   const [lineDesc, setLineDesc] = useState("");
   const [lineQty, setLineQty] = useState("1000");
   const [linePrice, setLinePrice] = useState("0");
-  const [lineTaxRate, setLineTaxRate] = useState("0");
+  const [lineTaxRate, setLineTaxRate] = useState("0"); // rate id, "0" (none), or "custom"
   const [lineCredit, setLineCredit] = useState(false);
 
   async function addLine() {
@@ -276,9 +276,18 @@ export function EstimatePanel({
           quantityMilli: parseInt(lineQty, 10) || 1000,
           unitPriceMinor: unitPrice,
           discountMinor: 0,
-          taxable: !lineCredit && parseInt(lineTaxRate, 10) > 0,
-          taxRateBasisPoints:
-            lineCredit || lineTaxRate === "custom" ? 0 : parseInt(lineTaxRate, 10) || 0,
+          taxable: !lineCredit && lineTaxRate !== "0" && lineTaxRate !== "custom",
+          // Named rates are sent by id so stacks (GST + PST) resolve server-side.
+          ...(lineTaxRate !== "0" && lineTaxRate !== "custom"
+            ? {
+                taxRateId: lineTaxRate,
+                taxRateBasisPoints:
+                  taxRates.find((rate) => rate.id === lineTaxRate)?.rateBasisPoints ?? 0,
+              }
+            : {
+                taxRateBasisPoints:
+                  lineCredit || lineTaxRate === "custom" ? parseInt(lineTaxRate, 10) || 0 : 0,
+              }),
           position: lines.length + 1,
         }),
       });
@@ -433,7 +442,7 @@ export function EstimatePanel({
                 >
                   <option value="0">No tax</option>
                   {taxRates.map((rate) => (
-                    <option key={rate.id} value={String(rate.rateBasisPoints)}>
+                    <option key={rate.id} value={rate.id}>
                       {rate.name} ({(rate.rateBasisPoints / 100).toFixed(3)}%)
                     </option>
                   ))}
