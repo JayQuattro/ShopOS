@@ -6,6 +6,7 @@ import { CustomerRepository } from "@/modules/customers/customer-repository";
 import { TenantContextNotResolved } from "@/modules/tenancy/resolve-tenant-context";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { TenantAccessDenied } from "@/modules/tenancy/policy";
+import { parsePhoneInput } from "@/i18n/phone-input";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,21 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const context = await getRequestContext();
     const repo = new CustomerRepository({ db, context });
-    const customer = await repo.create(stripUndefined(parsed.data) as CreateCustomerInput);
+    const input = stripUndefined(parsed.data);
+    let primaryPhone = input.primaryPhone as string | undefined;
+    if (primaryPhone) {
+      const regional = await db.organization.findUnique({
+        where: { id: context.organizationId },
+        select: { defaultPhoneCountry: true },
+      });
+      primaryPhone =
+        parsePhoneInput(primaryPhone, regional?.defaultPhoneCountry ?? null)?.e164 ??
+        primaryPhone.trim();
+    }
+    const customer = await repo.create({
+      ...input,
+      ...(primaryPhone ? { primaryPhone } : {}),
+    } as CreateCustomerInput);
     return Response.json(
       { customer },
       {

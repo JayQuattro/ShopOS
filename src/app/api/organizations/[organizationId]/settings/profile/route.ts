@@ -42,6 +42,7 @@ const updateSchema = z.object({
   defaultCurrency: z.string().trim().length(3).optional(),
   defaultLocale: z.string().trim().max(12).nullable().optional(),
   taxId: z.string().trim().max(32).nullable().optional(),
+  defaultPhoneCountry: z.string().trim().length(2).nullable().optional(),
 });
 
 export async function PUT(

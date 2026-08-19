@@ -14,6 +14,7 @@ type LocationRegional = {
   currency: string | null;
   locale: string | null;
   invoiceNumberPrefix: string | null;
+  phoneCountry: string | null;
 };
 
 /** One location: identity plus currency/locale overrides with live effect. */
@@ -31,6 +32,7 @@ export function LocationRegionalRow({
   const [currency, setCurrency] = useState(location.currency ?? "");
   const [locale, setLocale] = useState(location.locale ?? "");
   const [invoicePrefix, setInvoicePrefix] = useState(location.invoiceNumberPrefix ?? "");
+  const [phoneCountry, setPhoneCountry] = useState(location.phoneCountry ?? "");
   const [effective, setEffective] = useState({
     currency: effectiveCurrency,
     locale: effectiveLocale,
@@ -42,7 +44,8 @@ export function LocationRegionalRow({
   const dirty =
     currency !== (location.currency ?? "") ||
     locale !== (location.locale ?? "") ||
-    invoicePrefix !== (location.invoiceNumberPrefix ?? "");
+    invoicePrefix !== (location.invoiceNumberPrefix ?? "") ||
+    phoneCountry !== (location.phoneCountry ?? "");
 
   async function save() {
     setPending(true);
@@ -58,6 +61,7 @@ export function LocationRegionalRow({
             currency: currency || null,
             locale: locale || null,
             invoiceNumberPrefix: invoicePrefix || null,
+            phoneCountry: phoneCountry || null,
           }),
         },
       );
@@ -122,6 +126,17 @@ export function LocationRegionalRow({
               disabled={pending}
               className="h-9 w-32 font-mono text-sm"
               aria-label={`Invoice series prefix for ${location.name}`}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Phone country
+            <Input
+              value={phoneCountry}
+              onChange={(e) => setPhoneCountry(e.target.value.toUpperCase())}
+              placeholder="inherit"
+              disabled={pending}
+              className="h-9 w-24 font-mono text-sm"
+              aria-label={`Phone country for ${location.name}`}
             />
           </label>
           {dirty ? (

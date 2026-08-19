@@ -35,6 +35,7 @@ export type ShopProfile = Readonly<{
   defaultCurrency: string;
   defaultLocale: string | null;
   taxId: string | null;
+  defaultPhoneCountry: string | null;
 }>;
 
 /**
@@ -63,6 +64,7 @@ export async function getShopProfile(
       defaultCurrency: true,
       defaultLocale: true,
       taxId: true,
+      defaultPhoneCountry: true,
     },
   });
   if (!organization) throw new OrgProfileFailed("organization_not_found");
@@ -93,6 +95,7 @@ export async function updateShopProfile(
     defaultCurrency?: string;
     defaultLocale?: string | null;
     taxId?: string | null;
+    defaultPhoneCountry?: string | null;
   }>,
 ): Promise<void> {
   assertTenantAccess(context, { organizationId: context.organizationId }, "organizations.manage");
@@ -116,6 +119,10 @@ export async function updateShopProfile(
       : undefined;
   if (defaultCurrency !== undefined && !/^[A-Z]{3}$/.test(defaultCurrency)) {
     throw new OrgProfileFailed("invalid_currency");
+  }
+  const defaultPhoneCountry = clean(profile.defaultPhoneCountry)?.toUpperCase() ?? null;
+  if (defaultPhoneCountry && !/^[A-Z]{2}$/.test(defaultPhoneCountry)) {
+    throw new OrgProfileFailed("invalid_country");
   }
   const taxId = clean(profile.taxId);
   if (taxId && !/^[A-Za-z0-9.\-/ ]{4,32}$/.test(taxId)) {
@@ -147,6 +154,7 @@ export async function updateShopProfile(
         defaultCurrency: true,
         defaultLocale: true,
         taxId: true,
+        defaultPhoneCountry: true,
       },
     });
     if (!before) throw new OrgProfileFailed("organization_not_found");
@@ -165,6 +173,7 @@ export async function updateShopProfile(
       ...(defaultCurrency !== undefined ? { defaultCurrency } : {}),
       defaultLocale,
       taxId,
+      defaultPhoneCountry,
     };
 
     await transaction.organization.update({

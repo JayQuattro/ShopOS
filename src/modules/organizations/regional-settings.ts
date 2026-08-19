@@ -15,6 +15,7 @@ export class RegionalSettingsFailed extends Error {
 export type RegionalSettings = Readonly<{
   currency: string;
   locale: string;
+  phoneCountry: string | null;
 }>;
 
 const DEFAULT_CURRENCY = "USD";
@@ -49,25 +50,28 @@ export async function resolveRegionalSettings(
 ): Promise<RegionalSettings> {
   const org = await db.organization.findUnique({
     where: { id: organizationId },
-    select: { defaultCurrency: true, defaultLocale: true },
+    select: { defaultCurrency: true, defaultLocale: true, defaultPhoneCountry: true },
   });
 
   let locationCurrency: string | null = null;
   let locationLocale: string | null = null;
+  let locationPhoneCountry: string | null = null;
   if (locationId) {
     // Scoped lookup: a location id from another organization resolves to
     // nothing, so its overrides can never leak across tenants.
     const location = await db.location.findFirst({
       where: { id: locationId, organizationId },
-      select: { currency: true, locale: true },
+      select: { currency: true, locale: true, phoneCountry: true },
     });
     locationCurrency = location?.currency ?? null;
     locationLocale = location?.locale ?? null;
+    locationPhoneCountry = location?.phoneCountry ?? null;
   }
 
   return {
     currency: locationCurrency ?? org?.defaultCurrency ?? DEFAULT_CURRENCY,
     locale: locationLocale ?? org?.defaultLocale ?? DEFAULT_LOCALE,
+    phoneCountry: locationPhoneCountry ?? org?.defaultPhoneCountry ?? null,
   };
 }
 
@@ -80,6 +84,7 @@ export async function updateLocationRegionalSettings(
     currency?: string | null;
     locale?: string | null;
     invoiceNumberPrefix?: string | null;
+    phoneCountry?: string | null;
   },
 ): Promise<RegionalSettings> {
   assertTenantAccess(
@@ -101,6 +106,10 @@ export async function updateLocationRegionalSettings(
   if (locale && !isValidLocaleTag(locale)) {
     throw new RegionalSettingsFailed("invalid_locale");
   }
+  const phoneCountry = clean(input.phoneCountry)?.toUpperCase() ?? null;
+  if (phoneCountry && !/^[A-Z]{2}$/.test(phoneCountry)) {
+    throw new RegionalSettingsFailed("invalid_locale");
+  }
   const invoiceNumberPrefix = clean(input.invoiceNumberPrefix);
   if (invoiceNumberPrefix && !/^[A-Za-z0-9-]{1,12}$/.test(invoiceNumberPrefix)) {
     throw new RegionalSettingsFailed("invalid_locale");
@@ -117,6 +126,7 @@ export async function updateLocationRegionalSettings(
       ...(invoiceNumberPrefix !== undefined || input.invoiceNumberPrefix === null
         ? { invoiceNumberPrefix }
         : {}),
+      ...(phoneCountry !== undefined || input.phoneCountry === null ? { phoneCountry } : {}),
     },
   });
   if (updated.count !== 1) throw new RegionalSettingsFailed("location_not_found");

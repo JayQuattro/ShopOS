@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { PrismaClient } from "@/generated/prisma/client";
+import { parsePhoneInput } from "@/i18n/phone-input";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 
 type TransactionalClient = Omit<
@@ -74,7 +75,16 @@ export async function updateCustomer(
     const data: Record<string, unknown> = {};
     if (input.displayName !== undefined) data.displayName = input.displayName;
     if (input.primaryEmail !== undefined) data.primaryEmail = input.primaryEmail;
-    if (input.primaryPhone !== undefined) data.primaryPhone = input.primaryPhone;
+    if (input.primaryPhone !== undefined) {
+      // Normalize to E.164 against the org's default phone country so
+      // "919 555-0141" and "+1 (919) 555-0141" become one findable value.
+      const regional = await transaction.organization.findUnique({
+        where: { id: input.context.organizationId },
+        select: { defaultPhoneCountry: true },
+      });
+      const parsed = parsePhoneInput(input.primaryPhone, regional?.defaultPhoneCountry ?? null);
+      data.primaryPhone = parsed?.e164 ?? input.primaryPhone.trim();
+    }
     if (input.taxId !== undefined) data.taxId = input.taxId;
     if (input.internalNotes !== undefined) data.internalNotes = input.internalNotes;
     if (input.customerFacingNotes !== undefined)
