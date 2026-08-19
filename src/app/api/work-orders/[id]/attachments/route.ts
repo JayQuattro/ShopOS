@@ -48,6 +48,9 @@ export async function POST(
   const revisionField = formData.get("revisionId");
   const estimateRevisionId =
     typeof revisionField === "string" && revisionField.length > 0 ? revisionField : undefined;
+  const itemField = formData.get("inspectionItemId");
+  const inspectionItemId =
+    typeof itemField === "string" && itemField.length > 0 ? itemField : undefined;
 
   const body = new Uint8Array(await file.arrayBuffer());
 
@@ -59,6 +62,7 @@ export async function POST(
       context: tenantContext,
       workOrderId: id,
       ...(estimateRevisionId ? { estimateRevisionId } : {}),
+      ...(inspectionItemId ? { inspectionItemId } : {}),
       fileName: file.name,
       contentType: file.type || "application/octet-stream",
       body,

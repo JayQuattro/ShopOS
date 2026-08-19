@@ -23,6 +23,7 @@ import { PartsPanel } from "./parts-panel";
 import { LoanerPanel } from "./loaner-panel";
 import { SubletPanel } from "./sublet-panel";
 import { DepositPanel } from "./deposit-panel";
+import { InspectionPanel } from "./inspection-panel";
 import { TrackerLinkCard } from "./tracker-link-card";
 import { ApplyTemplateCard } from "./apply-template-card";
 
@@ -87,6 +88,13 @@ export default async function WorkOrderDetailPage({
   });
 
   const technicians = wo ? await listAssignableTechnicians({ db, context }) : [];
+  const inspectionTemplates = wo
+    ? await db.inspectionTemplate.findMany({
+        where: { organizationId: context.organizationId },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      })
+    : [];
 
   // Loaner candidates: fleet vehicles when the shop has marked any; otherwise
   // the heuristic fallback (active assets not tied to this WO's customer).
@@ -383,6 +391,15 @@ export default async function WorkOrderDetailPage({
         workOrderId={wo.id}
         hasInvoice={wo.invoice !== null}
         canRecordMoney={context.permissions.has("payments.record")}
+      />
+
+      <InspectionPanel
+        workOrderId={wo.id}
+        templates={inspectionTemplates.map((template) => ({
+          id: template.id,
+          name: template.name,
+        }))}
+        canWrite={context.permissions.has("work_orders.write")}
       />
 
       <TrackerLinkCard
