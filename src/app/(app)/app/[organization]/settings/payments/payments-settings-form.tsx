@@ -188,6 +188,14 @@ export function PaymentsSettingsForm({ organizationId }: { organizationId: strin
               <Button type="submit" disabled={pending || !adapterKey}>
                 {pending ? "Connecting…" : connector ? "Replace credentials" : "Connect processor"}
               </Button>
+              <p className="text-xs text-muted-foreground">
+                For automatic payment confirmation, add a webhook in your Stripe dashboard pointing
+                at{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono">
+                  {window.location.origin}/api/webhooks/payments/{organizationId}/stripe
+                </code>{" "}
+                and store its signing secret (whsec_…) above.
+              </p>
             </>
           ) : null}
         </CardContent>

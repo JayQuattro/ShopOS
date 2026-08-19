@@ -95,6 +95,33 @@ export async function resolvePaymentsAdapter(
   return instantiatePaymentsAdapter(connector.adapterKey, secret);
 }
 
+/**
+ * Internal: the organization's decrypted processor secrets, used only after
+ * a webhook's organization has been resolved from the endpoint path. Never
+ * exposed through transport responses.
+ */
+export async function resolveOrgPaymentsSecrets(
+  db: PrismaClient,
+  organizationId: string,
+): Promise<Readonly<{ adapterKey: string; secret: Record<string, string> }> | null> {
+  const connector = await db.connectorInstance.findFirst({
+    where: { organizationId, capability: "payments", status: "active" },
+    select: { adapterKey: true, encryptedSecret: true },
+  });
+  if (!connector) return null;
+
+  const masterKey = getMasterKeyFromEnv();
+  if (!masterKey || !connector.encryptedSecret) return null;
+  try {
+    return {
+      adapterKey: connector.adapterKey,
+      secret: JSON.parse(decryptSecret(connector.encryptedSecret, masterKey)),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function instantiatePaymentsAdapter(
   adapterKey: string,
   secret: Record<string, string>,

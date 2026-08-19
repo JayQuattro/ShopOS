@@ -1,8 +1,10 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+
 /**
  * Payments connector boundary (ADR 0016): BYO, organization-scoped processor
- * adapters. v1 surface is hosted payment links; signed webhook verification
- * joins in the adapter that needs it. Amounts are always integer minor units
- * plus an ISO currency code.
+ * adapters. v1 surface is hosted payment links plus signed webhook
+ * verification. Amounts are always integer minor units plus an ISO currency
+ * code.
  */
 export type PaymentLinkInput = Readonly<{
   amountMinor: number;
@@ -82,5 +84,48 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
     if (!session.url) throw new Error("stripe_payment_link_missing_url");
 
     return { url: session.url, providerRef: session.id };
+  }
+}
+
+// ─── Stripe webhook verification ────────────────────────────────────────────
+
+/**
+ * Verifies a Stripe webhook signature header against the raw request body:
+ * `t=<unix>,v1=<hex>` where v1 = HMAC-SHA256(webhookSecret, `${t}.${body}`).
+ * Returns the parsed event, or null for any tampering, staleness beyond the
+ * tolerance, or a missing signing secret — webhooks fail closed.
+ */
+export function verifyStripeWebhook(input: {
+  signingSecret: string | undefined;
+  signatureHeader: string | null;
+  rawBody: string;
+  toleranceSeconds?: number;
+}): unknown | null {
+  const { signingSecret, signatureHeader, rawBody } = input;
+  if (!signingSecret || !signatureHeader) return null;
+
+  const parts = new Map<string, string>();
+  for (const element of signatureHeader.split(",")) {
+    const [key, value] = element.split("=");
+    if (key && value) parts.set(key.trim(), value.trim());
+  }
+  const timestamp = parts.get("t");
+  const signature = parts.get("v1");
+  if (!timestamp || !signature) return null;
+
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!Number.isFinite(age) || age > (input.toleranceSeconds ?? 300)) return null;
+
+  const expected = createHmac("sha256", signingSecret)
+    .update(`${timestamp}.${rawBody}`)
+    .digest("hex");
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(signature, "utf8");
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+
+  try {
+    return JSON.parse(rawBody) as unknown;
+  } catch {
+    return null;
   }
 }
