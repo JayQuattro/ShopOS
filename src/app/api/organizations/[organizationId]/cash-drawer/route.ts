@@ -62,6 +62,8 @@ const actionSchema = z.discriminatedUnion("action", [
     currency: z.string().trim().length(3),
     openingFloatMinor: z.number().int().min(0).optional(),
     note: z.string().trim().max(500).optional(),
+    label: z.string().trim().max(80).optional(),
+    shared: z.boolean().optional(),
   }),
   z.object({
     action: z.literal("close"),
@@ -101,6 +103,8 @@ export async function POST(
           ? { openingFloatMinor: parsed.data.openingFloatMinor }
           : {}),
         ...(parsed.data.note ? { note: parsed.data.note } : {}),
+        ...(parsed.data.label ? { label: parsed.data.label } : {}),
+        ...(parsed.data.shared !== undefined ? { shared: parsed.data.shared } : {}),
       });
       return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
     }

@@ -219,6 +219,7 @@ model User {
   assignedServiceCalls  ServiceCall[]                     @relation("ServiceCallTechnician")
   portalCustomers       Customer[]                        @relation("CustomerPortalUser")
   openedCashDrawers     CashDrawerSession[]               @relation("CashDrawerOpenedBy")
+  ownedCashDrawers      CashDrawerSession[]               @relation("OwnedCashDrawers")
   closedCashDrawers     CashDrawerSession[]               @relation("CashDrawerClosedBy")
   recordedDeposits      Deposit[]                         @relation("DepositRecordedBy")
   recordedRefunds       Refund[]                          @relation("RefundRecordedBy")
@@ -1343,6 +1344,8 @@ model CashDrawerSession {
   currency          String    @db.VarChar(3)
   openingFloatMinor Int       @default(0) @map("opening_float_minor")
   status            String    @default("open") @db.VarChar(16)
+  ownerUserId       String?   @map("owner_user_id") @db.Uuid
+  label             String?   @db.VarChar(80)
   methodTotals      Json      @default("{}") @map("method_totals")
   countedCashMinor  Int?      @map("counted_cash_minor")
   expectedCashMinor Int?      @map("expected_cash_minor")
@@ -1357,6 +1360,8 @@ model CashDrawerSession {
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   location          Location  @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
   openedBy          User      @relation("CashDrawerOpenedBy", fields: [openedByUserId], references: [id], onDelete: Restrict)
+  owner             User?     @relation("OwnedCashDrawers", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  payments          Payment[]
   closedBy          User?     @relation("CashDrawerClosedBy", fields: [closedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id], map: "cash_drawer_org_id_unique")
@@ -1791,6 +1796,7 @@ model Payment {
   method           PaymentMethod
   reference        String?       @db.VarChar(160)
   processorChargeId String?     @map("processor_charge_id") @db.VarChar(120)
+  drawerSessionId  String?       @map("drawer_session_id") @db.Uuid
   receivedAt       DateTime      @map("received_at") @db.Timestamptz(6)
   recordedByUserId String        @map("recorded_by_user_id") @db.Uuid
   createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1798,6 +1804,7 @@ model Payment {
   location         Location      @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
   invoice          Invoice       @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
   refunds          Refund[]
+  drawerSession    CashDrawerSession? @relation(fields: [organizationId, drawerSessionId], references: [organizationId, id], onDelete: Restrict)
   recordedBy       User          @relation("PaymentRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id], map: "payments_org_id_unique")

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { PaymentMethod, PricedLineKind, PrismaClient } from "@/generated/prisma/client";
+import { resolveDrawerForPayment } from "@/modules/billing/cash-drawer-service";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import { transitionStatus } from "@/modules/work-orders/work-order-service";
 
@@ -353,6 +354,12 @@ export async function recordPayment(
         throw new InvoiceFailed("payment_exceeds_balance");
       }
 
+      const drawerSessionId = await resolveDrawerForPayment(
+        transaction,
+        input.context.organizationId,
+        invoice.locationId,
+        input.context.actorId,
+      );
       const payment = await transaction.payment.create({
         data: {
           id: randomUUID(),
@@ -366,6 +373,7 @@ export async function recordPayment(
           }))!.currency,
           method: input.method,
           reference: input.reference ?? null,
+          ...(drawerSessionId ? { drawerSessionId } : {}),
           receivedAt: input.receivedAt ?? new Date(),
           recordedByUserId: input.context.actorId,
         },
@@ -487,6 +495,12 @@ export async function recordPaymentTenders(
       throw new InvoiceFailed("payment_exceeds_balance");
     }
 
+    const drawerSessionId = await resolveDrawerForPayment(
+      transaction,
+      input.context.organizationId,
+      invoice.locationId,
+      input.context.actorId,
+    );
     const paymentIds: string[] = [];
     for (const tender of input.tenders) {
       const payment = await transaction.payment.create({
@@ -499,6 +513,7 @@ export async function recordPaymentTenders(
           currency: invoice.currency,
           method: tender.method,
           reference: tender.reference ?? null,
+          ...(drawerSessionId ? { drawerSessionId } : {}),
           receivedAt: input.receivedAt ?? new Date(),
           recordedByUserId: input.context.actorId,
         },
