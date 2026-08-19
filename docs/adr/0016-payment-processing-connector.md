@@ -55,14 +55,19 @@ the provider reference.
 ### Provider landscape
 
 Live adapters: **Stripe**, **Square** (the brick-and-mortar default), **Adyen**
-(Pay by Link), **Mollie** (the EU default). Planned slots are registered in the
-definitions registry as `status: "planned"` and shown as coming-soon in
-settings — honest about implemented vs. planned, and shops can tell us which
-slot they need: **PayPal/Venmo**, **Heartland/Global Payments (Dealer Tender —
-the automotive-vertical incumbent)**, **Worldpay/Fiserv**, **Chase Merchant
-Services**, **Authorize.Net**, **GoCardless** (bank debit), **Elavon/Converge**,
-**Moneris** (Canada), **Razorpay** (India), **Mercado Pago** (LatAm/PIX), and
-**Clover**.
+(Pay by Link), **Mollie** (the EU default), **Mercado Pago** (Checkout Pro —
+LatAm, decimal-aware for zero-decimal currencies like CLP/COP), and **Razorpay**
+(Payment Links — India, paise amounts, HMAC webhook verification ready).
+Planned slots are registered in the definitions registry as `status: "planned"`
+and shown as coming-soon in settings — honest about implemented vs. planned,
+and shops can tell us which slot they need: **PayPal/Venmo**, **Heartland/
+Global Payments (Dealer Tender — the automotive-vertical incumbent)**,
+**Worldpay/Fiserv**, **Chase Merchant Services**, **Authorize.Net**,
+**GoCardless** (bank debit), **Elavon/Converge**, **Moneris** (Canada —
+two-step Checkout ticket flow, next up), the LatAm domestic processors
+(**Cielo**, **PagBank/PagSeguro**, **Stone**, **Getnet** for Brazil; **Clip**
+for Mexico; **Transbank Webpay** for Chile; pan-regional PSPs **dLocal** and
+**Kushki**), and **Clover**.
 
 Wallets and regional rails ride the processor (Apple Pay / Alipay / WeChat Pay
 are Stripe/Adyen payment methods, not separate ShopOS connectors). Cash, check,

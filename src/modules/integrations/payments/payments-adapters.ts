@@ -287,3 +287,118 @@ export class MolliePaymentsAdapter implements PaymentsAdapter {
     return { url, providerRef: payload.id };
   }
 }
+
+// ─── Mercado Pago ───────────────────────────────────────────────────────────
+
+/**
+ * Zero-decimal currencies (minor unit == major unit); everything else
+ * ShopOS bills in has two. Latin American processors mix both.
+ */
+const ZERO_DECIMAL_CURRENCIES = new Set(["CLP", "COP", "PYG", "UYW", "GNF", "JPY", "KRW"]);
+
+function majorAmountString(amountMinor: number, currency: string): string {
+  if (ZERO_DECIMAL_CURRENCIES.has(currency)) return String(amountMinor);
+  return (amountMinor / 100).toFixed(2);
+}
+
+/**
+ * Mercado Pago Checkout Pro — the LatAm default (AR, BR, CL, CO, MX, PE,
+ * UY). Preferences carry our invoice reference back in
+ * `external_reference`; amounts are major-unit floats, decimal-aware for
+ * zero-decimal currencies like CLP and COP.
+ */
+export class MercadoPagoPaymentsAdapter implements PaymentsAdapter {
+  readonly key = "mercadopago";
+
+  constructor(private readonly secret: Readonly<{ accessToken: string }>) {}
+
+  async createPaymentLink(input: PaymentLinkInput): Promise<PaymentLink> {
+    const res = await fetch("https://api.mercadopago.com/checkout/preferences", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.secret.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        items: [
+          {
+            title: input.description.slice(0, 120),
+            quantity: 1,
+            unit_price: Number(majorAmountString(input.amountMinor, input.currency)),
+            currency_id: input.currency,
+          },
+        ],
+        external_reference: input.reference,
+      }),
+    });
+    if (!res.ok) throw new Error(`mercadopago_create_payment_link_failed_${res.status}`);
+
+    const payload = (await res.json()) as { id: string; init_point?: string };
+    if (!payload.init_point) throw new Error("mercadopago_payment_link_missing_url");
+
+    return { url: payload.init_point, providerRef: payload.id };
+  }
+}
+
+// ─── Razorpay ───────────────────────────────────────────────────────────────
+
+/**
+ * Razorpay Payment Links — India's default (cards, UPI, netbanking,
+ * wallets). Amounts are integer paise; Basic auth with the key pair.
+ */
+export class RazorpayPaymentsAdapter implements PaymentsAdapter {
+  readonly key = "razorpay";
+
+  constructor(private readonly secret: Readonly<{ keyId: string; keySecret: string }>) {}
+
+  async createPaymentLink(input: PaymentLinkInput): Promise<PaymentLink> {
+    const auth = Buffer.from(`${this.secret.keyId}:${this.secret.keySecret}`).toString("base64");
+    const res = await fetch("https://api.razorpay.com/v1/payment_links", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: input.amountMinor,
+        currency: input.currency,
+        description: input.description.slice(0, 120),
+        // Razorpay caps reference_id at 40 characters; our invoice UUID fits.
+        reference_id: input.reference.slice(0, 40),
+        callback_url: input.returnUrl,
+        callback_method: "get",
+      }),
+    });
+    if (!res.ok) throw new Error(`razorpay_create_payment_link_failed_${res.status}`);
+
+    const payload = (await res.json()) as { id: string; short_url: string };
+    if (!payload.short_url) throw new Error("razorpay_payment_link_missing_url");
+
+    return { url: payload.short_url, providerRef: payload.id };
+  }
+}
+
+/**
+ * Razorpay webhook verification: X-Razorpay-Signature is hex
+ * HMAC-SHA256(webhook_secret, raw_body) with no timestamp — replay
+ * tolerance comes from idempotent recording, not freshness.
+ */
+export function verifyRazorpayWebhook(input: {
+  webhookSecret: string | undefined;
+  signatureHeader: string | null;
+  rawBody: string;
+}): unknown | null {
+  const { webhookSecret, signatureHeader, rawBody } = input;
+  if (!webhookSecret || !signatureHeader) return null;
+
+  const expected = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(signatureHeader, "utf8");
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+
+  try {
+    return JSON.parse(rawBody) as unknown;
+  } catch {
+    return null;
+  }
+}
