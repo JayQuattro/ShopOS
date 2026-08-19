@@ -73,6 +73,10 @@ export default async function RoadsidePage({
   }));
   const canWrite = context.permissions.has("work_orders.write");
 
+  const orgCountry = await db.organization
+    .findUnique({ where: { id: context.organizationId }, select: { country: true } })
+    .then((org) => org?.country ?? null);
+
   const [customers, locations] = canWrite
     ? await Promise.all([
         db.customer.findMany({
@@ -117,7 +121,12 @@ export default async function RoadsidePage({
       />
 
       {canWrite ? (
-        <NewServiceCallForm orgId={orgId} customers={customers} locations={locations} />
+        <NewServiceCallForm
+          orgId={orgId}
+          customers={customers}
+          locations={locations}
+          defaultCountry={orgCountry}
+        />
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

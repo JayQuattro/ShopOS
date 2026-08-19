@@ -5,22 +5,40 @@ import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  addressShapeFor,
+  postalHint,
+  SUPPORTED_ADDRESS_COUNTRIES,
+  type AddressField,
+} from "@/i18n/address-formats";
 
+type FieldName = AddressField["name"];
+
+/** Adds a customer address, laid out the way its country writes them. */
 export function AddressForm({ customerId }: { customerId: string }) {
   const [open, setOpen] = useState(false);
+  const [country, setCountry] = useState("US");
   const [label, setLabel] = useState("");
-  const [line1, setLine1] = useState("");
-  const [line2, setLine2] = useState("");
-  const [city, setCity] = useState("");
-  const [stateProvince, setStateProvince] = useState("");
-  const [postalCode, setPostalCode] = useState("");
+  const [values, setValues] = useState<Record<FieldName, string>>({
+    line1: "",
+    line2: "",
+    city: "",
+    stateProvince: "",
+    postalCode: "",
+  });
   const [isPrimary, setIsPrimary] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const shape = addressShapeFor(country);
+  const postalAdvice = postalHint(country, values.postalCode);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!label.trim() || !line1.trim() || !city.trim()) return;
+    const requiredMet = shape.fields
+      .filter((field) => field.required)
+      .every((field) => values[field.name].trim().length > 0);
+    if (!label.trim() || !requiredMet) return;
     setPending(true);
     setError(null);
     try {
@@ -29,11 +47,12 @@ export function AddressForm({ customerId }: { customerId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           label,
-          line1,
-          city,
-          ...(line2 ? { line2 } : {}),
-          ...(stateProvince ? { stateProvince } : {}),
-          ...(postalCode ? { postalCode } : {}),
+          line1: values.line1,
+          city: values.city,
+          ...(values.line2 ? { line2: values.line2 } : {}),
+          ...(values.stateProvince ? { stateProvince: values.stateProvince } : {}),
+          ...(values.postalCode ? { postalCode: values.postalCode } : {}),
+          country,
           isPrimary,
         }),
       });
@@ -43,11 +62,7 @@ export function AddressForm({ customerId }: { customerId: string }) {
       }
       setOpen(false);
       setLabel("");
-      setLine1("");
-      setLine2("");
-      setCity("");
-      setStateProvince("");
-      setPostalCode("");
+      setValues({ line1: "", line2: "", city: "", stateProvince: "", postalCode: "" });
       setIsPrimary(false);
       window.location.reload();
     } catch (e) {
@@ -65,6 +80,22 @@ export function AddressForm({ customerId }: { customerId: string }) {
     );
   }
 
+  const allRequiredMet = shape.fields
+    .filter((field) => field.required)
+    .every((field) => values[field.name].trim().length > 0);
+
+  // Wide fields (street lines) go full width; the rest pair up in rows.
+  const rows: AddressField[][] = [];
+  for (const field of shape.fields) {
+    const lastRow = rows[rows.length - 1];
+    const isWide = field.name === "line1" || field.name === "line2";
+    if (lastRow && lastRow.length === 1 && !isWide) {
+      lastRow.push(field);
+    } else {
+      rows.push([field]);
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="grid w-full max-w-md gap-2">
       {error ? (
@@ -72,47 +103,53 @@ export function AddressForm({ customerId }: { customerId: string }) {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
-      <Input
-        placeholder="Label (e.g. Billing) *"
-        required
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        disabled={pending}
-      />
-      <Input
-        placeholder="Address line 1 *"
-        required
-        value={line1}
-        onChange={(e) => setLine1(e.target.value)}
-        disabled={pending}
-      />
-      <Input
-        placeholder="Address line 2"
-        value={line2}
-        onChange={(e) => setLine2(e.target.value)}
-        disabled={pending}
-      />
-      <Input
-        placeholder="City *"
-        required
-        value={city}
-        onChange={(e) => setCity(e.target.value)}
-        disabled={pending}
-      />
-      <div className="flex gap-2">
+      <label className="grid gap-1 text-sm font-medium">
+        Label
         <Input
-          placeholder="State / Province"
-          value={stateProvince}
-          onChange={(e) => setStateProvince(e.target.value)}
+          placeholder="Billing / Home / Site *"
+          required
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
           disabled={pending}
         />
-        <Input
-          placeholder="Postal code"
-          value={postalCode}
-          onChange={(e) => setPostalCode(e.target.value)}
+      </label>
+      <label className="grid gap-1 text-sm font-medium">
+        Country
+        <select
+          value={country}
+          onChange={(e) => setCountry(e.target.value)}
           disabled={pending}
-        />
-      </div>
+          className="h-[var(--control-height)] rounded-md border border-input bg-background px-3 text-sm"
+        >
+          {SUPPORTED_ADDRESS_COUNTRIES.map((entry) => (
+            <option key={entry.code} value={entry.code}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {rows.map((row, index) => (
+        <div key={index} className={row.length > 1 ? "flex gap-2" : undefined}>
+          {row.map((field) => (
+            <label key={field.name} className="grid flex-1 gap-1 text-sm font-medium">
+              {field.label}
+              {field.required ? " *" : ""}
+              <Input
+                placeholder={field.placeholder ?? ""}
+                required={field.required}
+                value={values[field.name]}
+                onChange={(e) => setValues((prev) => ({ ...prev, [field.name]: e.target.value }))}
+                disabled={pending}
+              />
+            </label>
+          ))}
+        </div>
+      ))}
+      {postalAdvice ? (
+        <p className="text-xs text-muted-foreground">
+          Postcode looks unusual for this country — expected {postalAdvice}. You can still save.
+        </p>
+      ) : null}
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
@@ -122,17 +159,13 @@ export function AddressForm({ customerId }: { customerId: string }) {
         Primary address
       </label>
       <div className="flex gap-2">
-        <Button
-          type="submit"
-          size="sm"
-          disabled={pending || !label.trim() || !line1.trim() || !city.trim()}
-        >
+        <Button type="submit" size="sm" disabled={pending || !label.trim() || !allRequiredMet}>
           Save
         </Button>
         <Button
           type="button"
+          variant="ghost"
           size="sm"
-          variant="outline"
           onClick={() => setOpen(false)}
           disabled={pending}
         >

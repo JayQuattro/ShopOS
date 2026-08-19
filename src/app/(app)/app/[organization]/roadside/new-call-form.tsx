@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { postalHint } from "@/i18n/address-formats";
 
 type CustomerOption = { id: string; displayName: string };
 type LocationOption = { id: string; name: string };
@@ -25,10 +26,12 @@ export function NewServiceCallForm({
   orgId,
   customers,
   locations,
+  defaultCountry,
 }: {
   orgId: string;
   customers: ReadonlyArray<CustomerOption>;
   locations: ReadonlyArray<LocationOption>;
+  defaultCountry?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -194,6 +197,12 @@ export function NewServiceCallForm({
                 />
               </label>
             </div>
+            {postalHint(defaultCountry, postalCode) ? (
+              <p className="text-xs text-muted-foreground md:col-span-2">
+                Postal code looks unusual for this country — expected{" "}
+                {postalHint(defaultCountry, postalCode)}.
+              </p>
+            ) : null}
             <label className="grid gap-1 text-sm font-medium md:col-span-2">
               Note
               <Input
