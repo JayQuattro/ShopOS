@@ -22,6 +22,7 @@ type BoardWorkOrder = {
   number: string;
   status: string;
   vehicleStage: string | null;
+  boardStage: { id: string; label: string } | null;
   bayLabel: string | null;
   customer: { displayName: string };
   asset: { displayName: string } | null;
@@ -56,11 +57,17 @@ export default async function WorkBoardPage({
     return <p className="text-destructive">Organization context mismatch.</p>;
   }
 
+  const boardStages = await db.boardStage.findMany({
+    where: { organizationId: context.organizationId, active: true },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, key: true, label: true },
+  });
+
   const workOrders: BoardWorkOrder[] = await db.workOrder.findMany({
     where: {
       organizationId: context.organizationId,
       status: { in: ["AUTHORIZED", "IN_PROGRESS", "BLOCKED", "COMPLETED"] },
-      vehicleStage: { not: null },
+      ...(boardStages.length > 0 ? {} : { vehicleStage: { not: null } }),
       ...(context.organizationWideLocationAccess
         ? {}
         : { locationId: { in: [...context.allowedLocationIds] } }),
@@ -76,6 +83,7 @@ export default async function WorkBoardPage({
       customer: { select: { displayName: true } },
       asset: { select: { displayName: true } },
       assignedTechnician: { select: { displayName: true } },
+      boardStage: { select: { id: true, label: true } },
       tasks: { where: { status: "NEEDS_ATTENTION" }, select: { id: true } },
       estimateRevisions: {
         where: { status: "PRESENTED", documentKind: "CHANGE_ORDER" },
@@ -91,15 +99,30 @@ export default async function WorkBoardPage({
   });
 
   const byStage = new Map<string, BoardWorkOrder[]>();
-  for (const stage of STAGES) byStage.set(stage.key, []);
   const unstaged: BoardWorkOrder[] = [];
-  for (const wo of workOrders) {
-    if (wo.vehicleStage && byStage.has(wo.vehicleStage)) {
-      byStage.get(wo.vehicleStage)!.push(wo);
-    } else if (wo.vehicleStage) {
-      unstaged.push(wo);
+
+  if (boardStages.length > 0) {
+    // The shop's own columns: cards sit in their custom stage; anything
+    // without one lands in the first column until staged.
+    for (const stage of boardStages) byStage.set(stage.id, []);
+    for (const wo of workOrders) {
+      if (wo.boardStage && byStage.has(wo.boardStage.id)) {
+        byStage.get(wo.boardStage.id)!.push(wo);
+      } else {
+        byStage.get(boardStages[0]!.id)!.push(wo);
+      }
+    }
+  } else {
+    for (const stage of STAGES) byStage.set(stage.key, []);
+    for (const wo of workOrders) {
+      if (wo.vehicleStage && byStage.has(wo.vehicleStage)) {
+        byStage.get(wo.vehicleStage)!.push(wo);
+      } else if (wo.vehicleStage) {
+        unstaged.push(wo);
+      }
     }
   }
+  void unstaged;
 
   const orgId = context.organizationId;
   function card(wo: BoardWorkOrder) {
@@ -157,7 +180,10 @@ export default async function WorkBoardPage({
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        {STAGES.map((stage) => {
+        {(boardStages.length > 0
+          ? boardStages.map((stage) => ({ key: stage.id, label: stage.label, hint: "" }))
+          : STAGES
+        ).map((stage) => {
           const jobs = byStage.get(stage.key) ?? [];
           return (
             <div key={stage.key} className="flex min-w-0 flex-col gap-2">

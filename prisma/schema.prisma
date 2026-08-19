@@ -324,6 +324,7 @@ model Organization {
   cashDrawerSessions CashDrawerSession[]
   deposits            Deposit[]
   locationHolidays    LocationHoliday[]
+  boardStages        BoardStage[]
   inspectionTemplates InspectionTemplate[]
   inspectionTemplateItems InspectionTemplateItem[]
   inspections       Inspection[]
@@ -912,6 +913,7 @@ model WorkOrder {
   qcPassedByUserId      String?        @map("qc_passed_by_user_id") @db.Uuid
   qcPassedAt            DateTime?      @map("qc_passed_at") @db.Timestamptz(6)
   vehicleStage      VehicleStage?      @map("vehicle_stage")
+  boardStageId      String?            @map("board_stage_id") @db.Uuid
   bayLabel          String?            @map("bay_label") @db.VarChar(60)
   keyTag            String?            @map("key_tag") @db.VarChar(40)
   keyLocation       String?            @map("key_location") @db.VarChar(80)
@@ -942,6 +944,7 @@ model WorkOrder {
   serviceCalls      ServiceCall[]
   transportJobs     TransportJob[]
   deposits           Deposit[]
+  boardStage        BoardStage? @relation(fields: [organizationId, boardStageId], references: [organizationId, id], onDelete: SetNull)
   inspections       Inspection[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
@@ -1536,6 +1539,25 @@ model InspectionItem {
   @@unique([organizationId, inspectionId, position], map: "inspection_items_position_unique")
   @@index([organizationId, inspectionId], map: "inspection_items_org_inspection_idx")
   @@map("inspection_items")
+}
+
+model BoardStage {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  key            String   @db.VarChar(40)
+  label          String   @db.VarChar(60)
+  colorHint      String?  @map("color_hint") @db.VarChar(20)
+  sortOrder      Int      @map("sort_order")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workOrders     WorkOrder[]
+
+  @@unique([organizationId, id], map: "board_stages_org_id_unique")
+  @@unique([organizationId, key], map: "board_stages_org_key_unique")
+  @@index([organizationId, active, sortOrder], map: "board_stages_org_order_idx")
+  @@map("board_stages")
 }
 
 model Deposit {
