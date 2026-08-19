@@ -151,3 +151,139 @@ export function verifyStripeWebhook(input: {
     return null;
   }
 }
+
+// ─── Square ─────────────────────────────────────────────────────────────────
+
+/**
+ * Square (Block) — the default processor for brick-and-mortar small
+ * businesses. Online-checkout payment links: a quick-pay order Square hosts
+ * at a shareable URL. Square-Version pinned per the API stability policy.
+ */
+export class SquarePaymentsAdapter implements PaymentsAdapter {
+  readonly key = "square";
+
+  constructor(
+    private readonly config: Readonly<{ locationId: string }>,
+    private readonly secret: Readonly<{ accessToken: string }>,
+  ) {}
+
+  async createPaymentLink(input: PaymentLinkInput): Promise<PaymentLink> {
+    const body = {
+      idempotency_key: `${input.reference}-${input.amountMinor}`,
+      description: input.description.slice(0, 60),
+      order: {
+        location_id: this.config.locationId,
+        line_items: [
+          {
+            name: input.description.slice(0, 120),
+            quantity: "1",
+            base_price_money: {
+              amount: input.amountMinor,
+              currency: input.currency,
+            },
+          },
+        ],
+      },
+    };
+
+    const res = await fetch("https://connect.squareup.com/v2/online-checkout/payment-links", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.secret.accessToken}`,
+        "Square-Version": "2026-01-23",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`square_create_payment_link_failed_${res.status}`);
+
+    const payload = (await res.json()) as {
+      payment_link?: { id: string; url: string };
+    };
+    if (!payload.payment_link?.url) throw new Error("square_payment_link_missing_url");
+
+    return { url: payload.payment_link.url, providerRef: payload.payment_link.id };
+  }
+}
+
+// ─── Adyen ──────────────────────────────────────────────────────────────────
+
+/**
+ * Adyen Pay by Link: a hosted page covering cards, wallets, and local
+ * methods, created with a reference we control for reconciliation.
+ */
+export class AdyenPaymentsAdapter implements PaymentsAdapter {
+  readonly key = "adyen";
+
+  constructor(
+    private readonly secret: Readonly<{ apiKey: string }>,
+    private readonly config: Readonly<{ merchantAccount: string }> = { merchantAccount: "" },
+  ) {}
+
+  async createPaymentLink(input: PaymentLinkInput): Promise<PaymentLink> {
+    const res = await fetch("https://checkout-test.adyen.com/checkout/v71/paymentLinks", {
+      method: "POST",
+      headers: {
+        "X-API-Key": this.secret.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        reference: input.reference,
+        amount: { value: input.amountMinor, currency: input.currency },
+        description: input.description.slice(0, 120),
+        merchantAccount: this.config.merchantAccount,
+      }),
+    });
+    if (!res.ok) throw new Error(`adyen_create_payment_link_failed_${res.status}`);
+
+    const payload = (await res.json()) as { id: string; url: string };
+    if (!payload.url) throw new Error("adyen_payment_link_missing_url");
+
+    return { url: payload.url, providerRef: payload.id };
+  }
+}
+
+// ─── Mollie ─────────────────────────────────────────────────────────────────
+
+/**
+ * Mollie — the EU default. Creates a hosted payment carrying our invoice
+ * reference in metadata; the checkout URL is the shareable link.
+ */
+export class MolliePaymentsAdapter implements PaymentsAdapter {
+  readonly key = "mollie";
+
+  constructor(
+    private readonly secret: Readonly<{ apiKey: string }>,
+    private readonly config: Readonly<{ webhookUrl?: string }> = {},
+  ) {}
+
+  async createPaymentLink(input: PaymentLinkInput): Promise<PaymentLink> {
+    const res = await fetch("https://api.mollie.com/v2/payments", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.secret.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: {
+          currency: input.currency,
+          value: (input.amountMinor / 100).toFixed(2),
+        },
+        description: input.description.slice(0, 120),
+        redirectUrl: input.returnUrl,
+        metadata: { reference: input.reference },
+        ...(this.config.webhookUrl ? { webhookUrl: this.config.webhookUrl } : {}),
+      }),
+    });
+    if (!res.ok) throw new Error(`mollie_create_payment_link_failed_${res.status}`);
+
+    const payload = (await res.json()) as {
+      id: string;
+      _links?: { checkout?: { href: string } };
+    };
+    const url = payload._links?.checkout?.href;
+    if (!url) throw new Error("mollie_payment_link_missing_url");
+
+    return { url, providerRef: payload.id };
+  }
+}
