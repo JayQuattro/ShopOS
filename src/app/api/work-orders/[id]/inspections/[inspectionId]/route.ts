@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/db/client";
 import { mapTenantError } from "@/modules/tenancy/http-errors";
 import { getRequestContext } from "@/modules/tenancy/request-context";
+import { recommendInspectionItemToEstimate } from "@/modules/work-orders/recommend-bridge-service";
 import {
   addInspectionItem,
   completeInspection,
@@ -26,6 +27,7 @@ const actionSchema = z.discriminatedUnion("action", [
     note: z.string().trim().max(2000).optional(),
   }),
   z.object({ action: z.literal("complete") }),
+  z.object({ action: z.literal("recommend"), itemId: z.string().uuid() }),
   z.object({ action: z.literal("share") }),
 ]);
 
@@ -70,6 +72,15 @@ export async function POST(
         ...(parsed.data.note !== undefined ? { note: parsed.data.note } : {}),
       });
       return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    if (parsed.data.action === "recommend") {
+      const result = await recommendInspectionItemToEstimate({
+        db,
+        context: tenantContext,
+        inspectionItemId: parsed.data.itemId,
+      });
+      return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
     }
 
     if (parsed.data.action === "complete") {
