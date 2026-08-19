@@ -24,6 +24,7 @@ type EstimateData = {
     approvedLines: ReadonlyArray<{ description: string; amountMinor: string }>;
     declinedCount: number;
   }>;
+  linePhotos: Record<string, Array<{ id: string; fileName: string }>>;
   lines: ReadonlyArray<{
     id: string;
     description: string;
@@ -272,7 +273,30 @@ export default function AuthorizePage() {
             <tbody>
               {data.lines.map((line) => (
                 <tr key={line.id} className="border-b border-border/60">
-                  <td className="py-3 pr-4">{line.description}</td>
+                  <td className="py-3 pr-4">
+                    {line.description}
+                    {(data.linePhotos?.[line.id] ?? []).length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {(data.linePhotos[line.id] ?? []).map((photo) => (
+                          <a
+                            key={photo.id}
+                            href={`/api/public/authorize/${token}/attachments/${photo.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block overflow-hidden rounded-md border border-border"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element -- token-scoped evidence */}
+                            <img
+                              src={`/api/public/authorize/${token}/attachments/${photo.id}`}
+                              alt={line.description}
+                              className="h-16 w-20 object-cover"
+                              loading="lazy"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="py-3 pr-4 text-right font-mono tabular-nums">
                     {formatMoney(Number(line.totalMinor), data.currency, "en-US")}
                   </td>

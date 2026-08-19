@@ -1715,6 +1715,7 @@ model WorkOrderAttachment {
   workOrderId         String   @map("work_order_id") @db.Uuid
   estimateRevisionId  String?  @map("estimate_revision_id") @db.Uuid
   inspectionItemId    String?  @map("inspection_item_id") @db.Uuid
+  estimateLineId      String?  @map("estimate_line_id") @db.Uuid
   objectKey           String   @map("object_key") @db.VarChar(512)
   fileName            String   @map("file_name") @db.VarChar(255)
   contentType         String   @map("content_type") @db.VarChar(127)
@@ -1725,6 +1726,7 @@ model WorkOrderAttachment {
   workOrder           WorkOrder        @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
   estimateRevision    EstimateRevision? @relation(fields: [organizationId, estimateRevisionId], references: [organizationId, id], onDelete: Cascade)
   inspectionItem      InspectionItem? @relation(fields: [organizationId, inspectionItemId], references: [organizationId, id], onDelete: Cascade)
+  estimateLine        EstimateLine? @relation(fields: [organizationId, estimateLineId], references: [organizationId, id], onDelete: Cascade)
   uploadedBy          User?            @relation("AttachmentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id], map: "work_order_attachments_org_id_unique")
@@ -1811,6 +1813,7 @@ model EstimateLine {
   taxInclusive           Boolean                 @default(false) @map("tax_inclusive")
   taxComponents          Json                    @default("[]") @map("tax_components")
   totalMinor             BigInt                  @map("total_minor")
+  attachments            WorkOrderAttachment[]
   authorizationRequired  Boolean                 @default(true) @map("authorization_required")
   position               Int
   createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
