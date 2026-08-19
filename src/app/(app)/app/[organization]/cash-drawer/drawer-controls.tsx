@@ -4,14 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-function parseMoneyInput(value: string): number | null {
-  const trimmed = value.trim().replace(/[$,]/g, "");
-  if (!trimmed) return null;
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return Math.round(parsed * 100);
-}
+import { parseMoneyInput } from "@/i18n/money-input";
 
 /** Open a drawer with a starting float, or count the cash and close it. */
 export function DrawerControls({
