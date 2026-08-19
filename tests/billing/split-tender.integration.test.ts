@@ -289,6 +289,7 @@ describe("stale payment links (#186)", { skip: shouldSkip }, () => {
           payment_status: "paid",
           amount_total: 250_00,
           currency: "usd",
+          payment_intent: "pi_stale",
         },
       },
     });

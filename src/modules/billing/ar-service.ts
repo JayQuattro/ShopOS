@@ -26,7 +26,7 @@ export type CustomerBalance = Readonly<{
 }>;
 
 export type StatementLine = Readonly<{
-  kind: "invoice" | "payment";
+  kind: "invoice" | "payment" | "refund";
   date: Date;
   label: string;
   reference: string | null;
@@ -194,7 +194,7 @@ export async function buildCustomerStatement(
   });
   if (!customer) throw new ArFailed("customer_not_found");
 
-  const [invoices, payments] = await Promise.all([
+  const [invoices, payments, refunds] = await Promise.all([
     db.invoice.findMany({
       where: {
         organizationId,
@@ -231,10 +231,34 @@ export async function buildCustomerStatement(
         invoice: { select: { number: true } },
       },
     }),
+    db.refund.findMany({
+      where: {
+        organizationId,
+        refundedAt: { lte: asOf },
+        invoice: { workOrder: { customerId: customer.id } },
+      },
+      select: {
+        id: true,
+        amountMinor: true,
+        currency: true,
+        reason: true,
+        refundedAt: true,
+        invoice: { select: { number: true } },
+      },
+    }),
   ]);
 
   type Draft = Omit<StatementLine, "runningBalanceMinor">;
   const drafts: Draft[] = [
+    ...refunds.map<Draft>((refund) => ({
+      kind: "refund",
+      date: refund.refundedAt,
+      label: `Refund on ${refund.invoice.number}${refund.reason ? ` — ${refund.reason}` : ""}`,
+      reference: null,
+      // A refund adds back to the balance, like a charge in reverse.
+      amountMinor: refund.amountMinor,
+      currency: refund.currency,
+    })),
     ...invoices.map<Draft>((invoice) => ({
       kind: "invoice",
       date: invoice.issuedAt!, // filtered to issued invoices above

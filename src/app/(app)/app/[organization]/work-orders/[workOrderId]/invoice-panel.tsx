@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,74 @@ export function InvoicePanel({
   const [tenders, setTenders] = useState<Array<{ amount: string; method: string }>>([
     { amount: "", method: "CASH" },
   ]);
+  const [payments, setPayments] = useState<
+    Array<{
+      id: string;
+      method: string;
+      amountMinor: string;
+      refundableMinor: string;
+      receivedAt: string;
+    }>
+  >([]);
+  const [refundPending, setRefundPending] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!invoice.id) return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/invoices/${invoice.id}/refunds`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          if (!cancelled) setPayments(data.payments ?? []);
+        }
+      } catch {
+        /* refunds are optional chrome */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [invoice.id, invoice.paidMinor]);
+
+  async function refund(paymentId: string, refundableMinor: string) {
+    const refundable = Number(refundableMinor) / 100;
+    const entered = window.prompt(
+      `Refund amount (up to ${refundable.toFixed(2)})?`,
+      refundable.toFixed(2),
+    );
+    if (entered === null) return;
+    const amountMinor = Math.round(Number(entered.replace(/[$,]/g, "")) * 100);
+    if (!Number.isFinite(amountMinor) || amountMinor <= 0) return;
+    const reason = window.prompt("Reason (shown on the statement)?") ?? undefined;
+    setRefundPending(paymentId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/refunds`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentId,
+          amountMinor,
+          ...(reason && reason.trim() ? { reason: reason.trim() } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const messages: Record<string, string> = {
+          refund_exceeds_payment: "That is more than is left to refund on this payment.",
+          processor_unavailable:
+            "Connect the processor in Settings → Payments to refund card payments.",
+          processor_refund_failed: "The processor rejected the refund. Check the account.",
+        };
+        throw new Error(messages[body.error ?? ""] ?? "Could not refund.");
+      }
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not refund.");
+      setRefundPending(null);
+    }
+  }
 
   async function createInvoice() {
     setPending(true);
@@ -249,6 +317,38 @@ export function InvoicePanel({
               </span>
             </>
           )}
+        </div>
+      ) : null}
+
+      {payments.length > 0 ? (
+        <div className="flex flex-col gap-1 border-t border-border pt-3">
+          {payments.map((payment) => (
+            <div
+              key={payment.id}
+              className="flex flex-wrap items-center justify-between gap-2 text-sm"
+            >
+              <span>
+                <span className="font-mono tabular-nums">
+                  {formatMoney(Number(payment.amountMinor), invoice.currency, "en-US")}
+                </span>
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {payment.method === "CARD_EXTERNAL" ? "card" : payment.method.toLowerCase()}
+                </span>
+              </span>
+              {Number(payment.refundableMinor) > 0 ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={refundPending === payment.id}
+                  onClick={() => void refund(payment.id, payment.refundableMinor)}
+                >
+                  {refundPending === payment.id ? "Refunding…" : "Refund"}
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">refunded</span>
+              )}
+            </div>
+          ))}
         </div>
       ) : null}
 

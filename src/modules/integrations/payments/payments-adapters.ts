@@ -23,6 +23,10 @@ export type PaymentLink = Readonly<{
 export interface PaymentsAdapter {
   readonly key: string;
   createPaymentLink(input: PaymentLinkInput): Promise<PaymentLink>;
+  /** Returns money through the processor; adapters without refund support omit it. */
+  createRefund?(
+    input: Readonly<{ chargeId: string; amountMinor: number }>,
+  ): Promise<Readonly<{ refundId: string }>>;
 }
 
 /** Dev/test adapter: deterministic fake link, never a live charge. */
@@ -84,6 +88,24 @@ export class StripePaymentsAdapter implements PaymentsAdapter {
     if (!session.url) throw new Error("stripe_payment_link_missing_url");
 
     return { url: session.url, providerRef: session.id };
+  }
+
+  async createRefund(input: Readonly<{ chargeId: string; amountMinor: number }>) {
+    const body = new URLSearchParams({
+      payment_intent: input.chargeId,
+      amount: String(input.amountMinor),
+    });
+    const res = await fetch("https://api.stripe.com/v1/refunds", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.secret.secretKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    });
+    if (!res.ok) throw new Error(`stripe_create_refund_failed_${res.status}`);
+    const refund = (await res.json()) as { id: string };
+    return { refundId: refund.id };
   }
 }
 
