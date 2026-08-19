@@ -4,7 +4,9 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import {
   buildCrossIndustryInvoice,
+  buildFatturaPa,
   buildUblInvoice,
+  splitTaxId,
   type EInvoiceSource,
 } from "@/modules/integrations/einvoicing/einvoice-formats";
 
@@ -13,7 +15,11 @@ export type EInvoiceServiceInput = Readonly<{ db: PrismaClient; context: TenantC
 export class EInvoiceFailed extends Error {
   constructor(
     public readonly reason:
-      "invoice_not_found" | "invoice_not_issued" | "no_format_configured" | "unsupported_format",
+      | "invoice_not_found"
+      | "invoice_not_issued"
+      | "no_format_configured"
+      | "unsupported_format"
+      | "sender_tax_id_required",
   ) {
     super("The e-invoice operation could not be completed.");
     this.name = "EInvoiceFailed";
@@ -28,6 +34,10 @@ export type EInvoiceDocumentSummary = Readonly<{
   contentHash: string;
   generatedAt: Date;
 }>;
+
+function todayCompact(date: Date): string {
+  return date.toISOString().slice(0, 10).replaceAll("-", "");
+}
 
 /**
  * Assembles the EN16931 source from an issued invoice and its stored
@@ -211,14 +221,32 @@ export async function generateEInvoice(
       format,
     );
 
-    const xml =
-      format === "factur-x"
-        ? buildCrossIndustryInvoice(source)
-        : format === "xrechnung"
-          ? buildUblInvoice(source)
-          : (() => {
-              throw new EInvoiceFailed("unsupported_format");
-            })();
+    let xml: string;
+    if (format === "factur-x") {
+      xml = buildCrossIndustryInvoice(source);
+    } else if (format === "xrechnung") {
+      xml = buildUblInvoice(source);
+    } else if (format === "fatturapa") {
+      // Sender identity comes from the org's tax registration (#194); the
+      // transmission progressive is derived from the per-establishment
+      // series number so it is stable per invoice.
+      const senderTax = splitTaxId(source.seller.taxId);
+      if (!senderTax.country || !senderTax.number) {
+        throw new EInvoiceFailed("sender_tax_id_required");
+      }
+      const progressive = `${source.invoiceNumber}-${todayCompact(source.issuedAt)}`
+        .replace(/[^A-Za-z0-9]/g, "")
+        .slice(0, 10)
+        .toUpperCase();
+      xml = buildFatturaPa({
+        ...source,
+        sender: { countryCode: senderTax.country, vatNumber: senderTax.number },
+        destinationCode: "0000000",
+        progressive,
+      });
+    } else {
+      throw new EInvoiceFailed("unsupported_format");
+    }
     const contentHash = createHash("sha256").update(xml).digest("hex");
 
     const before = await transaction.eInvoiceDocument.findFirst({

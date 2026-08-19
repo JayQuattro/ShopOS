@@ -11,7 +11,7 @@ type WorkPreferences = {
   changeOrderCreditPolicy: "AUTO_APPLY" | "REQUIRE_APPROVAL";
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
   taxDisplayMode: "EXCLUSIVE" | "INCLUSIVE";
-  einvoiceFormat: "factur-x" | "xrechnung" | null;
+  einvoiceFormat: "factur-x" | "xrechnung" | "fatturapa" | null;
   defaultPaperSize: "LETTER" | "A4" | "LEGAL";
   qualityCheckRequired: boolean;
   authorizationLinkTtlHours: number;
@@ -195,7 +195,7 @@ export function WorkPreferencesForm() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
-          {([null, "factur-x", "xrechnung"] as const).map((value) => (
+          {([null, "factur-x", "xrechnung", "fatturapa"] as const).map((value) => (
             <label key={value ?? "none"} className="flex items-start gap-3 text-sm">
               <input
                 type="radio"
@@ -220,11 +220,20 @@ export function WorkPreferencesForm() {
                     ? "Invoices are PDF-only."
                     : value === "factur-x"
                       ? "EN16931 Cross Industry Invoice XML alongside the PDF."
-                      : "EN16931 UBL Invoice XML (XRechnung 3.0)."}
+                      : value === "xrechnung"
+                        ? "EN16931 UBL Invoice XML (XRechnung 3.0)."
+                        : "SDI-bound FatturaPA 1.2 XML (FPR12); transmission via your intermediary."}
                 </span>
               </span>
             </label>
           ))}
+        </CardContent>
+        <CardContent>
+          <p className="text-xs text-muted-foreground">
+            Clearance countries (Italy SDI, Mexico CFDI via PAC, Poland KSeF, India IRN, Spain
+            VeriFactu) transmit through your accredited intermediary — bring-your-own connector
+            slots, on the roadmap.
+          </p>
         </CardContent>
       </Card>
 
