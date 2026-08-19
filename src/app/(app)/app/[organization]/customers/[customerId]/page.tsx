@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shopos/page-header";
 import { SummaryCard } from "@/components/shopos/states";
 import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
+import { formatAddressForDisplay } from "@/i18n/address-formats";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { AccountToggle } from "../../billing/account-toggle";
 import { ContactForm } from "./contact-form";
@@ -294,11 +295,7 @@ export default async function CustomerDetailPage({
                     </p>
                     <p className="text-sm">{a.line1}</p>
                     {a.line2 ? <p className="text-sm">{a.line2}</p> : null}
-                    <p className="text-sm text-muted-foreground">
-                      {[a.city, a.stateProvince, a.postalCode, a.country]
-                        .filter(Boolean)
-                        .join(", ")}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{formatAddressForDisplay(a)}</p>
                   </div>
                 ))}
               </div>

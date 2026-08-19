@@ -157,7 +157,6 @@ export function ProfileForm({ initial }: { initial: Profile }) {
           {field("city", "City", "Raleigh")}
           {field("stateProvince", "State / province", "NC")}
           {field("postalCode", "Postal code", "27601")}
-          {field("country", "Country (2-letter)", "US")}
           {field("defaultCurrency", "Default currency (3-letter)", "USD")}
           {field("defaultLocale", "Default display locale (e.g. en-US, pt-BR — blank = en-US)", "")}
           {field(
