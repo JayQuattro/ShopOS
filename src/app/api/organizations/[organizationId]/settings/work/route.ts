@@ -36,6 +36,7 @@ const updateSchema = z.object({
   invoiceLinePolicy: z.enum(["APPROVED_ONLY", "ALL_LINES"]),
   taxDisplayMode: z.enum(["EXCLUSIVE", "INCLUSIVE"]),
   einvoiceFormat: z.enum(["factur-x", "xrechnung", "fatturapa"]).nullable(),
+  weekStartsOn: z.union([z.literal(0), z.literal(1)]),
   defaultPaperSize: z.enum(["LETTER", "A4", "LEGAL"]),
   qualityCheckRequired: z.boolean(),
   authorizationLinkTtlHours: z.number().int().min(1).max(720),

@@ -8,6 +8,7 @@ export type WorkPreferences = Readonly<{
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
   taxDisplayMode: "EXCLUSIVE" | "INCLUSIVE";
   einvoiceFormat: "factur-x" | "xrechnung" | "fatturapa" | null;
+  weekStartsOn: 0 | 1;
   defaultPaperSize: "LETTER" | "A4" | "LEGAL";
   qualityCheckRequired: boolean;
   authorizationLinkTtlHours: number;
@@ -49,6 +50,7 @@ export async function getWorkPreferences(
       invoiceLinePolicy: true,
       taxDisplayMode: true,
       einvoiceFormat: true,
+      weekStartsOn: true,
       defaultPaperSize: true,
       qualityCheckRequired: true,
       authorizationLinkTtlHours: true,
@@ -65,6 +67,7 @@ export async function getWorkPreferences(
     changeOrderCreditPolicy: organization.changeOrderCreditPolicy,
     invoiceLinePolicy: organization.invoiceLinePolicy,
     taxDisplayMode: organization.taxDisplayMode === "INCLUSIVE" ? "INCLUSIVE" : "EXCLUSIVE",
+    weekStartsOn: organization.weekStartsOn === 1 ? 1 : 0,
     einvoiceFormat: ["factur-x", "xrechnung", "fatturapa"].includes(
       organization.einvoiceFormat ?? "",
     )
@@ -126,6 +129,7 @@ export async function updateWorkPreferences(
         invoiceLinePolicy: preferences.invoiceLinePolicy,
         taxDisplayMode: preferences.taxDisplayMode,
         einvoiceFormat: preferences.einvoiceFormat,
+        weekStartsOn: preferences.weekStartsOn,
         defaultPaperSize: preferences.defaultPaperSize,
         qualityCheckRequired: preferences.qualityCheckRequired,
         authorizationLinkTtlHours: preferences.authorizationLinkTtlHours,

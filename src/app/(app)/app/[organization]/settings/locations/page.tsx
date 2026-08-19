@@ -41,6 +41,7 @@ export default async function LocationsSettingsPage({
         locale: true,
         invoiceNumberPrefix: true,
         phoneCountry: true,
+        cashRoundingMinor: true,
       },
     }),
   ]);
@@ -70,6 +71,7 @@ export default async function LocationsSettingsPage({
                 locale: location.locale,
                 invoiceNumberPrefix: location.invoiceNumberPrefix,
                 phoneCountry: location.phoneCountry,
+                cashRoundingMinor: location.cashRoundingMinor,
               }}
               effectiveCurrency={effective[index]!.currency}
               effectiveLocale={effective[index]!.locale}

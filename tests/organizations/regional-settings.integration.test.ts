@@ -143,12 +143,20 @@ describe("regional settings (#193)", { skip: shouldSkip }, () => {
       currency: "EUR",
       locale: "pt-BR",
       phoneCountry: null,
+      cashRoundingMinor: 0,
+      weekStartsOn: 0,
     });
 
     // Location with no overrides: org defaults still.
     expect(
       await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.locationId),
-    ).toEqual({ currency: "EUR", locale: "pt-BR", phoneCountry: null });
+    ).toEqual({
+      currency: "EUR",
+      locale: "pt-BR",
+      phoneCountry: null,
+      cashRoundingMinor: 0,
+      weekStartsOn: 0,
+    });
 
     // Canadian location overrides both.
     await regional.updateLocationRegionalSettings({
@@ -160,11 +168,23 @@ describe("regional settings (#193)", { skip: shouldSkip }, () => {
     });
     expect(
       await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.secondLocationId),
-    ).toEqual({ currency: "CAD", locale: "fr-CA", phoneCountry: null });
+    ).toEqual({
+      currency: "CAD",
+      locale: "fr-CA",
+      phoneCountry: null,
+      cashRoundingMinor: 0,
+      weekStartsOn: 0,
+    });
     // Sibling untouched.
     expect(
       await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.locationId),
-    ).toEqual({ currency: "EUR", locale: "pt-BR", phoneCountry: null });
+    ).toEqual({
+      currency: "EUR",
+      locale: "pt-BR",
+      phoneCountry: null,
+      cashRoundingMinor: 0,
+      weekStartsOn: 0,
+    });
 
     // Clearing overrides falls back to the org defaults.
     await regional.updateLocationRegionalSettings({
@@ -176,7 +196,13 @@ describe("regional settings (#193)", { skip: shouldSkip }, () => {
     });
     expect(
       await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.secondLocationId),
-    ).toEqual({ currency: "EUR", locale: "pt-BR", phoneCountry: null });
+    ).toEqual({
+      currency: "EUR",
+      locale: "pt-BR",
+      phoneCountry: null,
+      cashRoundingMinor: 0,
+      weekStartsOn: 0,
+    });
 
     // A location from another organization resolves nothing — its overrides
     // can never leak.
@@ -184,6 +210,8 @@ describe("regional settings (#193)", { skip: shouldSkip }, () => {
       currency: "EUR",
       locale: "pt-BR",
       phoneCountry: null,
+      cashRoundingMinor: 0,
+      weekStartsOn: 0,
     });
   });
 
@@ -195,6 +223,8 @@ describe("regional settings (#193)", { skip: shouldSkip }, () => {
       currency: "USD",
       locale: "en-US",
       phoneCountry: null,
+      cashRoundingMinor: 0,
+      weekStartsOn: 0,
     });
   });
 
@@ -334,5 +364,40 @@ describe("phone normalization settings (#199)", { skip: shouldSkip }, () => {
         })
       )?.primaryPhone,
     ).toBe("call the shop");
+  });
+});
+
+describe("week start and cash rounding (#201)", { skip: shouldSkip }, () => {
+  it("resolves the org week start and the location cash rounding", async () => {
+    const regional = await import("@/modules/organizations/regional-settings");
+    const seed = await seedShop();
+
+    await dbModule.db.organization.update({
+      where: { id: seed.orgId },
+      data: { weekStartsOn: 1 },
+    });
+    await regional.updateLocationRegionalSettings({
+      db: dbModule.db,
+      context: seed.context(),
+      locationId: seed.secondLocationId,
+      cashRoundingMinor: 5,
+    });
+
+    expect(
+      await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.secondLocationId),
+    ).toMatchObject({ weekStartsOn: 1, cashRoundingMinor: 5 });
+    expect(
+      await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.locationId),
+    ).toMatchObject({ weekStartsOn: 1, cashRoundingMinor: 0 });
+
+    // Off-list rounding units are refused.
+    await expect(
+      regional.updateLocationRegionalSettings({
+        db: dbModule.db,
+        context: seed.context(),
+        locationId: seed.locationId,
+        cashRoundingMinor: 3,
+      }),
+    ).rejects.toMatchObject({ reason: "invalid_currency" });
   });
 });
