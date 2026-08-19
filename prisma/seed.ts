@@ -85,6 +85,7 @@ const ids = {
   demoPortalCredential: "00000000-0000-4000-8000-000000000998",
   demoDrawerClosed: "00000000-0000-4000-8000-000000000996",
   demoDrawerOpen: "00000000-0000-4000-8000-000000000995",
+  demoInspectionTemplate: "00000000-0000-4000-8000-000000000994",
 } as const;
 
 async function seed(): Promise<void> {
@@ -1224,6 +1225,7 @@ async function seedOperationalDemo(): Promise<void> {
   await seedPortalDemo();
   await seedDrawerDemo();
   await seedDepositDemo();
+  await seedInspectionTemplateDemo();
 }
 
 /** Roadside demo calls; idempotent so re-seeding older databases backfills. */
@@ -1455,6 +1457,74 @@ async function seedDepositDemo(): Promise<void> {
       recordedByUserId: ids.owner,
       note: "Left at drop-off for the next service.",
     },
+  });
+}
+
+/** Demo inspection checklist so DVI is one click from populated. */
+async function seedInspectionTemplateDemo(): Promise<void> {
+  const existing = await db.inspectionTemplate.findUnique({
+    where: { id: ids.demoInspectionTemplate },
+  });
+  if (existing) return;
+
+  await db.inspectionTemplate.create({
+    data: {
+      id: ids.demoInspectionTemplate,
+      organizationId: ids.organization,
+      name: "Full walkaround",
+    },
+  });
+  await db.inspectionTemplateItem.createMany({
+    data: [
+      {
+        id: "00000000-0000-4000-8000-0000000009a1",
+        organizationId: ids.organization,
+        inspectionTemplateId: ids.demoInspectionTemplate,
+        position: 1,
+        zone: "Brakes",
+        component: "Front pads & rotors",
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009a2",
+        organizationId: ids.organization,
+        inspectionTemplateId: ids.demoInspectionTemplate,
+        position: 2,
+        zone: "Brakes",
+        component: "Rear pads",
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009a3",
+        organizationId: ids.organization,
+        inspectionTemplateId: ids.demoInspectionTemplate,
+        position: 3,
+        zone: "Tires",
+        component: "Tread depth all four",
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009a4",
+        organizationId: ids.organization,
+        inspectionTemplateId: ids.demoInspectionTemplate,
+        position: 4,
+        zone: "Fluids",
+        component: "Oil level & condition",
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009a5",
+        organizationId: ids.organization,
+        inspectionTemplateId: ids.demoInspectionTemplate,
+        position: 5,
+        zone: "Lights",
+        component: "Exterior lamps",
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009a6",
+        organizationId: ids.organization,
+        inspectionTemplateId: ids.demoInspectionTemplate,
+        position: 6,
+        zone: "Battery",
+        component: "Terminal corrosion & test",
+      },
+    ],
   });
 }
 
