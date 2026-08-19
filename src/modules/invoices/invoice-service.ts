@@ -98,7 +98,7 @@ export async function createInvoiceFromWorkOrder(
         status: "PRESENTED",
       },
       orderBy: { revisionNumber: "desc" },
-      select: { id: true, currency: true },
+      select: { id: true, currency: true, taxInclusive: true },
     });
     // Change orders: every PRESENTED change order, oldest first.
     const changeOrders = await transaction.estimateRevision.findMany({
@@ -128,6 +128,7 @@ export async function createInvoiceFromWorkOrder(
       taxable: boolean;
       taxRateBasisPoints: number;
       taxMinor: bigint;
+      taxInclusive: boolean;
       totalMinor: bigint;
       position: number;
       approved: boolean;
@@ -154,6 +155,7 @@ export async function createInvoiceFromWorkOrder(
           taxable: line.taxable,
           taxRateBasisPoints: line.taxRateBasisPoints,
           taxMinor: line.taxMinor,
+          taxInclusive: line.taxInclusive,
           totalMinor: line.totalMinor,
           position: line.position,
           // Mirrors the money kernel: approved or authorization-not-required.
@@ -197,6 +199,8 @@ export async function createInvoiceFromWorkOrder(
         subtotalMinor,
         discountMinor,
         taxMinor,
+        // The invoice inherits the pricing convention of what was presented.
+        taxInclusive: baseline?.taxInclusive ?? false,
         totalMinor,
         paidMinor: 0n,
       },
@@ -221,6 +225,7 @@ export async function createInvoiceFromWorkOrder(
           taxable: line.taxable,
           taxRateBasisPoints: line.taxRateBasisPoints,
           taxMinor: line.taxMinor,
+          taxInclusive: line.taxInclusive,
           totalMinor: line.totalMinor,
           position: invoicePosition,
         },

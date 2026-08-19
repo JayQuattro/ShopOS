@@ -6,6 +6,7 @@ import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy
 export type WorkPreferences = Readonly<{
   changeOrderCreditPolicy: "AUTO_APPLY" | "REQUIRE_APPROVAL";
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
+  taxDisplayMode: "EXCLUSIVE" | "INCLUSIVE";
   defaultPaperSize: "LETTER" | "A4" | "LEGAL";
   qualityCheckRequired: boolean;
   authorizationLinkTtlHours: number;
@@ -45,6 +46,7 @@ export async function getWorkPreferences(
     select: {
       changeOrderCreditPolicy: true,
       invoiceLinePolicy: true,
+      taxDisplayMode: true,
       defaultPaperSize: true,
       qualityCheckRequired: true,
       authorizationLinkTtlHours: true,
@@ -60,6 +62,7 @@ export async function getWorkPreferences(
   return {
     changeOrderCreditPolicy: organization.changeOrderCreditPolicy,
     invoiceLinePolicy: organization.invoiceLinePolicy,
+    taxDisplayMode: organization.taxDisplayMode === "INCLUSIVE" ? "INCLUSIVE" : "EXCLUSIVE",
     defaultPaperSize: organization.defaultPaperSize,
     qualityCheckRequired: organization.qualityCheckRequired,
     authorizationLinkTtlHours: organization.authorizationLinkTtlHours,
@@ -114,6 +117,7 @@ export async function updateWorkPreferences(
       data: {
         changeOrderCreditPolicy: preferences.changeOrderCreditPolicy,
         invoiceLinePolicy: preferences.invoiceLinePolicy,
+        taxDisplayMode: preferences.taxDisplayMode,
         defaultPaperSize: preferences.defaultPaperSize,
         qualityCheckRequired: preferences.qualityCheckRequired,
         authorizationLinkTtlHours: preferences.authorizationLinkTtlHours,

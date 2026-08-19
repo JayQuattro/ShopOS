@@ -34,6 +34,7 @@ export async function GET(
 const updateSchema = z.object({
   changeOrderCreditPolicy: z.enum(["AUTO_APPLY", "REQUIRE_APPROVAL"]),
   invoiceLinePolicy: z.enum(["APPROVED_ONLY", "ALL_LINES"]),
+  taxDisplayMode: z.enum(["EXCLUSIVE", "INCLUSIVE"]),
   defaultPaperSize: z.enum(["LETTER", "A4", "LEGAL"]),
   qualityCheckRequired: z.boolean(),
   authorizationLinkTtlHours: z.number().int().min(1).max(720),

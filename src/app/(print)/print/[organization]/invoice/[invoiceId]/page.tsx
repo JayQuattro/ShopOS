@@ -31,6 +31,7 @@ export default async function InvoicePrintPage({
       subtotalMinor: true,
       discountMinor: true,
       taxMinor: true,
+      taxInclusive: true,
       totalMinor: true,
       paidMinor: true,
       issuedAt: true,
@@ -140,7 +141,9 @@ export default async function InvoicePrintPage({
               <span className="tabular-nums">{money(invoice.subtotalMinor)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-neutral-500">Tax</span>
+              <span className="text-neutral-500">
+                Tax{invoice.taxInclusive ? " (included in total)" : ""}
+              </span>
               <span className="tabular-nums">{money(invoice.taxMinor)}</span>
             </div>
             <div className="flex justify-between border-t border-neutral-900 pt-1 font-bold">

@@ -63,6 +63,11 @@ export async function createDraftRevision(
     });
     const nextNumber = (latestRevision?.revisionNumber ?? 0) + 1;
 
+    const org = await transaction.organization.findUnique({
+      where: { id: input.context.organizationId },
+      select: { taxDisplayMode: true },
+    });
+
     const revision = await transaction.estimateRevision.create({
       data: {
         id: randomUUID(),
@@ -76,6 +81,8 @@ export async function createDraftRevision(
         discountMinor: 0n,
         taxMinor: 0n,
         totalMinor: 0n,
+        // Snapshot the org's pricing convention (VAT-inclusive vs added).
+        taxInclusive: org?.taxDisplayMode === "INCLUSIVE",
         createdByUserId: input.context.actorId,
       },
     });
@@ -109,20 +116,23 @@ export async function addLine(
   );
 
   // Compute financial fields using the pure money kernel.
-  const calculated = calculateLine({
-    id: "temp",
-    kind: input.kind as PricedLineInput["kind"],
-    quantityMilli: input.quantityMilli,
-    unitPriceMinor: input.unitPriceMinor,
-    discountMinor: input.discountMinor,
-    taxable: input.taxable,
-    taxRateBasisPoints: input.taxRateBasisPoints,
-    authorization: "pending",
-  });
-
   return input.db.$transaction(async (transaction) => {
     const revision = await loadRevisionForMutation(transaction, input.context, input.revisionId);
     if (revision.status !== "DRAFT") throw new EstimateFailed("revision_not_draft");
+
+    // The line's price convention follows the revision's snapshot — set at
+    // revision creation from the org's tax display mode, never re-read live.
+    const calculated = calculateLine({
+      id: "temp",
+      kind: input.kind as PricedLineInput["kind"],
+      quantityMilli: input.quantityMilli,
+      unitPriceMinor: input.unitPriceMinor,
+      discountMinor: input.discountMinor,
+      taxable: input.taxable,
+      taxRateBasisPoints: input.taxRateBasisPoints,
+      authorization: "pending",
+      taxMode: revision.taxInclusive ? "INCLUSIVE" : "EXCLUSIVE",
+    });
 
     // Credit lines (negative unit price) exist only on change orders (ADR 0014).
     if (input.unitPriceMinor < 0 && revision.documentKind !== "CHANGE_ORDER") {
@@ -144,6 +154,7 @@ export async function addLine(
         taxable: input.taxable,
         taxRateBasisPoints: input.taxRateBasisPoints,
         taxMinor: BigInt(calculated.taxMinor),
+        taxInclusive: revision.taxInclusive,
         totalMinor: BigInt(calculated.totalMinor),
         position: input.position,
       },
@@ -226,6 +237,7 @@ export async function presentRevision(
         taxable: fee.taxable,
         taxRateBasisPoints: fee.taxRateBasisPoints,
         authorization: "pending",
+        taxMode: revision.taxInclusive ? "INCLUSIVE" : "EXCLUSIVE",
       });
       await transaction.estimateLine.create({
         data: {
@@ -242,6 +254,7 @@ export async function presentRevision(
           taxable: fee.taxable,
           taxRateBasisPoints: fee.taxRateBasisPoints,
           taxMinor: BigInt(calculated.taxMinor),
+          taxInclusive: revision.taxInclusive,
           totalMinor: BigInt(calculated.totalMinor),
           position: fee.position,
         },
@@ -417,6 +430,7 @@ export async function supersedeRevision(
         changeOrderNumber: oldRevision.changeOrderNumber,
         summaryNote: oldRevision.summaryNote,
         currency: oldRevision.currency,
+        taxInclusive: oldRevision.taxInclusive,
         subtotalMinor: 0n,
         discountMinor: 0n,
         taxMinor: 0n,
@@ -449,6 +463,7 @@ async function loadRevisionForMutation(
       changeOrderNumber: true,
       summaryNote: true,
       currency: true,
+      taxInclusive: true,
     },
   });
   if (!revision) throw new EstimateFailed("revision_not_found");
