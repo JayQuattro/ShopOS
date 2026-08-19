@@ -37,6 +37,7 @@ export default async function AuthorizationPrintPage({
         select: {
           name: true,
           defaultPaperSize: true,
+          defaultLocale: true,
           contactPhone: true,
           contactEmail: true,
           addressLine1: true,
@@ -78,12 +79,13 @@ export default async function AuthorizationPrintPage({
   if (!baseline) notFound();
 
   const currency = baseline.currency;
-  const money = (minor: bigint | number) => formatMoney(Number(minor), currency, "en-US");
+  const money = (minor: bigint | number) => formatMoney(Number(minor), currency, locale);
   const cumulative = workOrder.estimateRevisions.reduce(
     (sum, revision) => sum + revision.totalMinor,
     0n,
   );
 
+  const locale = workOrder.organization.defaultLocale ?? "en-US";
   const paper = resolvePaperSize(workOrder.organization.defaultPaperSize, paperOverride);
 
   return (
@@ -107,7 +109,7 @@ export default async function AuthorizationPrintPage({
                 "Make / model",
                 [workOrder.asset?.manufacturer, workOrder.asset?.model].filter(Boolean).join(" "),
               ],
-              ["Date", formatDate(workOrder.createdAt, "UTC", "en-US")],
+              ["Date", formatDate(workOrder.createdAt, "UTC", locale)],
               ["Repair order", workOrder.number],
             ]}
           />

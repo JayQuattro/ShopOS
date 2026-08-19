@@ -43,6 +43,7 @@ export default async function StatementPrintPage({
     select: {
       name: true,
       defaultPaperSize: true,
+      defaultLocale: true,
       contactPhone: true,
       contactEmail: true,
       addressLine1: true,
@@ -53,6 +54,7 @@ export default async function StatementPrintPage({
     },
   });
   if (!org) notFound();
+  const locale = org.defaultLocale ?? "en-US";
 
   const paper = resolvePaperSize(org.defaultPaperSize, paperOverride);
 
@@ -63,7 +65,7 @@ export default async function StatementPrintPage({
         organizationName={org.name}
         locationName="Account statement"
         title={`Statement — ${statement.customerName}`}
-        subtitle={`As of ${formatDate(statement.asOf, "UTC", "en-US")}`}
+        subtitle={`As of ${formatDate(statement.asOf, "UTC", locale)}`}
         contactLine={orgContactLine(org)}
       >
         <PrintSection heading="Activity">
@@ -86,7 +88,7 @@ export default async function StatementPrintPage({
               ) : (
                 statement.lines.map((line, index) => (
                   <tr key={`${line.kind}-${index}`} className="border-b border-border/60">
-                    <td className="py-2 tabular-nums">{formatDate(line.date, "UTC", "en-US")}</td>
+                    <td className="py-2 tabular-nums">{formatDate(line.date, "UTC", locale)}</td>
                     <td className="py-2">
                       {line.label}
                       {line.reference ? (
@@ -104,7 +106,7 @@ export default async function StatementPrintPage({
                       )}
                     </td>
                     <td className="py-2 text-right font-medium tabular-nums">
-                      {formatMoney(Number(line.runningBalanceMinor), line.currency, "en-US")}
+                      {formatMoney(Number(line.runningBalanceMinor), line.currency, locale)}
                     </td>
                   </tr>
                 ))
@@ -116,7 +118,7 @@ export default async function StatementPrintPage({
                   Balance due
                 </td>
                 <td className="py-2 text-right font-mono font-semibold tabular-nums">
-                  {formatMoney(Number(statement.balanceMinor), statement.currency, "en-US")}
+                  {formatMoney(Number(statement.balanceMinor), statement.currency, locale)}
                 </td>
               </tr>
             </tfoot>

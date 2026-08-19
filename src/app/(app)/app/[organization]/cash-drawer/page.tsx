@@ -9,6 +9,7 @@ import {
   listClosedCashDrawers,
   type OpenDrawerState,
 } from "@/modules/billing/cash-drawer-service";
+import { resolveRegionalSettings } from "@/modules/organizations/regional-settings";
 import { DrawerControls } from "./drawer-controls";
 
 export const dynamic = "force-dynamic";
@@ -136,12 +137,15 @@ export default async function CashDrawerPage({
     getOpenCashDrawers({ db, context }),
     listClosedCashDrawers({ db, context }),
   ]);
-  const org = await db.organization.findUnique({
-    where: { id: context.organizationId },
-    select: { defaultCurrency: true },
-  });
-  const currency = org?.defaultCurrency ?? "USD";
   const orgId = context.organizationId;
+  const effectiveByLocation = new Map(
+    await Promise.all(
+      locations.map(async (location) => {
+        const regional = await resolveRegionalSettings(db, context.organizationId, location.id);
+        return [location.id, regional.currency] as const;
+      }),
+    ),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -191,7 +195,7 @@ export default async function CashDrawerPage({
                     mode="open"
                     locationId={location.id}
                     locationName={`my till at ${location.name}`}
-                    currency={currency}
+                    currency={effectiveByLocation.get(location.id) ?? "USD"}
                   />
                 ) : null}
                 {!sharedOpen ? (
@@ -200,7 +204,7 @@ export default async function CashDrawerPage({
                     mode="open"
                     locationId={location.id}
                     locationName={`the shared drawer at ${location.name}`}
-                    currency={currency}
+                    currency={effectiveByLocation.get(location.id) ?? "USD"}
                     shared
                   />
                 ) : null}

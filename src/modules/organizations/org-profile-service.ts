@@ -8,7 +8,12 @@ export type OrgSettingsInput = Readonly<{ db: PrismaClient; context: TenantConte
 export class OrgProfileFailed extends Error {
   constructor(
     public readonly reason:
-      "organization_not_found" | "invalid_name" | "invalid_website" | "invalid_country",
+      | "organization_not_found"
+      | "invalid_name"
+      | "invalid_website"
+      | "invalid_country"
+      | "invalid_currency"
+      | "invalid_locale",
   ) {
     super("The shop profile operation could not be completed.");
     this.name = "OrgProfileFailed";
@@ -26,6 +31,8 @@ export type ShopProfile = Readonly<{
   stateProvince: string | null;
   postalCode: string | null;
   country: string | null;
+  defaultCurrency: string;
+  defaultLocale: string | null;
 }>;
 
 /**
@@ -51,6 +58,8 @@ export async function getShopProfile(
       stateProvince: true,
       postalCode: true,
       country: true,
+      defaultCurrency: true,
+      defaultLocale: true,
     },
   });
   if (!organization) throw new OrgProfileFailed("organization_not_found");
@@ -78,6 +87,8 @@ export async function updateShopProfile(
     stateProvince?: string | null;
     postalCode?: string | null;
     country?: string | null;
+    defaultCurrency?: string;
+    defaultLocale?: string | null;
   }>,
 ): Promise<void> {
   assertTenantAccess(context, { organizationId: context.organizationId }, "organizations.manage");
@@ -95,6 +106,17 @@ export async function updateShopProfile(
   const country = clean(profile.country);
   if (country && !/^[A-Za-z]{2}$/.test(country)) throw new OrgProfileFailed("invalid_country");
 
+  const defaultCurrency = (profile.defaultCurrency ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(defaultCurrency)) throw new OrgProfileFailed("invalid_currency");
+  const defaultLocale = clean(profile.defaultLocale);
+  if (
+    defaultLocale &&
+    (!/^[a-z]{2,3}(-[A-Z][a-zA-Z]{0,7})*$/.test(defaultLocale) ||
+      Intl.NumberFormat.supportedLocalesOf([defaultLocale]).length !== 1)
+  ) {
+    throw new OrgProfileFailed("invalid_locale");
+  }
+
   await db.$transaction(async (transaction) => {
     const before = await transaction.organization.findUnique({
       where: { id: context.organizationId },
@@ -109,6 +131,8 @@ export async function updateShopProfile(
         stateProvince: true,
         postalCode: true,
         country: true,
+        defaultCurrency: true,
+        defaultLocale: true,
       },
     });
     if (!before) throw new OrgProfileFailed("organization_not_found");
@@ -124,6 +148,8 @@ export async function updateShopProfile(
       stateProvince: clean(profile.stateProvince),
       postalCode: clean(profile.postalCode),
       country: country ? country.toUpperCase() : null,
+      defaultCurrency,
+      defaultLocale,
     };
 
     await transaction.organization.update({

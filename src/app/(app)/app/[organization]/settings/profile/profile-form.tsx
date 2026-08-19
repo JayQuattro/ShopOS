@@ -18,6 +18,8 @@ type Profile = {
   stateProvince: string | null;
   postalCode: string | null;
   country: string | null;
+  defaultCurrency: string;
+  defaultLocale: string | null;
 };
 
 /** Shop identity + contact details. Empty fields clear; website needs http(s). */
@@ -33,6 +35,8 @@ export function ProfileForm({ initial }: { initial: Profile }) {
     stateProvince: initial.stateProvince ?? "",
     postalCode: initial.postalCode ?? "",
     country: initial.country ?? "",
+    defaultCurrency: initial.defaultCurrency ?? "USD",
+    defaultLocale: initial.defaultLocale ?? "",
   });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +64,8 @@ export function ProfileForm({ initial }: { initial: Profile }) {
         const messages: Record<string, string> = {
           invalid_website: "The website must start with http:// or https://.",
           invalid_country: "Country is a two-letter code, e.g. US.",
+          invalid_currency: "Currency is a 3-letter code, like USD or CAD.",
+          invalid_locale: "Locale looks like en-US, pt-BR, or fr-CA.",
           invalid_name: "Give the shop a name.",
         };
         throw new Error(messages[data.error] ?? "Could not save the profile.");
@@ -141,6 +147,8 @@ export function ProfileForm({ initial }: { initial: Profile }) {
           {field("stateProvince", "State / province", "NC")}
           {field("postalCode", "Postal code", "27601")}
           {field("country", "Country (2-letter)", "US")}
+          {field("defaultCurrency", "Default currency (3-letter)", "USD")}
+          {field("defaultLocale", "Default display locale (e.g. en-US, pt-BR — blank = en-US)", "")}
         </CardContent>
       </Card>
 

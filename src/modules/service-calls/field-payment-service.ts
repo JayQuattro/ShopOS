@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { PrismaClient, PaymentMethod } from "@/generated/prisma/client";
 import { resolveDrawerForPayment } from "@/modules/billing/cash-drawer-service";
+import { resolveRegionalSettings } from "@/modules/organizations/regional-settings";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 
 export type FieldPaymentInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
@@ -44,10 +45,11 @@ export async function recordFieldPayment(
     });
     if (!call) throw new FieldPaymentFailed("service_call_not_found");
 
-    const org = await transaction.organization.findUnique({
-      where: { id: input.context.organizationId },
-      select: { defaultCurrency: true },
-    });
+    const regional = await resolveRegionalSettings(
+      transaction,
+      input.context.organizationId,
+      call.locationId,
+    );
 
     const drawerSessionId = await resolveDrawerForPayment(
       transaction,
@@ -63,7 +65,7 @@ export async function recordFieldPayment(
         locationId: call.locationId,
         serviceCallId: call.id,
         amountMinor: BigInt(input.amountMinor),
-        currency: org?.defaultCurrency ?? "USD",
+        currency: regional.currency,
         method: input.method,
         ...(input.reference ? { reference: input.reference.trim() } : {}),
         ...(drawerSessionId ? { drawerSessionId } : {}),
