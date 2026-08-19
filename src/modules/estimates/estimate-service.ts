@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 
 import type { PrismaClient, PricedLineKind } from "@/generated/prisma/client";
 import { calculateLine, currencyCode, type PricedLineInput } from "@/modules/shared/money";
+import { computeStackedTax, resolveTaxComponents } from "@/modules/taxes/tax-stacks";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import { transitionStatus } from "@/modules/work-orders/work-order-service";
 import { resolveLinkTtlHours } from "@/modules/estimates/authorization-link-service";
@@ -20,6 +21,7 @@ export class EstimateFailed extends Error {
       | "work_order_not_found"
       | "revision_not_found"
       | "revision_not_draft"
+      | "tax_rate_not_found"
       | "line_not_found"
       | "invalid_currency"
       | "credit_line_not_allowed"
@@ -106,6 +108,7 @@ export async function addLine(
     discountMinor: number;
     taxable: boolean;
     taxRateBasisPoints: number;
+    taxRateId?: string;
     position: number;
   },
 ): Promise<Readonly<{ lineId: string }>> {
@@ -120,6 +123,21 @@ export async function addLine(
     const revision = await loadRevisionForMutation(transaction, input.context, input.revisionId);
     if (revision.status !== "DRAFT") throw new EstimateFailed("revision_not_draft");
 
+    // A named tax rate may resolve to a stack (GST + PST/QST): the group's
+    // rates share one base, round per component, and sum to the line's tax.
+    let taxRateBasisPoints = input.taxRateBasisPoints;
+    let taxComponents: Parameters<typeof computeStackedTax>[1] | null = null;
+    if (input.taxRateId && input.taxable) {
+      const components = await resolveTaxComponents(
+        transaction,
+        input.context.organizationId,
+        input.taxRateId,
+      );
+      if (!components) throw new EstimateFailed("tax_rate_not_found");
+      taxRateBasisPoints = computeStackedTax(0, components).effectiveBasisPoints;
+      taxComponents = components;
+    }
+
     // The line's price convention follows the revision's snapshot — set at
     // revision creation from the org's tax display mode, never re-read live.
     const calculated = calculateLine({
@@ -129,10 +147,15 @@ export async function addLine(
       unitPriceMinor: input.unitPriceMinor,
       discountMinor: input.discountMinor,
       taxable: input.taxable,
-      taxRateBasisPoints: input.taxRateBasisPoints,
+      taxRateBasisPoints,
       authorization: "pending",
       taxMode: revision.taxInclusive ? "INCLUSIVE" : "EXCLUSIVE",
     });
+
+    // Component amounts for display, computed on this line's actual net.
+    const componentBreakdown = taxComponents
+      ? computeStackedTax(calculated.netMinor, taxComponents)
+      : null;
 
     // Credit lines (negative unit price) exist only on change orders (ADR 0014).
     if (input.unitPriceMinor < 0 && revision.documentKind !== "CHANGE_ORDER") {
@@ -152,9 +175,10 @@ export async function addLine(
         grossMinor: BigInt(calculated.grossMinor),
         discountMinor: BigInt(input.discountMinor),
         taxable: input.taxable,
-        taxRateBasisPoints: input.taxRateBasisPoints,
+        taxRateBasisPoints,
         taxMinor: BigInt(calculated.taxMinor),
         taxInclusive: revision.taxInclusive,
+        ...(componentBreakdown ? { taxComponents: componentBreakdown.breakdown } : {}),
         totalMinor: BigInt(calculated.totalMinor),
         position: input.position,
       },

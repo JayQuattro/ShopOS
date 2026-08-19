@@ -129,6 +129,7 @@ export async function createInvoiceFromWorkOrder(
       taxRateBasisPoints: number;
       taxMinor: bigint;
       taxInclusive: boolean;
+      taxComponents: unknown;
       totalMinor: bigint;
       position: number;
       approved: boolean;
@@ -156,6 +157,7 @@ export async function createInvoiceFromWorkOrder(
           taxRateBasisPoints: line.taxRateBasisPoints,
           taxMinor: line.taxMinor,
           taxInclusive: line.taxInclusive,
+          taxComponents: line.taxComponents ?? [],
           totalMinor: line.totalMinor,
           position: line.position,
           // Mirrors the money kernel: approved or authorization-not-required.
@@ -226,6 +228,7 @@ export async function createInvoiceFromWorkOrder(
           taxRateBasisPoints: line.taxRateBasisPoints,
           taxMinor: line.taxMinor,
           taxInclusive: line.taxInclusive,
+          taxComponents: line.taxComponents ?? [],
           totalMinor: line.totalMinor,
           position: invoicePosition,
         },

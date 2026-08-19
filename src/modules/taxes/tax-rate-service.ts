@@ -45,7 +45,7 @@ export async function listTaxRates(
 
 /** Creates a named tax rate (basis points, 0–10000). */
 export async function createTaxRate(
-  input: TaxServiceInput & { name: string; rateBasisPoints: number },
+  input: TaxServiceInput & { name: string; rateBasisPoints: number; stackGroup?: string },
 ): Promise<Readonly<{ taxRateId: string }>> {
   assertTenantAccess(
     input.context,
@@ -69,10 +69,12 @@ export async function createTaxRate(
   });
   if (existing) throw new TaxRateFailed("duplicate_name");
 
+  const stackGroup = input.stackGroup?.trim() ?? "";
   const rate = await input.db.taxRate.create({
     data: {
       id: randomUUID(),
       organizationId: input.context.organizationId,
+      ...(stackGroup ? { stackGroup } : {}),
       name,
       rateBasisPoints: input.rateBasisPoints,
     },
