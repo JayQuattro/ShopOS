@@ -89,6 +89,8 @@ export async function uploadAttachment(
     workOrderId: string;
     /** When set, the file is evidence for this estimate document and becomes visible to the customer through that document's authorization link. */
     estimateRevisionId?: string;
+    /** When set, the file is inspection media for one checklist row. */
+    inspectionItemId?: string;
     fileName: string;
     contentType: string;
     body: Uint8Array;
@@ -122,6 +124,20 @@ export async function uploadAttachment(
   });
   if (!workOrder) throw new AttachmentOperationFailed("work_order_not_found");
 
+  // An inspection-scoped upload must reference an item whose inspection
+  // belongs to this work order in the same tenant.
+  if (input.inspectionItemId) {
+    const item = await input.db.inspectionItem.findFirst({
+      where: {
+        id: input.inspectionItemId,
+        organizationId: input.context.organizationId,
+        inspection: { workOrderId: input.workOrderId },
+      },
+      select: { id: true },
+    });
+    if (!item) throw new AttachmentOperationFailed("revision_not_found");
+  }
+
   // A document-scoped upload must reference an estimate revision of this
   // work order in the same tenant.
   if (input.estimateRevisionId) {
@@ -152,6 +168,7 @@ export async function uploadAttachment(
       organizationId: input.context.organizationId,
       workOrderId: input.workOrderId,
       estimateRevisionId: input.estimateRevisionId ?? null,
+      inspectionItemId: input.inspectionItemId ?? null,
       objectKey,
       fileName: input.fileName,
       contentType: input.contentType,

@@ -224,6 +224,7 @@ model User {
   recordedDeposits      Deposit[]                         @relation("DepositRecordedBy")
   recordedRefunds       Refund[]                          @relation("RefundRecordedBy")
   generatedEInvoices    EInvoiceDocument[]                @relation("EInvoiceGeneratedBy")
+  performedInspections  Inspection[]                     @relation("InspectionPerformedBy")
   drivenTransportJobs   TransportJob[]                    @relation("TransportDriver")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
@@ -323,6 +324,10 @@ model Organization {
   cashDrawerSessions CashDrawerSession[]
   deposits            Deposit[]
   locationHolidays    LocationHoliday[]
+  inspectionTemplates InspectionTemplate[]
+  inspectionTemplateItems InspectionTemplateItem[]
+  inspections       Inspection[]
+  inspectionItems   InspectionItem[]
   refunds             Refund[]
   eInvoiceDocuments  EInvoiceDocument[]
   businessHours       LocationBusinessHour[]
@@ -404,6 +409,7 @@ model Location {
   serviceCalls   ServiceCall[]
   transportJobs  TransportJob[]
   holidays      LocationHoliday[]
+  inspections  Inspection[]
   cashDrawerSessions CashDrawerSession[]
   deposits         Deposit[]
 
@@ -936,6 +942,7 @@ model WorkOrder {
   serviceCalls      ServiceCall[]
   transportJobs     TransportJob[]
   deposits           Deposit[]
+  inspections       Inspection[]
 
   @@unique([organizationId, number], map: "work_orders_org_number_unique")
   @@unique([organizationId, locationId, id], map: "work_orders_org_location_id_unique")
@@ -1447,6 +1454,90 @@ model LocationHoliday {
   @@map("location_holidays")
 }
 
+enum InspectionItemCondition {
+  OK       @map("ok")
+  WATCH    @map("watch")
+  REPLACE  @map("replace")
+  NA       @map("na")
+
+  @@map("inspection_item_condition")
+}
+
+model InspectionTemplate {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(180)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  items          InspectionTemplateItem[]
+  inspections    Inspection[]
+
+  @@unique([organizationId, id], map: "inspection_templates_org_id_unique")
+  @@map("inspection_templates")
+}
+
+model InspectionTemplateItem {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  inspectionTemplateId String   @map("inspection_template_id") @db.Uuid
+  position             Int
+  zone                 String?  @db.VarChar(80)
+  component            String   @db.VarChar(160)
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  inspectionTemplate   InspectionTemplate @relation(fields: [organizationId, inspectionTemplateId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, inspectionTemplateId, position], map: "inspection_template_items_position_unique")
+  @@map("inspection_template_items")
+}
+
+model Inspection {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  locationId        String    @map("location_id") @db.Uuid
+  workOrderId       String    @map("work_order_id") @db.Uuid
+  inspectionTemplateId String? @map("inspection_template_id") @db.Uuid
+  title             String    @db.VarChar(180)
+  status            String    @default("draft") @db.VarChar(16)
+  performedByUserId String?   @map("performed_by_user_id") @db.Uuid
+  completedAt       DateTime? @map("completed_at") @db.Timestamptz(6)
+  sharedToken       String?   @unique @map("shared_token") @db.VarChar(64)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location          Location  @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  workOrder         WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  inspectionTemplate InspectionTemplate? @relation(fields: [organizationId, inspectionTemplateId], references: [organizationId, id], onDelete: SetNull)
+  performedBy       User?     @relation("InspectionPerformedBy", fields: [performedByUserId], references: [id], onDelete: Restrict)
+  items             InspectionItem[]
+
+  @@unique([organizationId, id], map: "inspections_org_id_unique")
+  @@index([organizationId, workOrderId], map: "inspections_org_work_order_idx")
+  @@map("inspections")
+}
+
+model InspectionItem {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  inspectionId   String    @map("inspection_id") @db.Uuid
+  position       Int
+  zone           String?   @db.VarChar(80)
+  component      String    @db.VarChar(160)
+  condition      InspectionItemCondition @default(OK)
+  note           String?
+  recommended    Boolean   @default(false)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  inspection     Inspection @relation(fields: [organizationId, inspectionId], references: [organizationId, id], onDelete: Cascade)
+  attachments    WorkOrderAttachment[]
+
+  @@unique([organizationId, id], map: "inspection_items_org_id_unique")
+  @@unique([organizationId, inspectionId, position], map: "inspection_items_position_unique")
+  @@index([organizationId, inspectionId], map: "inspection_items_org_inspection_idx")
+  @@map("inspection_items")
+}
+
 model Deposit {
   id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId   String    @map("organization_id") @db.Uuid
@@ -1623,6 +1714,7 @@ model WorkOrderAttachment {
   organizationId      String   @map("organization_id") @db.Uuid
   workOrderId         String   @map("work_order_id") @db.Uuid
   estimateRevisionId  String?  @map("estimate_revision_id") @db.Uuid
+  inspectionItemId    String?  @map("inspection_item_id") @db.Uuid
   objectKey           String   @map("object_key") @db.VarChar(512)
   fileName            String   @map("file_name") @db.VarChar(255)
   contentType         String   @map("content_type") @db.VarChar(127)
@@ -1632,6 +1724,7 @@ model WorkOrderAttachment {
   organization        Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workOrder           WorkOrder        @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
   estimateRevision    EstimateRevision? @relation(fields: [organizationId, estimateRevisionId], references: [organizationId, id], onDelete: Cascade)
+  inspectionItem      InspectionItem? @relation(fields: [organizationId, inspectionItemId], references: [organizationId, id], onDelete: Cascade)
   uploadedBy          User?            @relation("AttachmentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id], map: "work_order_attachments_org_id_unique")
