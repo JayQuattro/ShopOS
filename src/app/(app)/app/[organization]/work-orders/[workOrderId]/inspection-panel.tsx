@@ -219,6 +219,21 @@ export function InspectionPanel({
                         ) : null}
                         {item.component}
                       </span>
+                      {item.recommended && canWrite && inspection.status === "completed" ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() =>
+                            void post(`/inspections/${inspection.id}/recommend`, {
+                              action: "recommend",
+                              itemId: item.id,
+                            })
+                          }
+                          className="rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                        >
+                          Add to estimate →
+                        </button>
+                      ) : null}
                       {inspection.status === "draft" && canWrite ? (
                         <div className="flex gap-1">
                           {(["OK", "WATCH", "REPLACE", "NA"] as const).map((condition) => (
