@@ -252,6 +252,12 @@ export function EstimatePanel({
     }
   }
 
+  // Canned-job speed path: search templates and apply in one click.
+  const [templates, setTemplates] = useState<
+    Array<{ id: string; name: string; notes: string | null; lines: unknown[] }>
+  >([]);
+  const [cannedQuery, setCannedQuery] = useState("");
+
   // Line form state
   const [lineKind, setLineKind] = useState("LABOR");
   const [lineDesc, setLineDesc] = useState("");
@@ -259,6 +265,56 @@ export function EstimatePanel({
   const [linePrice, setLinePrice] = useState("0");
   const [lineTaxRate, setLineTaxRate] = useState("0"); // rate id, "0" (none), or "custom"
   const [lineCredit, setLineCredit] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      void (async () => {
+        try {
+          const res = await fetch("/api/service-templates");
+          if (res.ok && !cancelled) {
+            const data = await res.json();
+            if (!cancelled) setTemplates(data.templates ?? []);
+          }
+        } catch {
+          /* canned jobs are optional chrome */
+        }
+      })();
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, []);
+
+  async function applyCannedJob(templateId: string) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/work-orders/${workOrderId}/apply-template`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const messages: Record<string, string> = {
+          template_not_found: "That canned job no longer exists.",
+          work_order_not_found: "This work order no longer exists.",
+        };
+        throw new Error(messages[body.error ?? ""] ?? "Could not apply the canned job.");
+      }
+      const data = await res.json();
+      setCannedQuery("");
+      if (selectedRevId && data.revisionId === selectedRevId) await loadLines(selectedRevId);
+      else window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not apply the canned job.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function addLine() {
     if (!selectedRevId || !lineDesc.trim()) return;
@@ -400,6 +456,40 @@ export function EstimatePanel({
               </tbody>
             </table>
           )}
+
+          {canWrite && isDraft ? (
+            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              <input
+                list="canned-jobs-list"
+                value={cannedQuery}
+                onChange={(e) => setCannedQuery(e.target.value)}
+                placeholder="Canned job — type to search (oil change, brakes…)"
+                disabled={pending}
+                aria-label="Search canned jobs"
+                className="h-[var(--control-height)] min-w-56 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+              />
+              <datalist id="canned-jobs-list">
+                {templates.map((template) => (
+                  <option key={template.id} value={template.name} />
+                ))}
+              </datalist>
+              {(() => {
+                const match = templates.find(
+                  (template) => template.name.toLowerCase() === cannedQuery.trim().toLowerCase(),
+                );
+                return match ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void applyCannedJob(match.id)}
+                    className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  >
+                    Add canned job ({match.lines.length} line{match.lines.length === 1 ? "" : "s"})
+                  </button>
+                ) : null;
+              })()}
+            </div>
+          ) : null}
 
           {canWrite && isDraft ? (
             <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
