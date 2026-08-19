@@ -222,6 +222,7 @@ describe("recording stripe checkout completion (#185)", { skip: shouldSkip }, ()
           payment_status: "paid",
           amount_total: 200_00,
           currency: "usd",
+          payment_intent: "pi_first",
         },
       },
     });
@@ -261,6 +262,7 @@ describe("recording stripe checkout completion (#185)", { skip: shouldSkip }, ()
           payment_status: "paid",
           amount_total: 200_00,
           currency: "usd",
+          payment_intent: "pi_first",
         },
       },
     });
@@ -287,6 +289,7 @@ describe("recording stripe checkout completion (#185)", { skip: shouldSkip }, ()
           payment_status: "paid",
           amount_total: 250_00,
           currency: "usd",
+          payment_intent: "pi_second",
         },
       },
     });
@@ -308,6 +311,7 @@ describe("recording stripe checkout completion (#185)", { skip: shouldSkip }, ()
           payment_status: "paid",
           amount_total: 50_00,
           currency: "usd",
+          payment_intent: "pi_third",
         },
       },
     });

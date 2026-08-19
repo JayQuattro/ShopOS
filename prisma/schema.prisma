@@ -221,6 +221,7 @@ model User {
   openedCashDrawers     CashDrawerSession[]               @relation("CashDrawerOpenedBy")
   closedCashDrawers     CashDrawerSession[]               @relation("CashDrawerClosedBy")
   recordedDeposits      Deposit[]                         @relation("DepositRecordedBy")
+  recordedRefunds       Refund[]                          @relation("RefundRecordedBy")
   drivenTransportJobs   TransportJob[]                    @relation("TransportDriver")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
@@ -313,6 +314,7 @@ model Organization {
   transportJobs       TransportJob[]
   cashDrawerSessions CashDrawerSession[]
   deposits            Deposit[]
+  refunds             Refund[]
   businessHours       LocationBusinessHour[]
   shopFees            ShopFee[]
   partOrders         PartOrder[]
@@ -381,6 +383,7 @@ model Location {
   estimates      EstimateRevision[]
   invoices       Invoice[]
   payments       Payment[]
+  refunds        Refund[]
   activityEvents ActivityEvent[]
   auditEvents    AuditEvent[]
   serviceCalls   ServiceCall[]
@@ -1361,6 +1364,31 @@ model CashDrawerSession {
   @@map("cash_drawer_sessions")
 }
 
+model Refund {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  locationId       String    @map("location_id") @db.Uuid
+  invoiceId        String    @map("invoice_id") @db.Uuid
+  paymentId        String    @map("payment_id") @db.Uuid
+  amountMinor      BigInt    @map("amount_minor")
+  currency         String    @db.VarChar(3)
+  reason           String?   @db.VarChar(500)
+  providerRef      String?   @map("provider_ref") @db.VarChar(160)
+  refundedAt       DateTime  @map("refunded_at") @db.Timestamptz(6)
+  recordedByUserId String    @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location         Location  @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  invoice          Invoice   @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+  payment          Payment   @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Restrict)
+  recordedBy       User      @relation("RefundRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "refunds_org_id_unique")
+  @@index([organizationId, invoiceId], map: "refunds_org_invoice_idx")
+  @@index([organizationId, paymentId], map: "refunds_org_payment_idx")
+  @@map("refunds")
+}
+
 model Deposit {
   id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId   String    @map("organization_id") @db.Uuid
@@ -1718,6 +1746,7 @@ model Invoice {
   workOrder      WorkOrder     @relation(fields: [organizationId, locationId, workOrderId], references: [organizationId, locationId, id], onDelete: Restrict)
   lines          InvoiceLine[]
   payments       Payment[]
+  refunds        Refund[]
 
   @@unique([organizationId, number], map: "invoices_org_number_unique")
   @@unique([organizationId, locationId, workOrderId], map: "invoices_org_location_work_order_unique")
@@ -1761,14 +1790,17 @@ model Payment {
   currency         String        @db.VarChar(3)
   method           PaymentMethod
   reference        String?       @db.VarChar(160)
+  processorChargeId String?     @map("processor_charge_id") @db.VarChar(120)
   receivedAt       DateTime      @map("received_at") @db.Timestamptz(6)
   recordedByUserId String        @map("recorded_by_user_id") @db.Uuid
   createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   location         Location      @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
   invoice          Invoice       @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+  refunds          Refund[]
   recordedBy       User          @relation("PaymentRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id], map: "payments_org_id_unique")
   @@index([organizationId, invoiceId], map: "payments_org_invoice_idx")
   @@map("payments")
 }

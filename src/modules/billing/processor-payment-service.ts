@@ -28,6 +28,7 @@ export async function recordStripeCheckoutCompleted(
         payment_status: string;
         amount_total: number | null;
         currency: string | null;
+        payment_intent?: string | null;
       }>;
     }>;
   }>,
@@ -120,6 +121,7 @@ export async function recordStripeCheckoutCompleted(
         currency: invoice.currency,
         method: "CARD_EXTERNAL",
         reference: providerRef,
+        ...(session.payment_intent ? { processorChargeId: session.payment_intent } : {}),
         receivedAt: new Date(),
         recordedByUserId: systemUserId,
       },
