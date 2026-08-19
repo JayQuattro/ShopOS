@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 
 type Profile = {
+  defaultPhoneCountry: string | null;
   name: string;
   contactPhone: string | null;
   contactEmail: string | null;
@@ -39,6 +40,7 @@ export function ProfileForm({ initial }: { initial: Profile }) {
     defaultCurrency: initial.defaultCurrency ?? "USD",
     defaultLocale: initial.defaultLocale ?? "",
     taxId: initial.taxId ?? "",
+    defaultPhoneCountry: initial.defaultPhoneCountry ?? "",
   });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,10 +58,16 @@ export function ProfileForm({ initial }: { initial: Profile }) {
     setSuccess(null);
     try {
       const orgId = window.location.pathname.split("/")[2] ?? "";
+      const payload: Record<string, unknown> = {
+        ...profile,
+        defaultPhoneCountry: (profile.defaultPhoneCountry ?? "").toUpperCase() || null,
+        defaultLocale: profile.defaultLocale || null,
+        country: profile.country || null,
+      };
       const res = await fetch(`/api/organizations/${orgId}/settings/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profile),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

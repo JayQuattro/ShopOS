@@ -26,7 +26,7 @@ export default async function LocationsSettingsPage({
   const [org, locations] = await Promise.all([
     db.organization.findUnique({
       where: { id: context.organizationId },
-      select: { defaultCurrency: true, defaultLocale: true },
+      select: { defaultCurrency: true, defaultLocale: true, defaultPhoneCountry: true },
     }),
     db.location.findMany({
       where: { organizationId: context.organizationId },
@@ -39,6 +39,7 @@ export default async function LocationsSettingsPage({
         currency: true,
         locale: true,
         invoiceNumberPrefix: true,
+        phoneCountry: true,
       },
     }),
   ]);
@@ -67,6 +68,7 @@ export default async function LocationsSettingsPage({
               currency: location.currency,
               locale: location.locale,
               invoiceNumberPrefix: location.invoiceNumberPrefix,
+              phoneCountry: location.phoneCountry,
             }}
             effectiveCurrency={effective[index]!.currency}
             effectiveLocale={effective[index]!.locale}

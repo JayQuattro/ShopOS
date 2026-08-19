@@ -142,12 +142,13 @@ describe("regional settings (#193)", { skip: shouldSkip }, () => {
     expect(await regional.resolveRegionalSettings(dbModule.db, seed.orgId)).toEqual({
       currency: "EUR",
       locale: "pt-BR",
+      phoneCountry: null,
     });
 
     // Location with no overrides: org defaults still.
     expect(
       await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.locationId),
-    ).toEqual({ currency: "EUR", locale: "pt-BR" });
+    ).toEqual({ currency: "EUR", locale: "pt-BR", phoneCountry: null });
 
     // Canadian location overrides both.
     await regional.updateLocationRegionalSettings({
@@ -159,11 +160,11 @@ describe("regional settings (#193)", { skip: shouldSkip }, () => {
     });
     expect(
       await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.secondLocationId),
-    ).toEqual({ currency: "CAD", locale: "fr-CA" });
+    ).toEqual({ currency: "CAD", locale: "fr-CA", phoneCountry: null });
     // Sibling untouched.
     expect(
       await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.locationId),
-    ).toEqual({ currency: "EUR", locale: "pt-BR" });
+    ).toEqual({ currency: "EUR", locale: "pt-BR", phoneCountry: null });
 
     // Clearing overrides falls back to the org defaults.
     await regional.updateLocationRegionalSettings({
@@ -175,13 +176,14 @@ describe("regional settings (#193)", { skip: shouldSkip }, () => {
     });
     expect(
       await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.secondLocationId),
-    ).toEqual({ currency: "EUR", locale: "pt-BR" });
+    ).toEqual({ currency: "EUR", locale: "pt-BR", phoneCountry: null });
 
     // A location from another organization resolves nothing — its overrides
     // can never leak.
     expect(await regional.resolveRegionalSettings(dbModule.db, seed.orgId, randomUUID())).toEqual({
       currency: "EUR",
       locale: "pt-BR",
+      phoneCountry: null,
     });
   });
 
@@ -192,6 +194,7 @@ describe("regional settings (#193)", { skip: shouldSkip }, () => {
     expect(await regional.resolveRegionalSettings(dbModule.db, seed.orgId)).toEqual({
       currency: "USD",
       locale: "en-US",
+      phoneCountry: null,
     });
   });
 
@@ -247,5 +250,89 @@ describe("regional settings (#193)", { skip: shouldSkip }, () => {
     expect(enUS.replace(/\u00A0/g, " ")).toContain("1,234.56");
     expect(deDE.replace(/\u00A0|\u202F/g, ".")).toContain("1.234,56");
     expect(ptBR.replace(/\u00A0|\u202F/g, " ")).toContain("1.234,56");
+  });
+});
+
+describe("phone normalization settings (#199)", { skip: shouldSkip }, () => {
+  it("resolves the effective phone country with location override", async () => {
+    const regional = await import("@/modules/organizations/regional-settings");
+    const seed = await seedShop();
+
+    await dbModule.db.organization.update({
+      where: { id: seed.orgId },
+      data: { defaultPhoneCountry: "US" },
+    });
+    expect((await regional.resolveRegionalSettings(dbModule.db, seed.orgId)).phoneCountry).toBe(
+      "US",
+    );
+
+    await regional.updateLocationRegionalSettings({
+      db: dbModule.db,
+      context: seed.context(),
+      locationId: seed.secondLocationId,
+      phoneCountry: "it",
+    });
+    expect(
+      (await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.secondLocationId))
+        .phoneCountry,
+    ).toBe("IT");
+    expect(
+      (await regional.resolveRegionalSettings(dbModule.db, seed.orgId, seed.locationId))
+        .phoneCountry,
+    ).toBe("US");
+  });
+
+  it("normalizes customer phones to E.164 on update against the org default", async () => {
+    const customers = await import("@/modules/customers/customer-service");
+    const seed = await seedShop();
+    await dbModule.db.organization.update({
+      where: { id: seed.orgId },
+      data: { defaultPhoneCountry: "US" },
+    });
+    const customerId = randomUUID();
+    await dbModule.db.customer.create({
+      data: {
+        id: customerId,
+        organizationId: seed.orgId,
+        kind: "INDIVIDUAL",
+        displayName: "Phony",
+      },
+    });
+
+    const manageContext = {
+      ...seed.context(),
+      permissions: new Set(["customers.write"]),
+    } as import("@/modules/tenancy/policy").TenantContext;
+
+    await customers.updateCustomer({
+      db: dbModule.db,
+      context: manageContext,
+      customerId,
+      primaryPhone: "(919) 555-0141",
+    });
+    expect(
+      (
+        await dbModule.db.customer.findUnique({
+          where: { id: customerId },
+          select: { primaryPhone: true },
+        })
+      )?.primaryPhone,
+    ).toBe("+19195550141");
+
+    // Invalid text falls back to trimmed input rather than rejecting the save.
+    await customers.updateCustomer({
+      db: dbModule.db,
+      context: manageContext,
+      customerId,
+      primaryPhone: "call the shop",
+    });
+    expect(
+      (
+        await dbModule.db.customer.findUnique({
+          where: { id: customerId },
+          select: { primaryPhone: true },
+        })
+      )?.primaryPhone,
+    ).toBe("call the shop");
   });
 });

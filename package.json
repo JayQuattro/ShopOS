@@ -49,6 +49,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.0.0",
+    "libphonenumber-js": "^1.13.11",
     "lucide-react": "^1.25.0",
     "next": "16.2.11",
     "next-intl": "^4.13.3",
