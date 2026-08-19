@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/i18n/formatters";
+import { parseMoneyInput } from "@/i18n/money-input";
 
 type InvoiceData = {
   id: string | null;
@@ -186,10 +187,10 @@ export function InvoicePanel({
     if (!invoice.id) return;
     const parsed = tenders
       .map((tender) => ({
-        amountMinor: Math.round(Number(tender.amount.trim().replace(/[$,]/g, "")) * 100),
+        amountMinor: parseMoneyInput(tender.amount) ?? 0,
         method: tender.method,
       }))
-      .filter((tender) => Number.isFinite(tender.amountMinor) && tender.amountMinor > 0);
+      .filter((tender) => tender.amountMinor > 0);
     if (parsed.length === 0) {
       setError("Enter at least one tender amount, like 150.00");
       return;

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { parseMoneyInput } from "@/i18n/money-input";
 
 type Deposit = {
   id: string;
@@ -111,15 +112,15 @@ export function DepositPanel({
   }
 
   function submitRecord() {
-    const parsed = Number(amount.trim().replace(/[$,]/g, ""));
-    if (!Number.isFinite(parsed) || parsed <= 0) {
+    const parsed = parseMoneyInput(amount);
+    if (parsed === null || parsed <= 0) {
       setError("Enter an amount like 150.00");
       return;
     }
     void post({
       action: "record",
       workOrderId,
-      amountMinor: Math.round(parsed * 100),
+      amountMinor: parsed,
       currency: "USD",
       method,
       ...(reference.trim() ? { reference: reference.trim() } : {}),

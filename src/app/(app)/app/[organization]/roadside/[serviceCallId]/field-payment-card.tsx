@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { parseMoneyInput } from "@/i18n/money-input";
 
 const METHODS = [
   ["CASH", "Cash"],
@@ -45,8 +46,8 @@ export function FieldPaymentCard({ orgId, callId }: { orgId: string; callId: str
   }, [orgId, callId]);
 
   async function collect() {
-    const parsed = Number(amount.trim().replace(/[$,]/g, ""));
-    if (!Number.isFinite(parsed) || parsed <= 0) {
+    const parsed = parseMoneyInput(amount);
+    if (parsed === null || parsed <= 0) {
       setError("Enter an amount like 80.00");
       return;
     }
@@ -56,7 +57,7 @@ export function FieldPaymentCard({ orgId, callId }: { orgId: string; callId: str
       const res = await fetch(`/api/organizations/${orgId}/service-calls/${callId}/payment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amountMinor: Math.round(parsed * 100), method }),
+        body: JSON.stringify({ amountMinor: parsed, method }),
       });
       if (!res.ok) throw new Error("Could not record the payment.");
       setAmount("");
