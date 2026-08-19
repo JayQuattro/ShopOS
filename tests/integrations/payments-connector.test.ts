@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createHmac } from "node:crypto";
+
 import {
   AdyenPaymentsAdapter,
   ConsolePaymentsAdapter,
+  MercadoPagoPaymentsAdapter,
   MolliePaymentsAdapter,
+  RazorpayPaymentsAdapter,
   SquarePaymentsAdapter,
   StripePaymentsAdapter,
+  verifyRazorpayWebhook,
 } from "@/modules/integrations/payments/payments-adapters";
 import {
   getPaymentsAdapterDefinition,
@@ -200,15 +205,132 @@ describe("mollie payments adapter", () => {
   });
 });
 
+describe("mercadopago payments adapter", () => {
+  const adapter = new MercadoPagoPaymentsAdapter({ accessToken: "APP_USR_test" });
+
+  it("creates a Checkout Pro preference with major-unit prices", async () => {
+    fetchResult = {
+      id: "123456789",
+      init_point: "https://www.mercadopago.com/checkout/v1/redirect?pref_id=123456789",
+    };
+    const link = await adapter.createPaymentLink({
+      amountMinor: 45_000,
+      currency: "ARS",
+      description: "Invoice INV-4",
+      reference: "inv-4",
+      returnUrl: "https://shop.example.test/portal",
+    });
+
+    expect(fetchCalls[0]).toBe("https://api.mercadopago.com/checkout/preferences");
+    const body = JSON.parse(fetchCalls[1]!);
+    expect(body.items[0]).toEqual({
+      title: "Invoice INV-4",
+      quantity: 1,
+      unit_price: 450,
+      currency_id: "ARS",
+    });
+    expect(body.external_reference).toBe("inv-4");
+    expect(link.providerRef).toBe("123456789");
+    expect(link.url).toContain("pref_id=123456789");
+  });
+
+  it("keeps zero-decimal currencies whole (CLP, COP)", async () => {
+    fetchResult = { id: "2", init_point: "https://mp.test/x" };
+    await adapter.createPaymentLink({
+      amountMinor: 25_000,
+      currency: "CLP",
+      description: "Invoice INV-5",
+      reference: "inv-5",
+      returnUrl: "https://x.test",
+    });
+    // CLP has no minor unit: 25000 minor == 25000 pesos, not 250.00.
+    // (fetchCalls alternates url/body — the latest body is last.)
+    expect(JSON.parse(fetchCalls[fetchCalls.length - 1]!).items[0].unit_price).toBe(25000);
+
+    await adapter.createPaymentLink({
+      amountMinor: 12_350,
+      currency: "COP",
+      description: "d",
+      reference: "r",
+      returnUrl: "https://x.test",
+    });
+    expect(JSON.parse(fetchCalls[fetchCalls.length - 1]!).items[0].unit_price).toBe(12350);
+  });
+});
+
+describe("razorpay payments adapter", () => {
+  const adapter = new RazorpayPaymentsAdapter({ keyId: "rzp_live_X", keySecret: "secret_X" });
+
+  it("creates a payment link in paise with basic auth", async () => {
+    fetchResult = { id: "plink_ABC", short_url: "https://rzp.io/l/abc" };
+    const link = await adapter.createPaymentLink({
+      amountMinor: 75_000,
+      currency: "INR",
+      description: "Invoice INV-6",
+      reference: "inv-6",
+      returnUrl: "https://shop.example.test/portal",
+    });
+
+    expect(fetchCalls[0]).toBe("https://api.razorpay.com/v1/payment_links");
+    const body = JSON.parse(fetchCalls[1]!);
+    expect(body).toMatchObject({
+      amount: 75000,
+      currency: "INR",
+      reference_id: "inv-6",
+      callback_url: "https://shop.example.test/portal",
+      callback_method: "get",
+    });
+    expect(link).toEqual({ url: "https://rzp.io/l/abc", providerRef: "plink_ABC" });
+  });
+
+  it("verifies webhook signatures with timing-safe comparison", () => {
+    const rawBody = JSON.stringify({
+      event: "payment_link.paid",
+      payload: { payment_link: { entity: { id: "plink_ABC", reference_id: "inv-6" } } },
+    });
+    const signature = createHmac("sha256", "whsec_rzp").update(rawBody).digest("hex");
+
+    expect(
+      verifyRazorpayWebhook({
+        webhookSecret: "whsec_rzp",
+        signatureHeader: signature,
+        rawBody,
+      }),
+    ).toMatchObject({ event: "payment_link.paid" });
+
+    // Tampered body, wrong secret, missing pieces → null.
+    expect(
+      verifyRazorpayWebhook({
+        webhookSecret: "whsec_rzp",
+        signatureHeader: signature,
+        rawBody: rawBody.replace("plink_ABC", "plink_EVIL"),
+      }),
+    ).toBeNull();
+    expect(
+      verifyRazorpayWebhook({
+        webhookSecret: "other",
+        signatureHeader: signature,
+        rawBody,
+      }),
+    ).toBeNull();
+    expect(
+      verifyRazorpayWebhook({ webhookSecret: undefined, signatureHeader: signature, rawBody }),
+    ).toBeNull();
+    expect(
+      verifyRazorpayWebhook({ webhookSecret: "whsec_rzp", signatureHeader: null, rawBody }),
+    ).toBeNull();
+  });
+});
+
 describe("payments adapter definitions", () => {
   it("registers four live adapters and marks the rest as planned slots", () => {
     const live = PAYMENTS_ADAPTER_DEFINITIONS.filter((d) => d.status === "live").map((d) => d.key);
     const planned = PAYMENTS_ADAPTER_DEFINITIONS.filter((d) => d.status === "planned").map(
       (d) => d.key,
     );
-    expect(live).toEqual(["stripe", "square", "adyen", "mollie"]);
+    expect(live).toEqual(["stripe", "square", "adyen", "mollie", "mercadopago", "razorpay"]);
     // Slots the landscape demands: wallets, the automotive vertical's
-    // incumbents, and the regional defaults.
+    // incumbents, Canada, and the LatAm domestic processors.
     expect(planned).toEqual([
       "paypal",
       "heartland",
@@ -218,8 +340,14 @@ describe("payments adapter definitions", () => {
       "gocardless",
       "elavon",
       "moneris",
-      "razorpay",
-      "mercadopago",
+      "cielo",
+      "pagbank",
+      "stone",
+      "clip",
+      "transbank",
+      "dlocal",
+      "kushki",
+      "getnet",
       "clover",
     ]);
 
@@ -242,14 +370,22 @@ describe("payments adapter definitions", () => {
     expect(instantiatePaymentsAdapter("mollie", {}, { apiKey: "live_" })).toBeInstanceOf(
       MolliePaymentsAdapter,
     );
+    expect(
+      instantiatePaymentsAdapter("mercadopago", {}, { accessToken: "APP_USR" }),
+    ).toBeInstanceOf(MercadoPagoPaymentsAdapter);
+    expect(
+      instantiatePaymentsAdapter("razorpay", {}, { keyId: "rzp", keySecret: "s" }),
+    ).toBeInstanceOf(RazorpayPaymentsAdapter);
 
     // Missing config or credentials → null, never a half-configured adapter.
     expect(instantiatePaymentsAdapter("square", {}, { accessToken: "EAAA" })).toBeNull();
     expect(instantiatePaymentsAdapter("square", { locationId: "L1" }, {})).toBeNull();
     expect(instantiatePaymentsAdapter("adyen", {}, { apiKey: "AQEy" })).toBeNull();
     expect(instantiatePaymentsAdapter("stripe", {}, {})).toBeNull();
+    expect(instantiatePaymentsAdapter("razorpay", {}, { keyId: "rzp" })).toBeNull();
     // Planned slots cannot instantiate.
     expect(instantiatePaymentsAdapter("chase", {}, { apiKey: "x" })).toBeNull();
     expect(instantiatePaymentsAdapter("paypal", {}, {})).toBeNull();
+    expect(instantiatePaymentsAdapter("cielo", {}, {})).toBeNull();
   });
 });

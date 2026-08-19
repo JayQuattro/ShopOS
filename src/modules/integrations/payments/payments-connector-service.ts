@@ -10,7 +10,9 @@ import type { PaymentsAdapter } from "@/modules/integrations/payments/payments-a
 import {
   AdyenPaymentsAdapter,
   getConsolePaymentsAdapter,
+  MercadoPagoPaymentsAdapter,
   MolliePaymentsAdapter,
+  RazorpayPaymentsAdapter,
   SquarePaymentsAdapter,
   StripePaymentsAdapter,
 } from "@/modules/integrations/payments/payments-adapters";
@@ -169,15 +171,72 @@ export const PAYMENTS_ADAPTER_DEFINITIONS: ReadonlyArray<PaymentsAdapterDefiniti
   {
     key: "moneris",
     displayName: "Moneris",
-    description: "Canada's default processor.",
+    description:
+      "Canada's default processor — two-step Checkout ticket flow; up next for a live adapter.",
     status: "planned",
     configFields: [],
     secretFields: [],
   },
   {
-    key: "razorpay",
-    displayName: "Razorpay",
-    description: "India — cards, UPI, netbanking.",
+    key: "cielo",
+    displayName: "Cielo",
+    description: "Brazil's card giant.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "pagbank",
+    displayName: "PagBank / PagSeguro",
+    description: "Brazil — cards and PIX from the PagSeguro ecosystem.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "stone",
+    displayName: "Stone",
+    description: "Brazil — cards and PIX.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "clip",
+    displayName: "Clip",
+    description: "Mexico — the Square of Mexico; cards, SPEI, OXXO.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "transbank",
+    displayName: "Transbank Webpay",
+    description: "Chile's dominant processor (Webpay Plus).",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "dlocal",
+    displayName: "dLocal",
+    description: "Pan-regional LatAm PSP — one integration, many rails.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "kushki",
+    displayName: "Kushki",
+    description: "LatAm PSP — local rails across the Andean markets.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "getnet",
+    displayName: "Getnet",
+    description: "Brazil (Santander) — cards and PIX.",
     status: "planned",
     configFields: [],
     secretFields: [],
@@ -185,10 +244,38 @@ export const PAYMENTS_ADAPTER_DEFINITIONS: ReadonlyArray<PaymentsAdapterDefiniti
   {
     key: "mercadopago",
     displayName: "Mercado Pago",
-    description: "Latin America — cards and local rails incl. PIX.",
-    status: "planned",
+    description:
+      "Checkout Pro across Latin America (AR, BR, CL, CO, MX, PE, UY) — cards, PIX, PSE, OXXO, and local rails. Payments confirm manually until Mercado Pago webhooks land.",
+    status: "live",
     configFields: [],
-    secretFields: [],
+    secretFields: [
+      {
+        name: "accessToken",
+        label: "Access Token",
+        type: "password",
+        required: true,
+        placeholder: "APP_USR-…",
+      },
+    ],
+  },
+  {
+    key: "razorpay",
+    displayName: "Razorpay",
+    description:
+      "Payment links for India — cards, UPI, netbanking, and wallets. Payments confirm manually until Razorpay webhooks land.",
+    status: "live",
+    configFields: [],
+    secretFields: [
+      { name: "keyId", label: "Key ID", type: "text", required: true, placeholder: "rzp_live_…" },
+      { name: "keySecret", label: "Key Secret", type: "password", required: true },
+      {
+        name: "webhookSecret",
+        label: "Webhook Secret",
+        type: "password",
+        required: false,
+        placeholder: "for automatic confirmation (later)",
+      },
+    ],
   },
   {
     key: "clover",
@@ -300,6 +387,14 @@ export function instantiatePaymentsAdapter(
         ? new AdyenPaymentsAdapter({ apiKey: secret.apiKey }, { merchantAccount })
         : null;
     }
+    case "mercadopago":
+      return secret.accessToken
+        ? new MercadoPagoPaymentsAdapter({ accessToken: secret.accessToken })
+        : null;
+    case "razorpay":
+      return secret.keyId && secret.keySecret
+        ? new RazorpayPaymentsAdapter({ keyId: secret.keyId, keySecret: secret.keySecret })
+        : null;
     case "mollie": {
       const webhookUrl = config.webhookUrl ? String(config.webhookUrl) : undefined;
       return secret.apiKey
