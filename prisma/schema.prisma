@@ -1708,6 +1708,8 @@ model Invoice {
   taxMinor       BigInt        @map("tax_minor")
   totalMinor     BigInt        @map("total_minor")
   paidMinor      BigInt        @default(0) @map("paid_minor")
+  paymentUrl     String?       @map("payment_url") @db.VarChar(2048)
+  paymentLinkRef String?       @map("payment_link_ref") @db.VarChar(160)
   issuedAt       DateTime?     @map("issued_at") @db.Timestamptz(6)
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)

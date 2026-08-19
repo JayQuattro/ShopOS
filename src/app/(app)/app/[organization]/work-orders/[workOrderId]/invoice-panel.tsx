@@ -15,6 +15,7 @@ type InvoiceData = {
   totalMinor: string | null;
   paidMinor: string | null;
   currency: string;
+  paymentUrl: string | null;
 };
 
 export function InvoicePanel({
@@ -29,6 +30,8 @@ export function InvoicePanel({
   const [pending, setPending] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [paymentUrl, setPaymentUrl] = useState(initialInvoice.paymentUrl);
+  const [linkPending, setLinkPending] = useState(false);
 
   async function createInvoice() {
     setPending(true);
@@ -51,6 +54,7 @@ export function InvoicePanel({
         totalMinor: "0",
         paidMinor: "0",
         currency: "USD",
+        paymentUrl: null,
       });
       window.location.reload();
     } catch (e) {
@@ -75,6 +79,37 @@ export function InvoicePanel({
       setError("Could not issue the invoice.");
     } finally {
       setPending(false);
+    }
+  }
+
+  async function createPaymentLink() {
+    if (!invoice.id) return;
+    setLinkPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/payment-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          returnUrl: `${window.location.origin}/app/${window.location.pathname.split("/")[2]}/work-orders/${workOrderId}`,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const messages: Record<string, string> = {
+          no_processor: "Connect a payment processor in Settings → Payments first.",
+          invoice_not_issued: "Issue the invoice before creating a payment link.",
+          invoice_already_paid: "This invoice is already paid in full.",
+          provider_error: "The processor rejected the request. Check the credentials.",
+        };
+        throw new Error(messages[body.error ?? ""] ?? "Could not create the payment link.");
+      }
+      const data = await res.json();
+      setPaymentUrl(data.url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create the payment link.");
+    } finally {
+      setLinkPending(false);
     }
   }
 
@@ -171,6 +206,38 @@ export function InvoicePanel({
         <Button variant="default" size="sm" onClick={issueInvoice} disabled={pending}>
           Issue invoice
         </Button>
+      ) : null}
+
+      {(invoice.status === "ISSUED" || invoice.status === "PARTIALLY_PAID") && balance > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          {paymentUrl ? (
+            <>
+              <a
+                href={paymentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+              >
+                Customer payment link ↗
+              </a>
+              <span className="text-xs text-muted-foreground">Send this to the customer</span>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={createPaymentLink}
+                disabled={linkPending}
+              >
+                {linkPending ? "Creating…" : "Create payment link"}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {formatMoney(balance, invoice.currency, "en-US")} hosted by your processor
+              </span>
+            </>
+          )}
+        </div>
       ) : null}
 
       {(invoice.status === "ISSUED" || invoice.status === "PARTIALLY_PAID") && balance > 0 ? (

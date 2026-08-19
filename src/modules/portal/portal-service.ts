@@ -28,6 +28,7 @@ export type PortalInvoice = Readonly<{
   totalMinor: bigint;
   paidMinor: bigint;
   issuedAt: Date | null;
+  paymentUrl: string | null;
 }>;
 
 export type PortalShopView = Readonly<{
@@ -162,6 +163,7 @@ export async function getPortalShopView(
         totalMinor: true,
         paidMinor: true,
         issuedAt: true,
+        paymentUrl: true,
       },
     }),
     buildCustomerStatement(db, organizationId, customer.customerId, new Date()),

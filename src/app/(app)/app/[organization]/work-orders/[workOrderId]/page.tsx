@@ -77,6 +77,7 @@ export default async function WorkOrderDetailPage({
           totalMinor: true,
           paidMinor: true,
           currency: true,
+          paymentUrl: true,
         },
       },
       assistingTechnicians: {
@@ -318,6 +319,7 @@ export default async function WorkOrderDetailPage({
                     status: wo.invoice.status,
                     totalMinor: wo.invoice.totalMinor.toString(),
                     paidMinor: wo.invoice.paidMinor.toString(),
+                    paymentUrl: wo.invoice.paymentUrl,
                     currency: wo.invoice.currency,
                   }
                 : {
@@ -326,6 +328,7 @@ export default async function WorkOrderDetailPage({
                     status: null,
                     totalMinor: null,
                     paidMinor: null,
+                    paymentUrl: null,
                     currency: "USD",
                   }
             }
