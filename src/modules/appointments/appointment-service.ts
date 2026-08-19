@@ -5,6 +5,7 @@ import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy
 import type { TransactionalClient } from "@/modules/estimates/estimate-service";
 import { WorkOrderRepository } from "@/modules/work-orders/work-order-repository";
 import { assertWithinBookingRules } from "@/modules/organizations/business-hours-service";
+import { allDayClosureOn } from "@/modules/organizations/holiday-service";
 
 export type AppointmentServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
 
@@ -16,6 +17,7 @@ export class AppointmentFailed extends Error {
       | "asset_not_found"
       | "location_not_found"
       | "invalid_time_range"
+      | "location_closed_holiday"
       | "invalid_reason"
       | "invalid_transition"
       | "already_converted",
@@ -81,7 +83,7 @@ export async function createAppointment(
       }),
       transaction.location.findFirst({
         where: { id: input.locationId, organizationId: input.context.organizationId },
-        select: { id: true },
+        select: { id: true, timeZone: true },
       }),
     ]);
     if (!customer) throw new AppointmentFailed("customer_not_found");
@@ -94,6 +96,19 @@ export async function createAppointment(
       startAt: input.startAt,
       endAt: input.endAt,
     });
+
+    // All-day holiday closures refuse new bookings with the holiday's name
+    // as the reason (the local date comes from the location's time zone).
+    const localDate = input.startAt.toLocaleDateString("en-CA", {
+      timeZone: location.timeZone,
+    });
+    const closure = await allDayClosureOn(
+      transaction,
+      input.context.organizationId,
+      input.locationId,
+      localDate,
+    );
+    if (closure) throw new AppointmentFailed("location_closed_holiday");
 
     // A nested tenant check: the asset must belong to this customer in this org.
     if (input.assetId) {
