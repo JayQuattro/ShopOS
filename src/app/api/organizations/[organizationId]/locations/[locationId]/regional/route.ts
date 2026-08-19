@@ -15,6 +15,11 @@ const bodySchema = z.object({
   locale: z.string().trim().max(12).nullable().optional(),
   invoiceNumberPrefix: z.string().trim().max(12).nullable().optional(),
   phoneCountry: z.string().trim().length(2).nullable().optional(),
+  cashRoundingMinor: z
+    .number()
+    .int()
+    .refine((v) => [0, 1, 5, 10, 25, 50, 100, 500, 1000].includes(v))
+    .optional(),
 });
 
 export async function PUT(
@@ -47,6 +52,9 @@ export async function PUT(
         : {}),
       ...(parsed.data.phoneCountry !== undefined
         ? { phoneCountry: parsed.data.phoneCountry?.toUpperCase() ?? null }
+        : {}),
+      ...(parsed.data.cashRoundingMinor !== undefined
+        ? { cashRoundingMinor: parsed.data.cashRoundingMinor }
         : {}),
     });
     return Response.json(effective, { headers: { "Cache-Control": "no-store" } });

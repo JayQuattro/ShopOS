@@ -12,6 +12,7 @@ type WorkPreferences = {
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
   taxDisplayMode: "EXCLUSIVE" | "INCLUSIVE";
   einvoiceFormat: "factur-x" | "xrechnung" | "fatturapa" | null;
+  weekStartsOn: 0 | 1;
   defaultPaperSize: "LETTER" | "A4" | "LEGAL";
   qualityCheckRequired: boolean;
   authorizationLinkTtlHours: number;
@@ -179,6 +180,37 @@ export function WorkPreferencesForm() {
                   {value === "EXCLUSIVE"
                     ? "A $100 line at 8% tax charges the customer $108.00."
                     : "A €100 line at 20% VAT charges the customer €100.00 — the VAT portion (€16.67) is reported separately and already inside the price."}
+                </span>
+              </span>
+            </label>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Week starts on</CardTitle>
+          <CardDescription>Schedule and report grouping.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {([0, 1] as const).map((value) => (
+            <label key={value} className="flex items-start gap-3 text-sm">
+              <input
+                type="radio"
+                name="weekStartsOn"
+                checked={preferences.weekStartsOn === value}
+                onChange={() =>
+                  setPreferences((prev) => (prev ? { ...prev, weekStartsOn: value } : prev))
+                }
+                disabled={pending}
+                className="mt-0.5 size-4"
+              />
+              <span>
+                <span className="font-medium">{value === 0 ? "Sunday" : "Monday (ISO)"}</span>
+                <span className="block text-muted-foreground">
+                  {value === 0
+                    ? "North American convention."
+                    : "Most of the world; weeks group Mon–Sun."}
                 </span>
               </span>
             </label>

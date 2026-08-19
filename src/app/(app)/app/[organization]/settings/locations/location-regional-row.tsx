@@ -15,6 +15,7 @@ type LocationRegional = {
   locale: string | null;
   invoiceNumberPrefix: string | null;
   phoneCountry: string | null;
+  cashRoundingMinor: number;
 };
 
 /** One location: identity plus currency/locale overrides with live effect. */
@@ -33,6 +34,7 @@ export function LocationRegionalRow({
   const [locale, setLocale] = useState(location.locale ?? "");
   const [invoicePrefix, setInvoicePrefix] = useState(location.invoiceNumberPrefix ?? "");
   const [phoneCountry, setPhoneCountry] = useState(location.phoneCountry ?? "");
+  const [rounding, setRounding] = useState(String(location.cashRoundingMinor));
   const [effective, setEffective] = useState({
     currency: effectiveCurrency,
     locale: effectiveLocale,
@@ -45,7 +47,8 @@ export function LocationRegionalRow({
     currency !== (location.currency ?? "") ||
     locale !== (location.locale ?? "") ||
     invoicePrefix !== (location.invoiceNumberPrefix ?? "") ||
-    phoneCountry !== (location.phoneCountry ?? "");
+    phoneCountry !== (location.phoneCountry ?? "") ||
+    rounding !== String(location.cashRoundingMinor);
 
   async function save() {
     setPending(true);
@@ -62,6 +65,7 @@ export function LocationRegionalRow({
             locale: locale || null,
             invoiceNumberPrefix: invoicePrefix || null,
             phoneCountry: phoneCountry || null,
+            cashRoundingMinor: parseInt(rounding, 10) || 0,
           }),
         },
       );
@@ -138,6 +142,21 @@ export function LocationRegionalRow({
               className="h-9 w-24 font-mono text-sm"
               aria-label={`Phone country for ${location.name}`}
             />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Cash rounding
+            <select
+              value={rounding}
+              onChange={(e) => setRounding(e.target.value)}
+              disabled={pending}
+              aria-label={`Cash rounding for ${location.name}`}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="0">Exact</option>
+              <option value="5">Nearest 0.05 (CAD nickel)</option>
+              <option value="100">Nearest 1.00 (SEK)</option>
+              <option value="500">Nearest 5.00 (CHF)</option>
+            </select>
           </label>
           {dirty ? (
             <button

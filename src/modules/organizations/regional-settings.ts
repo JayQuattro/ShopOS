@@ -16,6 +16,8 @@ export type RegionalSettings = Readonly<{
   currency: string;
   locale: string;
   phoneCountry: string | null;
+  cashRoundingMinor: number;
+  weekStartsOn: 0 | 1;
 }>;
 
 const DEFAULT_CURRENCY = "USD";
@@ -50,28 +52,37 @@ export async function resolveRegionalSettings(
 ): Promise<RegionalSettings> {
   const org = await db.organization.findUnique({
     where: { id: organizationId },
-    select: { defaultCurrency: true, defaultLocale: true, defaultPhoneCountry: true },
+    select: {
+      defaultCurrency: true,
+      defaultLocale: true,
+      defaultPhoneCountry: true,
+      weekStartsOn: true,
+    },
   });
 
   let locationCurrency: string | null = null;
   let locationLocale: string | null = null;
   let locationPhoneCountry: string | null = null;
+  let locationCashRoundingMinor: number | null = null;
   if (locationId) {
     // Scoped lookup: a location id from another organization resolves to
     // nothing, so its overrides can never leak across tenants.
     const location = await db.location.findFirst({
       where: { id: locationId, organizationId },
-      select: { currency: true, locale: true, phoneCountry: true },
+      select: { currency: true, locale: true, phoneCountry: true, cashRoundingMinor: true },
     });
     locationCurrency = location?.currency ?? null;
     locationLocale = location?.locale ?? null;
     locationPhoneCountry = location?.phoneCountry ?? null;
+    locationCashRoundingMinor = location?.cashRoundingMinor ?? null;
   }
 
   return {
     currency: locationCurrency ?? org?.defaultCurrency ?? DEFAULT_CURRENCY,
     locale: locationLocale ?? org?.defaultLocale ?? DEFAULT_LOCALE,
     phoneCountry: locationPhoneCountry ?? org?.defaultPhoneCountry ?? null,
+    cashRoundingMinor: locationCashRoundingMinor ?? 0,
+    weekStartsOn: org?.weekStartsOn === 1 ? 1 : 0,
   };
 }
 
@@ -85,6 +96,7 @@ export async function updateLocationRegionalSettings(
     locale?: string | null;
     invoiceNumberPrefix?: string | null;
     phoneCountry?: string | null;
+    cashRoundingMinor?: number;
   },
 ): Promise<RegionalSettings> {
   assertTenantAccess(
@@ -110,6 +122,12 @@ export async function updateLocationRegionalSettings(
   if (phoneCountry && !/^[A-Z]{2}$/.test(phoneCountry)) {
     throw new RegionalSettingsFailed("invalid_locale");
   }
+  if (
+    input.cashRoundingMinor !== undefined &&
+    ![0, 1, 5, 10, 25, 50, 100, 500, 1000].includes(input.cashRoundingMinor)
+  ) {
+    throw new RegionalSettingsFailed("invalid_currency");
+  }
   const invoiceNumberPrefix = clean(input.invoiceNumberPrefix);
   if (invoiceNumberPrefix && !/^[A-Za-z0-9-]{1,12}$/.test(invoiceNumberPrefix)) {
     throw new RegionalSettingsFailed("invalid_locale");
@@ -127,6 +145,9 @@ export async function updateLocationRegionalSettings(
         ? { invoiceNumberPrefix }
         : {}),
       ...(phoneCountry !== undefined || input.phoneCountry === null ? { phoneCountry } : {}),
+      ...(input.cashRoundingMinor !== undefined
+        ? { cashRoundingMinor: input.cashRoundingMinor }
+        : {}),
     },
   });
   if (updated.count !== 1) throw new RegionalSettingsFailed("location_not_found");
