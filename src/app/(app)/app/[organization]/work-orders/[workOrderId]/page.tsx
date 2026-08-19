@@ -11,6 +11,7 @@ import { listAssignableTechnicians } from "@/modules/work-orders/assignment-serv
 import { listLoanerCandidates } from "@/modules/assets/fleet-service";
 import { AssignmentSelect } from "./assignment-select";
 import { VehicleCard } from "./vehicle-card";
+import { BoardStageSelect } from "./board-stage-select";
 import { EstimatePanel } from "./estimate-panel";
 import { InvoicePanel } from "./invoice-panel";
 import { WorkOrderEditForm } from "./work-order-edit-form";
@@ -88,6 +89,13 @@ export default async function WorkOrderDetailPage({
   });
 
   const technicians = wo ? await listAssignableTechnicians({ db, context }) : [];
+  const boardStages = wo
+    ? await db.boardStage.findMany({
+        where: { organizationId: context.organizationId, active: true },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, label: true },
+      })
+    : [];
   const inspectionTemplates = wo
     ? await db.inspectionTemplate.findMany({
         where: { organizationId: context.organizationId },
@@ -208,6 +216,12 @@ export default async function WorkOrderDetailPage({
               locationId={wo.locationId}
               stage={wo.vehicleStage}
               bayLabel={wo.bayLabel}
+              canWrite={context.permissions.has("work_orders.write")}
+            />
+            <BoardStageSelect
+              workOrderId={wo.id}
+              stages={boardStages.map((stage) => ({ id: stage.id, label: stage.label }))}
+              currentStageId={wo.boardStageId}
               canWrite={context.permissions.has("work_orders.write")}
             />
             <p className="mt-3 text-xs text-muted-foreground">

@@ -86,6 +86,8 @@ const ids = {
   demoDrawerClosed: "00000000-0000-4000-8000-000000000996",
   demoDrawerOpen: "00000000-0000-4000-8000-000000000995",
   demoInspectionTemplate: "00000000-0000-4000-8000-000000000994",
+  demoStageWaiting: "00000000-0000-4000-8000-000000000993",
+  demoStageSublet: "00000000-0000-4000-8000-000000000992",
 } as const;
 
 async function seed(): Promise<void> {
@@ -1226,6 +1228,7 @@ async function seedOperationalDemo(): Promise<void> {
   await seedDrawerDemo();
   await seedDepositDemo();
   await seedInspectionTemplateDemo();
+  await seedBoardStagesDemo();
 }
 
 /** Roadside demo calls; idempotent so re-seeding older databases backfills. */
@@ -1457,6 +1460,33 @@ async function seedDepositDemo(): Promise<void> {
       recordedByUserId: ids.owner,
       note: "Left at drop-off for the next service.",
     },
+  });
+}
+
+/** Demo custom board stages showing configurability. */
+async function seedBoardStagesDemo(): Promise<void> {
+  const existing = await db.boardStage.findUnique({ where: { id: ids.demoStageWaiting } });
+  if (existing) return;
+
+  await db.boardStage.createMany({
+    data: [
+      {
+        id: ids.demoStageWaiting,
+        organizationId: ids.organization,
+        key: "waiting-on-customer",
+        label: "Waiting on customer",
+        colorHint: "#f59e0b",
+        sortOrder: 1,
+      },
+      {
+        id: ids.demoStageSublet,
+        organizationId: ids.organization,
+        key: "sublet-out",
+        label: "Sublet out",
+        colorHint: "#8b5cf6",
+        sortOrder: 2,
+      },
+    ],
   });
 }
 
