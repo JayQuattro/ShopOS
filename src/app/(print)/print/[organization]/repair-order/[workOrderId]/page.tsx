@@ -37,6 +37,7 @@ export default async function RepairOrderPrintPage({
         select: {
           name: true,
           defaultPaperSize: true,
+          defaultLocale: true,
           contactPhone: true,
           contactEmail: true,
           addressLine1: true,
@@ -81,6 +82,7 @@ export default async function RepairOrderPrintPage({
   if (!workOrder) notFound();
 
   const tz = workOrder.location.timeZone;
+  const locale = workOrder.organization.defaultLocale ?? "en-US";
   const paper = resolvePaperSize(workOrder.organization.defaultPaperSize, paperOverride);
   const totalMinutes = workOrder.timeEntries.reduce((sum, entry) => {
     if (!entry.endedAt) return sum;
@@ -114,10 +116,10 @@ export default async function RepairOrderPrintPage({
                 "Make / model",
                 [workOrder.asset?.manufacturer, workOrder.asset?.model].filter(Boolean).join(" "),
               ],
-              ["Opened", formatDate(workOrder.createdAt, tz, "en-US")],
+              ["Opened", formatDate(workOrder.createdAt, tz, locale)],
               [
                 "Promised",
-                workOrder.promisedAt ? formatDateTime(workOrder.promisedAt, tz, "en-US") : "",
+                workOrder.promisedAt ? formatDateTime(workOrder.promisedAt, tz, locale) : "",
               ],
               ["Status", workOrder.status.replace(/_/g, " ").toLowerCase()],
               ["Bay", workOrder.bayLabel ?? ""],
@@ -193,7 +195,7 @@ export default async function RepairOrderPrintPage({
           <PrintSection heading="Quality control">
             <p>
               Passed{workOrder.qcPassedBy ? ` by ${workOrder.qcPassedBy.displayName}` : ""}
-              {workOrder.qcPassedAt ? ` on ${formatDate(workOrder.qcPassedAt, tz, "en-US")}` : ""}
+              {workOrder.qcPassedAt ? ` on ${formatDate(workOrder.qcPassedAt, tz, locale)}` : ""}
               {workOrder.qcNote ? ` — ${workOrder.qcNote}` : ""}
             </p>
           </PrintSection>
@@ -204,7 +206,7 @@ export default async function RepairOrderPrintPage({
             <p>
               Estimate total:{" "}
               <strong>
-                {formatMoney(Number(latestEstimate.totalMinor), latestEstimate.currency, "en-US")}
+                {formatMoney(Number(latestEstimate.totalMinor), latestEstimate.currency, locale)}
               </strong>
             </p>
             {workOrder.invoice ? (

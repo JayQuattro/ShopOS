@@ -38,6 +38,7 @@ export default async function IntakePrintPage({
     select: {
       name: true,
       defaultPaperSize: true,
+      defaultLocale: true,
       contactPhone: true,
       contactEmail: true,
       addressLine1: true,
@@ -48,6 +49,7 @@ export default async function IntakePrintPage({
     },
   });
   if (!org) notFound();
+  const locale = org.defaultLocale ?? "en-US";
 
   const paper = resolvePaperSize(org.defaultPaperSize, paperOverride);
 
@@ -59,7 +61,7 @@ export default async function IntakePrintPage({
         locationName={org.locations.map((location) => location.name).join(" · ")}
         contactLine={orgContactLine(org)}
         title="Intake form"
-        subtitle={formatDate(new Date(), "UTC", "en-US")}
+        subtitle={formatDate(new Date(), "UTC", locale)}
       >
         <PrintSection heading="Customer">
           <Line label="Name" />

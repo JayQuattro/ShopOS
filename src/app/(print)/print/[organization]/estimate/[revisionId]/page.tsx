@@ -41,6 +41,7 @@ export default async function EstimatePrintPage({
         select: {
           name: true,
           defaultPaperSize: true,
+          defaultLocale: true,
           contactPhone: true,
           contactEmail: true,
           addressLine1: true,
@@ -68,12 +69,13 @@ export default async function EstimatePrintPage({
   if (!revision) notFound();
 
   const currency = revision.currency;
-  const money = (minor: bigint | number) => formatMoney(Number(minor), currency, "en-US");
+  const money = (minor: bigint | number) => formatMoney(Number(minor), currency, locale);
   const title =
     revision.documentKind === "CHANGE_ORDER"
       ? `Change order ${revision.changeOrderNumber ?? ""}`.trim()
       : "Estimate";
 
+  const locale = revision.organization.defaultLocale ?? "en-US";
   const paper = resolvePaperSize(revision.organization.defaultPaperSize, paperOverride);
 
   return (
@@ -166,7 +168,7 @@ export default async function EstimatePrintPage({
 
         {revision.expiresAt ? (
           <p className="text-sm text-neutral-600">
-            This estimate is valid through {formatDate(revision.expiresAt, "UTC", "en-US")}.
+            This estimate is valid through {formatDate(revision.expiresAt, "UTC", locale)}.
           </p>
         ) : null}
         <p className="mt-4 text-xs text-neutral-500">

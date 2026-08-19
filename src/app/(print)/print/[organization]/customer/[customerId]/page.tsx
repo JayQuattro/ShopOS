@@ -35,6 +35,7 @@ export default async function CustomerPrintPage({
         select: {
           name: true,
           defaultPaperSize: true,
+          defaultLocale: true,
           contactPhone: true,
           contactEmail: true,
           addressLine1: true,
@@ -88,6 +89,7 @@ export default async function CustomerPrintPage({
     );
   }
 
+  const locale = customer.organization.defaultLocale ?? "en-US";
   const paper = resolvePaperSize(customer.organization.defaultPaperSize, paperOverride);
 
   return (
@@ -207,14 +209,14 @@ export default async function CustomerPrintPage({
                   {customer.workOrders.map((wo, index) => (
                     <tr key={index} className="border-b border-neutral-200">
                       <td className="py-1.5 pr-3 whitespace-nowrap">
-                        {formatDate(wo.createdAt, "UTC", "en-US")}
+                        {formatDate(wo.createdAt, "UTC", locale)}
                       </td>
                       <td className="py-1.5 pr-3 font-mono">{wo.number}</td>
                       <td className="py-1.5 pr-3">{wo.asset?.displayName ?? "—"}</td>
                       <td className="py-1.5 pr-3">{wo.status.replace(/_/g, " ").toLowerCase()}</td>
                       <td className="py-1.5 text-right tabular-nums">
                         {wo.invoice
-                          ? formatMoney(Number(wo.invoice.totalMinor), wo.invoice.currency, "en-US")
+                          ? formatMoney(Number(wo.invoice.totalMinor), wo.invoice.currency, locale)
                           : "—"}
                       </td>
                     </tr>
@@ -227,7 +229,7 @@ export default async function CustomerPrintPage({
                     Lifetime invoiced (last {customer.workOrders.length} visits):
                   </span>{" "}
                   {[...lifetime.entries()]
-                    .map(([currency_, minor]) => formatMoney(minor, currency_, "en-US"))
+                    .map(([currency_, minor]) => formatMoney(minor, currency_, locale))
                     .join(" · ")}
                 </p>
               ) : null}

@@ -39,6 +39,8 @@ const updateSchema = z.object({
   stateProvince: z.string().trim().max(120).nullable().optional(),
   postalCode: z.string().trim().max(20).nullable().optional(),
   country: z.string().trim().length(2).nullable().optional(),
+  defaultCurrency: z.string().trim().length(3).optional(),
+  defaultLocale: z.string().trim().max(12).nullable().optional(),
 });
 
 export async function PUT(
@@ -76,6 +78,12 @@ export async function PUT(
         : {}),
       ...(parsed.data.postalCode !== undefined ? { postalCode: parsed.data.postalCode } : {}),
       ...(parsed.data.country !== undefined ? { country: parsed.data.country } : {}),
+      ...(parsed.data.defaultCurrency !== undefined
+        ? { defaultCurrency: parsed.data.defaultCurrency }
+        : {}),
+      ...(parsed.data.defaultLocale !== undefined
+        ? { defaultLocale: parsed.data.defaultLocale }
+        : {}),
     });
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

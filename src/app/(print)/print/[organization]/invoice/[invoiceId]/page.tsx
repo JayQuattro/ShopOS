@@ -38,6 +38,7 @@ export default async function InvoicePrintPage({
         select: {
           name: true,
           defaultPaperSize: true,
+          defaultLocale: true,
           contactPhone: true,
           contactEmail: true,
           addressLine1: true,
@@ -68,9 +69,10 @@ export default async function InvoicePrintPage({
   if (!invoice) notFound();
 
   const currency = invoice.currency;
-  const money = (minor: bigint | number) => formatMoney(Number(minor), currency, "en-US");
+  const money = (minor: bigint | number) => formatMoney(Number(minor), currency, locale);
   const balance = invoice.totalMinor - invoice.paidMinor;
 
+  const locale = invoice.organization.defaultLocale ?? "en-US";
   const paper = resolvePaperSize(invoice.organization.defaultPaperSize, paperOverride);
 
   return (
@@ -92,7 +94,7 @@ export default async function InvoicePrintPage({
               ["Vehicle / asset", invoice.workOrder.asset?.displayName ?? ""],
               [
                 "Invoice date",
-                invoice.issuedAt ? formatDate(invoice.issuedAt, "UTC", "en-US") : "draft",
+                invoice.issuedAt ? formatDate(invoice.issuedAt, "UTC", locale) : "draft",
               ],
             ]}
           />
@@ -163,9 +165,7 @@ export default async function InvoicePrintPage({
               <tbody>
                 {invoice.payments.map((payment, index) => (
                   <tr key={index} className="border-b border-neutral-200">
-                    <td className="py-1.5 pr-3">
-                      {formatDate(payment.receivedAt, "UTC", "en-US")}
-                    </td>
+                    <td className="py-1.5 pr-3">{formatDate(payment.receivedAt, "UTC", locale)}</td>
                     <td className="py-1.5 pr-3">
                       {payment.method.replace(/_/g, " ").toLowerCase()}
                     </td>
