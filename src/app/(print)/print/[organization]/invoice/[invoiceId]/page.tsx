@@ -39,6 +39,7 @@ export default async function InvoicePrintPage({
           name: true,
           defaultPaperSize: true,
           defaultLocale: true,
+          taxId: true,
           contactPhone: true,
           contactEmail: true,
           addressLine1: true,
@@ -52,7 +53,7 @@ export default async function InvoicePrintPage({
         select: {
           number: true,
           completedAt: true,
-          customer: { select: { displayName: true, primaryPhone: true } },
+          customer: { select: { displayName: true, primaryPhone: true, taxId: true } },
           asset: { select: { displayName: true } },
         },
       },
@@ -91,6 +92,9 @@ export default async function InvoicePrintPage({
             items={[
               ["Customer", invoice.workOrder.customer.displayName],
               ["Phone", invoice.workOrder.customer.primaryPhone ?? ""],
+              ...(invoice.workOrder.customer.taxId
+                ? [["Customer tax ID", invoice.workOrder.customer.taxId] as const]
+                : []),
               ["Vehicle / asset", invoice.workOrder.asset?.displayName ?? ""],
               [
                 "Invoice date",
@@ -98,6 +102,11 @@ export default async function InvoicePrintPage({
               ],
             ]}
           />
+          {invoice.organization.taxId ? (
+            <p className="mt-2 text-xs text-neutral-500">
+              Seller tax registration: {invoice.organization.taxId}
+            </p>
+          ) : null}
         </PrintSection>
 
         <PrintSection heading="Charges">

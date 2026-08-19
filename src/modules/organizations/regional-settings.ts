@@ -79,6 +79,7 @@ export async function updateLocationRegionalSettings(
     locationId: string;
     currency?: string | null;
     locale?: string | null;
+    invoiceNumberPrefix?: string | null;
   },
 ): Promise<RegionalSettings> {
   assertTenantAccess(
@@ -100,6 +101,10 @@ export async function updateLocationRegionalSettings(
   if (locale && !isValidLocaleTag(locale)) {
     throw new RegionalSettingsFailed("invalid_locale");
   }
+  const invoiceNumberPrefix = clean(input.invoiceNumberPrefix);
+  if (invoiceNumberPrefix && !/^[A-Za-z0-9-]{1,12}$/.test(invoiceNumberPrefix)) {
+    throw new RegionalSettingsFailed("invalid_locale");
+  }
 
   const updated = await input.db.location.updateMany({
     where: {
@@ -109,6 +114,9 @@ export async function updateLocationRegionalSettings(
     data: {
       ...(currency !== undefined || input.currency === null ? { currency } : {}),
       ...(locale !== undefined || input.locale === null ? { locale } : {}),
+      ...(invoiceNumberPrefix !== undefined || input.invoiceNumberPrefix === null
+        ? { invoiceNumberPrefix }
+        : {}),
     },
   });
   if (updated.count !== 1) throw new RegionalSettingsFailed("location_not_found");

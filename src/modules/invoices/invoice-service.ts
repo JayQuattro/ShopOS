@@ -179,7 +179,11 @@ export async function createInvoiceFromWorkOrder(
     const currency = baseline?.currency ?? "USD";
 
     // Generate invoice number.
-    const number = await generateInvoiceNumber(transaction, input.context.organizationId);
+    const number = await generateInvoiceNumber(
+      transaction,
+      input.context.organizationId,
+      wo.locationId,
+    );
 
     const invoice = await transaction.invoice.create({
       data: {
@@ -570,18 +574,31 @@ export async function recordPaymentTenders(
   return result;
 }
 
+/**
+ * Gapless per-establishment series (legal requirement in much of the EU):
+ * each location numbers from its own sequence — the location's prefix when
+ * set, otherwise the organization's — and numbers are unique per
+ * (organization, location), so two locations may both issue INV-1001.
+ */
 async function generateInvoiceNumber(
   transaction: TransactionalClient,
   organizationId: string,
+  locationId: string,
 ): Promise<string> {
-  const org = await transaction.organization.findUnique({
-    where: { id: organizationId },
-    select: { invoiceNumberPrefix: true },
-  });
-  const prefix = org?.invoiceNumberPrefix ?? "INV-";
+  const [org, location] = await Promise.all([
+    transaction.organization.findUnique({
+      where: { id: organizationId },
+      select: { invoiceNumberPrefix: true },
+    }),
+    transaction.location.findFirst({
+      where: { id: locationId, organizationId },
+      select: { invoiceNumberPrefix: true },
+    }),
+  ]);
+  const prefix = location?.invoiceNumberPrefix ?? org?.invoiceNumberPrefix ?? "INV-";
 
   const latest = await transaction.invoice.findFirst({
-    where: { organizationId },
+    where: { organizationId, locationId, number: { startsWith: prefix } },
     orderBy: { number: "desc" },
     select: { number: true },
   });

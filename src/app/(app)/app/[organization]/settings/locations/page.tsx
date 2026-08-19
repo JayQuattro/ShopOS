@@ -31,7 +31,15 @@ export default async function LocationsSettingsPage({
     db.location.findMany({
       where: { organizationId: context.organizationId },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, code: true, timeZone: true, currency: true, locale: true },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        timeZone: true,
+        currency: true,
+        locale: true,
+        invoiceNumberPrefix: true,
+      },
     }),
   ]);
 
@@ -58,6 +66,7 @@ export default async function LocationsSettingsPage({
               timeZone: location.timeZone,
               currency: location.currency,
               locale: location.locale,
+              invoiceNumberPrefix: location.invoiceNumberPrefix,
             }}
             effectiveCurrency={effective[index]!.currency}
             effectiveLocale={effective[index]!.locale}

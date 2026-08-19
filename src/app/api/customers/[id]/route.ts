@@ -17,6 +17,7 @@ const updateSchema = z.object({
   displayName: z.string().trim().min(1).max(220).optional(),
   primaryEmail: z.string().trim().max(320).nullable().optional(),
   primaryPhone: z.string().trim().max(40).nullable().optional(),
+  taxId: z.string().trim().max(32).nullable().optional(),
   internalNotes: z.string().nullable().optional(),
   customerFacingNotes: z.string().nullable().optional(),
 });
@@ -86,6 +87,7 @@ export async function PATCH(
     if (d.displayName !== undefined) updateInput.displayName = d.displayName;
     if (d.primaryEmail !== undefined) updateInput.primaryEmail = d.primaryEmail ?? "";
     if (d.primaryPhone !== undefined) updateInput.primaryPhone = d.primaryPhone ?? "";
+    if (d.taxId !== undefined) updateInput.taxId = d.taxId ?? "";
     if (d.internalNotes !== undefined) updateInput.internalNotes = d.internalNotes ?? "";
     if (d.customerFacingNotes !== undefined)
       updateInput.customerFacingNotes = d.customerFacingNotes ?? "";

@@ -143,6 +143,7 @@ export default async function CustomerDetailPage({
                 initialEmail={customer.primaryEmail ?? ""}
                 initialPhone={customer.primaryPhone ?? ""}
                 initialReference={customer.organizationReference ?? ""}
+                initialTaxId={customer.taxId ?? ""}
                 initialInternalNotes={customer.internalNotes ?? ""}
                 canWrite
               />
@@ -196,6 +197,7 @@ export default async function CustomerDetailPage({
             initialEmail={customer.primaryEmail ?? ""}
             initialPhone={customer.primaryPhone ?? ""}
             initialReference={customer.organizationReference ?? ""}
+            initialTaxId={customer.taxId ?? ""}
             initialInternalNotes={customer.internalNotes ?? ""}
             canWrite={context.permissions.has("customers.write")}
           />
