@@ -8,7 +8,10 @@ import {
 } from "@/modules/integrations/crypto/secret-cipher";
 import type { PaymentsAdapter } from "@/modules/integrations/payments/payments-adapters";
 import {
+  AdyenPaymentsAdapter,
   getConsolePaymentsAdapter,
+  MolliePaymentsAdapter,
+  SquarePaymentsAdapter,
   StripePaymentsAdapter,
 } from "@/modules/integrations/payments/payments-adapters";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
@@ -17,6 +20,14 @@ export type PaymentsAdapterDefinition = Readonly<{
   key: string;
   displayName: string;
   description: string;
+  /** Live adapters are selectable; planned ones are honest placeholders. */
+  status: "live" | "planned";
+  configFields: ReadonlyArray<{
+    name: string;
+    label: string;
+    required: boolean;
+    placeholder?: string;
+  }>;
   secretFields: ReadonlyArray<{
     name: string;
     label: string;
@@ -31,7 +42,9 @@ export const PAYMENTS_ADAPTER_DEFINITIONS: ReadonlyArray<PaymentsAdapterDefiniti
     key: "stripe",
     displayName: "Stripe",
     description:
-      "Your own Stripe account. Checkout links accept cards, Apple Pay, Google Pay, Alipay, and WeChat Pay as enabled on the account.",
+      "Your own Stripe account. Checkout links accept cards, Apple Pay, Google Pay, Alipay, and WeChat Pay as enabled on the account. Automatic payment confirmation via webhook.",
+    status: "live",
+    configFields: [],
     secretFields: [
       {
         name: "secretKey",
@@ -40,7 +53,150 @@ export const PAYMENTS_ADAPTER_DEFINITIONS: ReadonlyArray<PaymentsAdapterDefiniti
         required: true,
         placeholder: "sk_live_…",
       },
+      {
+        name: "webhookSigningSecret",
+        label: "Webhook Signing Secret",
+        type: "password",
+        required: false,
+        placeholder: "whsec_… (required for automatic confirmation)",
+      },
     ],
+  },
+  {
+    key: "square",
+    displayName: "Square",
+    description:
+      "Square Online Checkout payment links — the default for brick-and-mortar shops on Square. Payments confirm manually until Square webhooks land.",
+    status: "live",
+    configFields: [
+      { name: "locationId", label: "Location ID", required: true, placeholder: "LXXXXXXXXXXXX" },
+    ],
+    secretFields: [
+      {
+        name: "accessToken",
+        label: "Access Token",
+        type: "password",
+        required: true,
+        placeholder: "EAAA…",
+      },
+    ],
+  },
+  {
+    key: "adyen",
+    displayName: "Adyen",
+    description:
+      "Adyen Pay by Link — cards, wallets, and local methods worldwide from one hosted page. Payments confirm manually until Adyen webhooks land.",
+    status: "live",
+    configFields: [
+      {
+        name: "merchantAccount",
+        label: "Merchant Account",
+        required: true,
+        placeholder: "MyShopECOM",
+      },
+    ],
+    secretFields: [
+      { name: "apiKey", label: "API Key", type: "password", required: true, placeholder: "AQEy…" },
+    ],
+  },
+  {
+    key: "mollie",
+    displayName: "Mollie",
+    description:
+      "Mollie hosted checkout — the European default, with iDEAL, Bancontact, and cards. Payments confirm manually until Mollie webhooks land.",
+    status: "live",
+    configFields: [{ name: "webhookUrl", label: "Webhook URL (optional)", required: false }],
+    secretFields: [
+      { name: "apiKey", label: "API Key", type: "password", required: true, placeholder: "live_…" },
+    ],
+  },
+  {
+    key: "paypal",
+    displayName: "PayPal",
+    description: "PayPal + Venmo wallets.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "heartland",
+    displayName: "Heartland / Global Payments",
+    description: "Heartland (Dealer Tender) — common in automotive dealerships and shops.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "worldpay",
+    displayName: "Worldpay / Fiserv",
+    description: "Worldpay hosted checkout.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "chase",
+    displayName: "Chase Merchant Services",
+    description: "Chase (JPMorgan Payments) hosted payment pages.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "authorizenet",
+    displayName: "Authorize.Net",
+    description: "The long-tail US classic with a hosted payment form.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "gocardless",
+    displayName: "GoCardless",
+    description: "Bank debit (ACH/SEPA) — recurring account billing.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "elavon",
+    displayName: "Elavon / Converge",
+    description: "Elavon hosted checkout.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "moneris",
+    displayName: "Moneris",
+    description: "Canada's default processor.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "razorpay",
+    displayName: "Razorpay",
+    description: "India — cards, UPI, netbanking.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "mercadopago",
+    displayName: "Mercado Pago",
+    description: "Latin America — cards and local rails incl. PIX.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
+  },
+  {
+    key: "clover",
+    displayName: "Clover (Fiserv)",
+    description: "Clover-hosted checkout and terminals.",
+    status: "planned",
+    configFields: [],
+    secretFields: [],
   },
 ];
 
@@ -52,6 +208,7 @@ export class PaymentsConnectorOperationFailed extends Error {
   constructor(
     public readonly reason:
       | "invalid_adapter"
+      | "adapter_not_available"
       | "invalid_configuration"
       | "encryption_key_missing"
       | "connector_not_found",
@@ -75,7 +232,7 @@ export async function resolvePaymentsAdapter(
   // configured outside production.
   const connector = await db.connectorInstance.findFirst({
     where: { organizationId, capability: "payments", status: "active" },
-    select: { adapterKey: true, encryptedSecret: true },
+    select: { adapterKey: true, configuration: true, encryptedSecret: true },
   });
 
   if (!connector) {
@@ -92,7 +249,8 @@ export async function resolvePaymentsAdapter(
     return null;
   }
 
-  return instantiatePaymentsAdapter(connector.adapterKey, secret);
+  const config = (connector.configuration ?? {}) as Record<string, unknown>;
+  return instantiatePaymentsAdapter(connector.adapterKey, config, secret);
 }
 
 /**
@@ -106,7 +264,7 @@ export async function resolveOrgPaymentsSecrets(
 ): Promise<Readonly<{ adapterKey: string; secret: Record<string, string> }> | null> {
   const connector = await db.connectorInstance.findFirst({
     where: { organizationId, capability: "payments", status: "active" },
-    select: { adapterKey: true, encryptedSecret: true },
+    select: { adapterKey: true, configuration: true, encryptedSecret: true },
   });
   if (!connector) return null;
 
@@ -124,11 +282,30 @@ export async function resolveOrgPaymentsSecrets(
 
 export function instantiatePaymentsAdapter(
   adapterKey: string,
+  config: Record<string, unknown>,
   secret: Record<string, string>,
 ): PaymentsAdapter | null {
   switch (adapterKey) {
     case "stripe":
       return secret.secretKey ? new StripePaymentsAdapter({ secretKey: secret.secretKey }) : null;
+    case "square": {
+      const locationId = String(config.locationId ?? "");
+      return secret.accessToken && locationId
+        ? new SquarePaymentsAdapter({ locationId }, { accessToken: secret.accessToken })
+        : null;
+    }
+    case "adyen": {
+      const merchantAccount = String(config.merchantAccount ?? "");
+      return secret.apiKey && merchantAccount
+        ? new AdyenPaymentsAdapter({ apiKey: secret.apiKey }, { merchantAccount })
+        : null;
+    }
+    case "mollie": {
+      const webhookUrl = config.webhookUrl ? String(config.webhookUrl) : undefined;
+      return secret.apiKey
+        ? new MolliePaymentsAdapter({ apiKey: secret.apiKey }, webhookUrl ? { webhookUrl } : {})
+        : null;
+    }
     default:
       return null;
   }
@@ -169,6 +346,7 @@ export async function upsertOrgPaymentsConnector(
     context: TenantContext;
     adapterKey: string;
     displayName: string;
+    configuration?: Record<string, unknown>;
     secret: Record<string, string>;
   }>,
 ): Promise<Readonly<{ connectorId: string }>> {
@@ -180,6 +358,13 @@ export async function upsertOrgPaymentsConnector(
 
   const adapter = getPaymentsAdapterDefinition(input.adapterKey);
   if (!adapter) throw new PaymentsConnectorOperationFailed("invalid_adapter");
+  if (adapter.status !== "live")
+    throw new PaymentsConnectorOperationFailed("adapter_not_available");
+  for (const field of adapter.configFields) {
+    if (field.required && !input.configuration?.[field.name]) {
+      throw new PaymentsConnectorOperationFailed("invalid_configuration");
+    }
+  }
   for (const field of adapter.secretFields) {
     if (field.required && !input.secret[field.name]) {
       throw new PaymentsConnectorOperationFailed("invalid_configuration");
@@ -208,7 +393,7 @@ export async function upsertOrgPaymentsConnector(
         capability: "payments",
         adapterKey: input.adapterKey,
         displayName: input.displayName,
-        configuration: {},
+        configuration: JSON.parse(JSON.stringify(input.configuration ?? {})),
         encryptedSecret,
         status: "active",
         createdByUserId: input.context.actorId,

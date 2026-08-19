@@ -32,6 +32,7 @@ export async function GET(
 const bodySchema = z.object({
   adapterKey: z.string().trim().min(1),
   displayName: z.string().trim().min(1).max(180),
+  configuration: z.record(z.string(), z.unknown()).optional(),
   secret: z.record(z.string(), z.string()),
 });
 
@@ -59,6 +60,7 @@ export async function PUT(
       context: tenantContext,
       adapterKey: parsed.data.adapterKey,
       displayName: parsed.data.displayName,
+      ...(parsed.data.configuration ? { configuration: parsed.data.configuration } : {}),
       secret: parsed.data.secret,
     });
     return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
@@ -71,6 +73,7 @@ function paymentsConnectorError(error: unknown): Response {
   if (error instanceof PaymentsConnectorOperationFailed) {
     const statusMap: Record<string, number> = {
       invalid_adapter: 400,
+      adapter_not_available: 400,
       invalid_configuration: 400,
       encryption_key_missing: 500,
     };

@@ -54,11 +54,22 @@ the provider reference.
 
 ### Provider landscape
 
-Popular processors (Stripe, Adyen, Worldpay, Chase) each become an adapter.
+Live adapters: **Stripe**, **Square** (the brick-and-mortar default), **Adyen**
+(Pay by Link), **Mollie** (the EU default). Planned slots are registered in the
+definitions registry as `status: "planned"` and shown as coming-soon in
+settings — honest about implemented vs. planned, and shops can tell us which
+slot they need: **PayPal/Venmo**, **Heartland/Global Payments (Dealer Tender —
+the automotive-vertical incumbent)**, **Worldpay/Fiserv**, **Chase Merchant
+Services**, **Authorize.Net**, **GoCardless** (bank debit), **Elavon/Converge**,
+**Moneris** (Canada), **Razorpay** (India), **Mercado Pago** (LatAm/PIX), and
+**Clover**.
+
 Wallets and regional rails ride the processor (Apple Pay / Alipay / WeChat Pay
 are Stripe/Adyen payment methods, not separate ShopOS connectors). Cash, check,
 Zelle-style bank rails, and cash-discounting are domestic ShopOS pricing/payment
-features, not connector concerns.
+features, not connector concerns. Webhook auto-confirmation beyond Stripe is a
+follow-up per adapter; Square/Adyen/Mollie links record payments manually until
+their webhook verification lands.
 
 ### Out of scope for v1 (documented follow-ups)
 

@@ -12,6 +12,8 @@ type AdapterDefinition = {
   key: string;
   displayName: string;
   description: string;
+  status: "live" | "planned";
+  configFields: Array<{ name: string; label: string; required: boolean; placeholder?: string }>;
   secretFields: Array<{
     name: string;
     label: string;
@@ -30,6 +32,7 @@ export function PaymentsSettingsForm({ organizationId }: { organizationId: strin
   const [adapterKey, setAdapterKey] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [secret, setSecret] = useState<Record<string, string>>({});
+  const [config, setConfig] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,14 +76,16 @@ export function PaymentsSettingsForm({ organizationId }: { organizationId: strin
         body: JSON.stringify({
           adapterKey,
           displayName: displayName || selected.displayName,
+          configuration: config,
           secret,
         }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         const messages: Record<string, string> = {
-          invalid_configuration: "Fill in the required credentials.",
+          invalid_configuration: "Fill in the required fields.",
           invalid_adapter: "Pick a processor.",
+          adapter_not_available: "That processor isn't available yet.",
         };
         throw new Error(messages[body.error ?? ""] ?? "Could not save.");
       }
@@ -149,15 +154,18 @@ export function PaymentsSettingsForm({ organizationId }: { organizationId: strin
               onChange={(e) => {
                 setAdapterKey(e.target.value);
                 setSecret({});
+                setConfig({});
               }}
               className="h-[var(--control-height)] rounded-md border border-input bg-background px-3 text-sm"
             >
               <option value="">Select a processor…</option>
-              {adapters.map((a) => (
-                <option key={a.key} value={a.key}>
-                  {a.displayName}
-                </option>
-              ))}
+              {adapters
+                .filter((a) => a.status === "live")
+                .map((a) => (
+                  <option key={a.key} value={a.key}>
+                    {a.displayName}
+                  </option>
+                ))}
             </select>
           </label>
 
@@ -170,6 +178,20 @@ export function PaymentsSettingsForm({ organizationId }: { organizationId: strin
                 onChange={(e) => setDisplayName(e.target.value)}
                 disabled={pending}
               />
+              {selected.configFields.map((field) => (
+                <label key={field.name} className="grid gap-1 text-sm font-medium">
+                  {field.label}
+                  {field.required ? " *" : ""}
+                  <Input
+                    value={config[field.name] ?? ""}
+                    onChange={(e) =>
+                      setConfig((prev) => ({ ...prev, [field.name]: e.target.value }))
+                    }
+                    placeholder={field.placeholder ?? ""}
+                    disabled={pending}
+                  />
+                </label>
+              ))}
               {selected.secretFields.map((field) => (
                 <label key={field.name} className="grid gap-1 text-sm font-medium">
                   {field.label}
@@ -200,6 +222,30 @@ export function PaymentsSettingsForm({ organizationId }: { organizationId: strin
           ) : null}
         </CardContent>
       </Card>
+      {adapters.some((a) => a.status === "planned") ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">More processors on the way</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {adapters
+              .filter((a) => a.status === "planned")
+              .map((a) => (
+                <span
+                  key={a.key}
+                  title={a.description}
+                  className="rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted-foreground"
+                >
+                  {a.displayName}
+                </span>
+              ))}
+            <p className="w-full pt-2 text-xs text-muted-foreground">
+              Adapter slots are built into ShopOS — tell us which one your shop uses and it moves up
+              the list.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
     </form>
   );
 }
