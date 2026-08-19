@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { PrismaClient, PaymentMethod } from "@/generated/prisma/client";
+import { resolveDrawerForPayment } from "@/modules/billing/cash-drawer-service";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 
 export type DepositServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
@@ -204,12 +205,19 @@ export async function applyDeposit(
     });
     if (claimed.count !== 1) throw new DepositFailed("deposit_already_applied");
 
+    const drawerSessionId = await resolveDrawerForPayment(
+      transaction,
+      input.context.organizationId,
+      invoice.locationId,
+      input.context.actorId,
+    );
     await transaction.payment.create({
       data: {
         id: randomUUID(),
         organizationId: input.context.organizationId,
         locationId: invoice.locationId,
         invoiceId: invoice.id,
+        ...(drawerSessionId ? { drawerSessionId } : {}),
         amountMinor: deposit.amountMinor,
         currency: invoice.currency,
         method: deposit.method as PaymentMethod,

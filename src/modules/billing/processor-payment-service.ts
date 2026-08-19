@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { PrismaClient } from "@/generated/prisma/client";
+import { resolveDrawerForPayment } from "@/modules/billing/cash-drawer-service";
 
 export type ProcessorWebhookOutcome =
   | { kind: "ignored"; reason: string }
@@ -98,6 +99,13 @@ export async function recordStripeCheckoutCompleted(
       return { kind: "ignored", reason: "invoice_not_payable" };
     }
 
+    const sharedDrawerId = await resolveDrawerForPayment(
+      transaction,
+      organizationId,
+      invoice.locationId,
+      null,
+    );
+
     // Idempotency: the provider reference is unique per session. A replayed
     // webhook must never double-pay.
     const providerRef = `stripe:${session.id}`;
@@ -122,6 +130,8 @@ export async function recordStripeCheckoutCompleted(
         method: "CARD_EXTERNAL",
         reference: providerRef,
         ...(session.payment_intent ? { processorChargeId: session.payment_intent } : {}),
+        // No staff actor: processor payments land in the shared drawer.
+        ...(sharedDrawerId ? { drawerSessionId: sharedDrawerId } : {}),
         receivedAt: new Date(),
         recordedByUserId: systemUserId,
       },

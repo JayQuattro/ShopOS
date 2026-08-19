@@ -33,6 +33,9 @@ export type OpenDrawerState = Readonly<{
   openingFloatMinor: number;
   openedAt: Date;
   openedByName: string;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  label: string | null;
   note: string | null;
   methodTotals: MethodTotals;
   expectedCashMinor: number;
@@ -44,6 +47,8 @@ export type ClosedDrawerSummary = Readonly<{
   locationId: string;
   currency: string;
   openingFloatMinor: number;
+  label: string | null;
+  ownerName: string | null;
   methodTotals: MethodTotals;
   countedCashMinor: number;
   expectedCashMinor: number;
@@ -58,19 +63,39 @@ export type ClosedDrawerSummary = Readonly<{
 /** Payment methods counted as cash in the drawer. */
 const CASH_METHODS = new Set(["CASH"]);
 
-async function methodTotalsForWindow(
+/**
+ * A drawer's totals. Stamped payments are attributed to the till they were
+ * recorded into; unstamped payments (recorded before attribution existed,
+ * or with no open drawer at the time) reconcile to the shared house
+ * drawer's window only — a personal till never inherits them.
+ */
+async function methodTotalsForDrawer(
   db: PrismaClient | TransactionalClient,
   organizationId: string,
-  locationId: string,
-  currency: string,
-  since: Date,
+  session: Readonly<{
+    id: string;
+    locationId: string;
+    currency: string;
+    openedAt: Date;
+    ownerUserId: string | null;
+  }>,
 ): Promise<MethodTotals> {
   const payments = await db.payment.findMany({
     where: {
       organizationId,
-      locationId,
-      currency,
-      receivedAt: { gte: since },
+      OR: [
+        { drawerSessionId: session.id },
+        ...(session.ownerUserId === null
+          ? [
+              {
+                drawerSessionId: null,
+                locationId: session.locationId,
+                currency: session.currency,
+                receivedAt: { gte: session.openedAt },
+              },
+            ]
+          : []),
+      ],
     },
     select: { method: true, amountMinor: true },
   });
@@ -83,6 +108,36 @@ async function methodTotalsForWindow(
 }
 
 /**
+ * The drawer a new payment should land in: the recorder's open personal
+ * till at that location, else the shared open drawer. Null when nothing
+ * is open — the payment records fine either way.
+ */
+export async function resolveDrawerForPayment(
+  db: PrismaClient | TransactionalClient,
+  organizationId: string,
+  locationId: string,
+  actorUserId: string | null,
+): Promise<string | null> {
+  const where: Record<string, unknown> = {
+    organizationId,
+    locationId,
+    status: "open",
+  };
+  if (actorUserId) {
+    const personal = await db.cashDrawerSession.findFirst({
+      where: { ...where, ownerUserId: actorUserId },
+      select: { id: true },
+    });
+    if (personal) return personal.id;
+  }
+  const shared = await db.cashDrawerSession.findFirst({
+    where: { ...where, ownerUserId: null },
+    select: { id: true },
+  });
+  return shared?.id ?? null;
+}
+
+/**
  * Opens the drawer for a location: one open session at a time, with the
  * starting float. Payments recorded after `openedAt` make up the day.
  */
@@ -92,6 +147,9 @@ export async function openCashDrawer(
     currency: string;
     openingFloatMinor?: number;
     note?: string;
+    label?: string;
+    /** Shared house drawer instead of the opener's personal till. */
+    shared?: boolean;
   },
 ): Promise<Readonly<{ sessionId: string }>> {
   assertTenantAccess(
@@ -114,11 +172,17 @@ export async function openCashDrawer(
     });
     if (!location) throw new CashDrawerFailed("location_not_found");
 
+    // A personal till belongs to the opener; `shared` opens the house
+    // drawer instead. Uniqueness (one shared per location, one personal
+    // per owner per location) is enforced by partial unique indexes; a
+    // friendly check here keeps the error readable.
+    const ownerUserId = input.shared ? null : input.context.actorId;
     const existing = await transaction.cashDrawerSession.findFirst({
       where: {
         organizationId: input.context.organizationId,
         locationId: input.locationId,
         status: "open",
+        ...(ownerUserId ? { ownerUserId } : { ownerUserId: null }),
       },
       select: { id: true },
     });
@@ -130,6 +194,8 @@ export async function openCashDrawer(
         organizationId: input.context.organizationId,
         locationId: input.locationId,
         currency: input.currency.trim().toUpperCase(),
+        ...(ownerUserId ? { ownerUserId } : {}),
+        ...(input.label ? { label: input.label.trim() } : {}),
         ...(input.openingFloatMinor !== undefined
           ? { openingFloatMinor: input.openingFloatMinor }
           : {}),
@@ -149,64 +215,90 @@ export async function openCashDrawer(
 export async function getOpenCashDrawer(
   input: CashDrawerServiceInput & { locationId: string },
 ): Promise<OpenDrawerState | null> {
+  const drawers = await getOpenCashDrawers(input);
+  return drawers[0] ?? null;
+}
+
+/** Every open till (shared + personal) across the authorized locations. */
+export async function getOpenCashDrawers(
+  input: CashDrawerServiceInput & { locationId?: string },
+): Promise<readonly OpenDrawerState[]> {
   assertTenantAccess(
     input.context,
-    { organizationId: input.context.organizationId, locationId: input.locationId },
+    { organizationId: input.context.organizationId },
     "payments.record",
   );
 
-  const session = await input.db.cashDrawerSession.findFirst({
-    where: {
-      organizationId: input.context.organizationId,
-      locationId: input.locationId,
-      status: "open",
-    },
+  const where: Record<string, unknown> = {
+    organizationId: input.context.organizationId,
+    status: "open",
+  };
+  if (input.locationId) {
+    where.locationId = input.locationId;
+  } else if (
+    !input.context.organizationWideLocationAccess &&
+    input.context.allowedLocationIds.size > 0
+  ) {
+    where.locationId = { in: [...input.context.allowedLocationIds] };
+  }
+
+  const sessions = await input.db.cashDrawerSession.findMany({
+    where,
+    orderBy: [{ locationId: "asc" }, { openedAt: "asc" }],
     select: {
       id: true,
+      organizationId: true,
       locationId: true,
       currency: true,
       openingFloatMinor: true,
       openedAt: true,
       note: true,
+      label: true,
+      ownerUserId: true,
+      owner: { select: { displayName: true } },
       openedBy: { select: { displayName: true } },
     },
   });
-  if (!session) return null;
 
-  const [totals, paymentCount] = await Promise.all([
-    methodTotalsForWindow(
-      input.db,
-      input.context.organizationId,
-      session.locationId,
-      session.currency,
-      session.openedAt,
-    ),
-    input.db.payment.count({
-      where: {
-        organizationId: input.context.organizationId,
+  const states: OpenDrawerState[] = [];
+  for (const session of sessions) {
+    const [totals, paymentCount] = await Promise.all([
+      methodTotalsForDrawer(input.db, session.organizationId, {
+        id: session.id,
         locationId: session.locationId,
         currency: session.currency,
-        receivedAt: { gte: session.openedAt },
-      },
-    }),
-  ]);
+        openedAt: session.openedAt,
+        ownerUserId: session.ownerUserId,
+      }),
+      input.db.payment.count({
+        where: {
+          organizationId: session.organizationId,
+          OR: [{ drawerSessionId: session.id }],
+        },
+      }),
+    ]);
 
-  const cashTakenIn = Object.entries(totals)
-    .filter(([method]) => CASH_METHODS.has(method))
-    .reduce((sum, [, minor]) => sum + minor, 0);
+    const cashTakenIn = Object.entries(totals)
+      .filter(([method]) => CASH_METHODS.has(method))
+      .reduce((sum, [, minor]) => sum + minor, 0);
 
-  return {
-    sessionId: session.id,
-    locationId: session.locationId,
-    currency: session.currency,
-    openingFloatMinor: session.openingFloatMinor,
-    openedAt: session.openedAt,
-    openedByName: session.openedBy.displayName,
-    note: session.note,
-    methodTotals: totals,
-    expectedCashMinor: session.openingFloatMinor + cashTakenIn,
-    paymentCount,
-  };
+    states.push({
+      sessionId: session.id,
+      locationId: session.locationId,
+      currency: session.currency,
+      openingFloatMinor: session.openingFloatMinor,
+      openedAt: session.openedAt,
+      openedByName: session.openedBy.displayName,
+      ownerUserId: session.ownerUserId,
+      ownerName: session.owner?.displayName ?? null,
+      label: session.label,
+      note: session.note,
+      methodTotals: totals,
+      expectedCashMinor: session.openingFloatMinor + cashTakenIn,
+      paymentCount,
+    });
+  }
+  return states;
 }
 
 /**
@@ -237,6 +329,7 @@ export async function closeCashDrawer(
         currency: true,
         openingFloatMinor: true,
         openedAt: true,
+        ownerUserId: true,
       },
     });
     if (!session) throw new CashDrawerFailed("session_not_found");
@@ -248,13 +341,13 @@ export async function closeCashDrawer(
       "payments.record",
     );
 
-    const totals = await methodTotalsForWindow(
-      transaction,
-      input.context.organizationId,
-      session.locationId,
-      session.currency,
-      session.openedAt,
-    );
+    const totals = await methodTotalsForDrawer(transaction, input.context.organizationId, {
+      id: session.id,
+      locationId: session.locationId,
+      currency: session.currency,
+      openedAt: session.openedAt,
+      ownerUserId: session.ownerUserId ?? null,
+    });
     const cashTakenIn = Object.entries(totals)
       .filter(([method]) => CASH_METHODS.has(method))
       .reduce((sum, [, minor]) => sum + minor, 0);
@@ -326,6 +419,8 @@ export async function listClosedCashDrawers(
       locationId: true,
       currency: true,
       openingFloatMinor: true,
+      label: true,
+      owner: { select: { displayName: true } },
       methodTotals: true,
       countedCashMinor: true,
       expectedCashMinor: true,
@@ -343,6 +438,8 @@ export async function listClosedCashDrawers(
     locationId: session.locationId,
     currency: session.currency,
     openingFloatMinor: session.openingFloatMinor,
+    label: session.label,
+    ownerName: session.owner?.displayName ?? null,
     methodTotals: (session.methodTotals ?? {}) as MethodTotals,
     countedCashMinor: session.countedCashMinor ?? 0,
     expectedCashMinor: session.expectedCashMinor ?? 0,

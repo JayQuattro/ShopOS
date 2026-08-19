@@ -4,7 +4,11 @@ import { PageHeader } from "@/components/shopos/page-header";
 import { db } from "@/db/client";
 import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
-import { getOpenCashDrawer, listClosedCashDrawers } from "@/modules/billing/cash-drawer-service";
+import {
+  getOpenCashDrawers,
+  listClosedCashDrawers,
+  type OpenDrawerState,
+} from "@/modules/billing/cash-drawer-service";
 import { DrawerControls } from "./drawer-controls";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +21,78 @@ const METHOD_LABELS: Readonly<Record<string, string>> = {
   OTHER: "Other",
 };
 
+function tillTitle(drawer: OpenDrawerState): string {
+  if (drawer.ownerName) return drawer.label ?? `${drawer.ownerName}'s till`;
+  return drawer.label ?? "Shared drawer";
+}
+
+function TillCard({
+  drawer,
+  orgId,
+  locationName,
+}: {
+  drawer: OpenDrawerState;
+  orgId: string;
+  locationName: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+          <span>
+            {tillTitle(drawer)}
+            <span className="ml-2 text-xs font-normal text-muted-foreground">{locationName}</span>
+          </span>
+          <Badge variant="default" className="text-[10px]">
+            open
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-xs text-muted-foreground">
+          Opened {formatDateTime(drawer.openedAt, "UTC", "en-US")} by {drawer.openedByName} · float{" "}
+          {formatMoney(drawer.openingFloatMinor, drawer.currency, "en-US")}
+          {drawer.ownerName ? ` · ${drawer.ownerName}'s money` : ""}
+        </p>
+        <ul className="flex flex-col divide-y divide-border/60 text-sm">
+          {Object.entries(drawer.methodTotals).length === 0 ? (
+            <li className="py-1.5 text-muted-foreground">No payments in this till yet.</li>
+          ) : (
+            Object.entries(drawer.methodTotals).map(([method, minor]) => (
+              <li key={method} className="flex items-center justify-between py-1.5">
+                <span>{METHOD_LABELS[method] ?? method.toLowerCase()}</span>
+                <span className="font-mono tabular-nums">
+                  {formatMoney(minor, drawer.currency, "en-US")}
+                </span>
+              </li>
+            ))
+          )}
+        </ul>
+        <p className="text-sm">
+          Expected cash:{" "}
+          <span className="font-mono font-medium">
+            {formatMoney(drawer.expectedCashMinor, drawer.currency, "en-US")}
+          </span>
+          <span className="ml-2 text-xs text-muted-foreground">
+            ({drawer.paymentCount} payment{drawer.paymentCount === 1 ? "" : "s"} in this till)
+          </span>
+        </p>
+        <DrawerControls
+          orgId={orgId}
+          mode="close"
+          sessionId={drawer.sessionId}
+          locationName={tillTitle(drawer)}
+          currency={drawer.currency}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
 /**
- * The nightly close-out: one open drawer per location, running totals by
- * payment method since it opened, count-the-cash at close, and over/short
- * history for reconciliation.
+ * The nightly close-out: every open till (each cashier's own plus the shared
+ * house drawer) with its own method totals and count-the-cash close, and the
+ * over/short history for reconciliation.
  */
 export default async function CashDrawerPage({
   params,
@@ -49,39 +121,33 @@ export default async function CashDrawerPage({
     );
   }
 
-  const locations = await db.location.findMany({
-    where: {
-      organizationId: context.organizationId,
-      active: true,
-      ...(context.organizationWideLocationAccess
-        ? {}
-        : { id: { in: [...context.allowedLocationIds] } }),
-    },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
-
-  const openDrawers = await Promise.all(
-    locations.map(async (location) => ({
-      locationId: location.id,
-      locationName: location.name,
-      drawer: await getOpenCashDrawer({ db, context, locationId: location.id }),
-    })),
-  );
-  const closed = await listClosedCashDrawers({ db, context });
+  const [locations, openDrawers, closed] = await Promise.all([
+    db.location.findMany({
+      where: {
+        organizationId: context.organizationId,
+        active: true,
+        ...(context.organizationWideLocationAccess
+          ? {}
+          : { id: { in: [...context.allowedLocationIds] } }),
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    getOpenCashDrawers({ db, context }),
+    listClosedCashDrawers({ db, context }),
+  ]);
   const org = await db.organization.findUnique({
     where: { id: context.organizationId },
     select: { defaultCurrency: true },
   });
   const currency = org?.defaultCurrency ?? "USD";
-
-  const openCount = openDrawers.filter((entry) => entry.drawer).length;
+  const orgId = context.organizationId;
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Cash drawer"
-        description="Open the drawer at shift start, count the cash at close, keep over/short honest."
+        description="Each cashier can run their own till alongside the shared drawer — count and close them independently."
         breadcrumbs={[{ label: "Cash drawer" }]}
       />
 
@@ -92,82 +158,62 @@ export default async function CashDrawerPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {openDrawers.map((entry) => (
-            <Card key={entry.locationId}>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between text-base">
-                  {entry.locationName}
-                  <Badge variant={entry.drawer ? "default" : "outline"} className="text-[10px]">
-                    {entry.drawer ? "open" : "closed"}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                {entry.drawer ? (
-                  <>
-                    <p className="text-xs text-muted-foreground">
-                      Opened {formatDateTime(entry.drawer.openedAt, "UTC", "en-US")} by{" "}
-                      {entry.drawer.openedByName} · float{" "}
-                      {formatMoney(entry.drawer.openingFloatMinor, entry.drawer.currency, "en-US")}
-                    </p>
-                    <ul className="flex flex-col divide-y divide-border/60 text-sm">
-                      {Object.entries(entry.drawer.methodTotals).length === 0 ? (
-                        <li className="py-1.5 text-muted-foreground">
-                          No payments recorded since open.
-                        </li>
-                      ) : (
-                        Object.entries(entry.drawer.methodTotals).map(([method, minor]) => (
-                          <li key={method} className="flex items-center justify-between py-1.5">
-                            <span>{METHOD_LABELS[method] ?? method.toLowerCase()}</span>
-                            <span className="font-mono tabular-nums">
-                              {formatMoney(minor, entry.drawer!.currency, "en-US")}
-                            </span>
-                          </li>
-                        ))
-                      )}
-                    </ul>
-                    <p className="text-sm">
-                      Expected cash:{" "}
-                      <span className="font-mono font-medium">
-                        {formatMoney(
-                          entry.drawer.expectedCashMinor,
-                          entry.drawer.currency,
-                          "en-US",
-                        )}
-                      </span>
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        ({entry.drawer.paymentCount} payment
-                        {entry.drawer.paymentCount === 1 ? "" : "s"} since open)
-                      </span>
-                    </p>
-                    <DrawerControls
-                      orgId={context.organizationId}
-                      mode="close"
-                      sessionId={entry.drawer.sessionId}
-                      locationName={entry.locationName}
-                      currency={entry.drawer.currency}
+        locations.map((location) => {
+          const drawers = openDrawers.filter((drawer) => drawer.locationId === location.id);
+          const sharedOpen = drawers.some((drawer) => drawer.ownerUserId === null);
+          const myOpen = drawers.some((drawer) => drawer.ownerUserId === context.actorId);
+          return (
+            <div key={location.id} className="flex flex-col gap-3">
+              <div className="flex items-baseline justify-between">
+                <h2 className="text-sm font-semibold">{location.name}</h2>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {drawers.length} open till{drawers.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {drawers.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {drawers.map((drawer) => (
+                    <TillCard
+                      key={drawer.sessionId}
+                      drawer={drawer}
+                      orgId={orgId}
+                      locationName={location.name}
                     />
-                  </>
-                ) : (
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nothing open at this location.</p>
+              )}
+              <div className="flex flex-wrap gap-3">
+                {!myOpen ? (
                   <DrawerControls
-                    orgId={context.organizationId}
+                    orgId={orgId}
                     mode="open"
-                    locationId={entry.locationId}
-                    locationName={entry.locationName}
+                    locationId={location.id}
+                    locationName={`my till at ${location.name}`}
                     currency={currency}
                   />
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                ) : null}
+                {!sharedOpen ? (
+                  <DrawerControls
+                    orgId={orgId}
+                    mode="open"
+                    locationId={location.id}
+                    locationName={`the shared drawer at ${location.name}`}
+                    currency={currency}
+                    shared
+                  />
+                ) : null}
+              </div>
+            </div>
+          );
+        })
       )}
 
       <Card>
         <CardContent className="p-0">
           <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
-            Close-out history · {openCount} drawer{openCount === 1 ? "" : "s"} still open
+            Close-out history
           </p>
           {closed.length === 0 ? (
             <p className="px-6 py-6 text-center text-sm text-muted-foreground">
@@ -178,9 +224,9 @@ export default async function CashDrawerPage({
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
                   <th className="px-4 py-3 font-medium">Closed</th>
+                  <th className="px-4 py-3 font-medium">Till</th>
                   <th className="px-4 py-3 font-medium">By</th>
                   <th className="px-4 py-3 font-medium">Counted</th>
-                  <th className="px-4 py-3 font-medium">Expected</th>
                   <th className="px-4 py-3 font-medium">Over / short</th>
                 </tr>
               </thead>
@@ -190,12 +236,14 @@ export default async function CashDrawerPage({
                     <td className="px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground">
                       {formatDateTime(session.closedAt, "UTC", "en-US")}
                     </td>
+                    <td className="px-4 py-3">
+                      {session.ownerName
+                        ? (session.label ?? `${session.ownerName}'s till`)
+                        : (session.label ?? "Shared drawer")}
+                    </td>
                     <td className="px-4 py-3">{session.closedByName}</td>
                     <td className="px-4 py-3 font-mono tabular-nums">
                       {formatMoney(session.countedCashMinor, session.currency, "en-US")}
-                    </td>
-                    <td className="px-4 py-3 font-mono tabular-nums text-muted-foreground">
-                      {formatMoney(session.expectedCashMinor, session.currency, "en-US")}
                     </td>
                     <td className="px-4 py-3 font-mono tabular-nums">
                       {session.overShortMinor === 0 ? (

@@ -21,6 +21,7 @@ export function DrawerControls({
   sessionId,
   locationName,
   currency,
+  shared,
 }: {
   orgId: string;
   mode: "open" | "close";
@@ -28,6 +29,7 @@ export function DrawerControls({
   sessionId?: string;
   locationName: string;
   currency: string;
+  shared?: boolean;
 }) {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -54,6 +56,7 @@ export function DrawerControls({
                 currency,
                 openingFloatMinor: minor,
                 ...(note ? { note } : {}),
+                ...(shared ? { shared: true } : {}),
               }
             : {
                 action: "close",

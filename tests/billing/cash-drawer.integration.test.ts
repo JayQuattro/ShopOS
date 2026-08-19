@@ -168,10 +168,10 @@ async function seedShop() {
         number: "INV-6601",
         status: "ISSUED",
         currency: "USD",
-        subtotalMinor: 0n,
+        subtotalMinor: 500_00n,
         discountMinor: 0n,
         taxMinor: 0n,
-        totalMinor: 0n,
+        totalMinor: 500_00n,
         issuedAt: new Date(),
       },
     }),
@@ -210,7 +210,7 @@ async function seedShop() {
     });
   }
 
-  return { orgId, otherOrgId, locationId, otherLocationId, context, addPayment };
+  return { orgId, otherOrgId, locationId, otherLocationId, invoiceId, context, addPayment };
 }
 
 describe("cash drawer (#181)", { skip: shouldSkip }, () => {
@@ -219,15 +219,18 @@ describe("cash drawer (#181)", { skip: shouldSkip }, () => {
     const seed = await seedShop();
     const context = seed.context();
 
+    // Default is the opener's personal till.
     const opened = await drawer.openCashDrawer({
       db: dbModule.db,
       context,
       locationId: seed.locationId,
       currency: "USD",
       openingFloatMinor: 200_00,
+      label: "Front desk",
     });
 
-    // One open drawer per location.
+    // A second personal till for the same owner is refused; a shared house
+    // drawer coexists.
     await expect(
       drawer.openCashDrawer({
         db: dbModule.db,
@@ -236,44 +239,77 @@ describe("cash drawer (#181)", { skip: shouldSkip }, () => {
         currency: "USD",
       }),
     ).rejects.toMatchObject({ reason: "drawer_already_open" });
+    const shared = await drawer.openCashDrawer({
+      db: dbModule.db,
+      context,
+      locationId: seed.locationId,
+      currency: "USD",
+      openingFloatMinor: 50_00,
+      shared: true,
+    });
+    await expect(
+      drawer.openCashDrawer({
+        db: dbModule.db,
+        context,
+        locationId: seed.locationId,
+        currency: "USD",
+        shared: true,
+      }),
+    ).rejects.toMatchObject({ reason: "drawer_already_open" });
 
+    // Payments through the invoice flow stamp the recorder's open till.
+    const invoiceService = await import("@/modules/invoices/invoice-service");
+    await invoiceService.recordPaymentTenders({
+      db: dbModule.db,
+      context,
+      invoiceId: seed.invoiceId,
+      tenders: [
+        { amountMinor: 120_00, method: "CASH" },
+        { amountMinor: 85_25, method: "CARD_EXTERNAL" },
+      ],
+    });
+    // An unstamped payment (legacy style, no drawer) reconciles to the
+    // shared drawer's window — never the personal till.
     const windowStart = new Date(Date.now() - 1000);
-    await seed.addPayment({ method: "CASH", amountMinor: 120_00, receivedAt: new Date() });
     await seed.addPayment({ method: "CASH", amountMinor: 30_50, receivedAt: new Date() });
-    await seed.addPayment({ method: "CARD_EXTERNAL", amountMinor: 85_25, receivedAt: new Date() });
-    // Before the window opened — must not count.
     await seed.addPayment({
       method: "CASH",
       amountMinor: 999_00,
       receivedAt: new Date(windowStart.getTime() - 60 * 60 * 1000),
     });
 
-    const open = await drawer.getOpenCashDrawer({
-      db: dbModule.db,
-      context,
-      locationId: seed.locationId,
-    });
-    expect(open?.sessionId).toBe(opened.sessionId);
-    expect(open?.methodTotals).toEqual({ CASH: 150_50, CARD_EXTERNAL: 85_25 });
-    expect(open?.expectedCashMinor).toBe(350_50); // float 200 + cash 150.50
-    expect(open?.paymentCount).toBe(3);
+    const openDrawers = await drawer.getOpenCashDrawers({ db: dbModule.db, context });
+    expect(openDrawers).toHaveLength(2);
 
-    // Count 349.00 in the drawer → 1.50 short.
+    const personal = openDrawers.find((d) => d.ownerUserId !== null);
+    expect(personal?.sessionId).toBe(opened.sessionId);
+    expect(personal?.label).toBe("Front desk");
+    expect(personal?.methodTotals).toEqual({ CASH: 120_00, CARD_EXTERNAL: 85_25 });
+    expect(personal?.expectedCashMinor).toBe(320_00); // float 200 + cash 120
+    expect(personal?.paymentCount).toBe(2);
+
+    const sharedDrawer = openDrawers.find((d) => d.ownerUserId === null);
+    expect(sharedDrawer?.sessionId).toBe(shared.sessionId);
+    expect(sharedDrawer?.methodTotals).toEqual({ CASH: 30_50 });
+    expect(sharedDrawer?.expectedCashMinor).toBe(80_50); // float 50 + cash 30.50
+
+    // Count 319.00 in the personal till → 1.00 short.
     const closed = await drawer.closeCashDrawer({
       db: dbModule.db,
       context,
       sessionId: opened.sessionId,
-      countedCashMinor: 349_00,
+      countedCashMinor: 319_00,
       note: "small shortage noted",
     });
-    expect(closed.overShortMinor).toBe(-150);
+    expect(closed.overShortMinor).toBe(-100);
 
     const history = await drawer.listClosedCashDrawers({ db: dbModule.db, context });
     expect(history).toHaveLength(1);
-    expect(history[0]?.methodTotals).toEqual({ CASH: 150_50, CARD_EXTERNAL: 85_25 });
-    expect(history[0]?.expectedCashMinor).toBe(350_50);
-    expect(history[0]?.countedCashMinor).toBe(349_00);
-    expect(history[0]?.overShortMinor).toBe(-150);
+    expect(history[0]?.label).toBe("Front desk");
+    expect(history[0]?.methodTotals).toEqual({ CASH: 120_00, CARD_EXTERNAL: 85_25 });
+    expect(history[0]?.expectedCashMinor).toBe(320_00);
+    expect(history[0]?.countedCashMinor).toBe(319_00);
+    expect(history[0]?.overShortMinor).toBe(-100);
     expect(history[0]?.note).toBe("small shortage noted");
 
     // Closed stays closed; the audit trail recorded the close.
@@ -294,7 +330,7 @@ describe("cash drawer (#181)", { skip: shouldSkip }, () => {
     });
     expect(audits).toHaveLength(1);
 
-    // A new drawer can open after closing.
+    // A new personal till can open after closing.
     const reopened = await drawer.openCashDrawer({
       db: dbModule.db,
       context,
