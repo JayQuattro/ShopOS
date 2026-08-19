@@ -74,7 +74,7 @@ function escapeXml(value: string): string {
 }
 
 /** Splits "DE123456789" into country code and number for tax scheme IDs. */
-function splitTaxId(taxId: string | null): { country: string | null; number: string } {
+export function splitTaxId(taxId: string | null): { country: string | null; number: string } {
   if (!taxId) return { country: null, number: "" };
   const match = taxId.match(/^([A-Za-z]{2})(.+)$/);
   if (match) return { country: match[1]!.toUpperCase(), number: match[2]! };
@@ -334,4 +334,122 @@ ${vatBreakdown
   </cac:LegalMonetaryTotal>
 ${lines}
 </Invoice>`;
+}
+
+/**
+ * FatturaPA 1.2 — Italy's SDI-bound XML. Generation is local; transmission
+ * goes through the shop's accredited SDI intermediary (ADR 0017 clearance
+ * seam). CodiceDestinatario defaults to the public 0000000 mailbox when the
+ * buyer has no dedicated SDI code. Amounts are two-decimal strings per the
+ * schema; Italian invoices are tax-exclusive by convention, so inclusive
+ * snapshots emit net + explicit VAT like the other builders.
+ */
+export function buildFatturaPa(
+  source: EInvoiceSource & {
+    sender: Readonly<{ countryCode: string; vatNumber: string; fiscalCode?: string }>;
+    destinationCode: string;
+    progressive: string;
+  },
+): string {
+  const vatBreakdown = source.vatBreakdown.length
+    ? source.vatBreakdown
+    : [{ rateBasisPoints: 0, basisMinor: source.netSubtotalMinor, amountMinor: 0n }];
+
+  const formatRate = (basisPoints: number): string => (basisPoints / 100).toFixed(2);
+
+  const bodyLines = source.lines
+    .map((line, index) => {
+      // Line net-of-tax in either mode: the total carries the tax in both,
+      // differing only in how it was entered.
+      const net = line.taxable
+        ? (line.totalMinor * 10_000n) / BigInt(10_000 + line.taxRateBasisPoints)
+        : line.totalMinor;
+      return `        <DettaglioLinee>
+          <NumeroLinea>${index + 1}</NumeroLinea>
+          <Descrizione>${escapeXml(line.description)}</Descrizione>
+          <Quantita>${(line.quantityMilli / 1000).toFixed(3)}</Quantita>
+          <PrezzoUnitario>${amount(line.unitPriceMinor)}</PrezzoUnitario>
+          <PrezzoTotale>${amount(net)}</PrezzoTotale>
+          <AliquotaIVA>${formatRate(line.taxRateBasisPoints)}</AliquotaIVA>
+        </DettaglioLinee>`;
+    })
+    .join("\n");
+
+  const riepilogo = vatBreakdown
+    .map(
+      (vat) => `        <DatiRiepilogo>
+          <ImponibileImporto>${amount(vat.basisMinor)}</ImponibileImporto>
+          <Imposta>${amount(vat.amountMinor)}</Imposta>
+          <AliquotaIVA>${formatRate(vat.rateBasisPoints)}</AliquotaIVA>
+        </DatiRiepilogo>`,
+    )
+    .join("\n");
+
+  const today = isoDate(source.issuedAt).replaceAll("-", "");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2" versione="FPR12">
+  <FatturaElettronicaHeader>
+    <DatiTrasmissione>
+      <IdTrasmittente>
+        <IdPaese>${escapeXml(source.sender.countryCode)}</IdPaese>
+        <IdCodice>${escapeXml(source.sender.vatNumber)}</IdCodice>
+      </IdTrasmittente>
+      <ProgressivoInvio>${escapeXml(source.progressive)}</ProgressivoInvio>
+      <FormatoTrasmissione>FPR12</FormatoTrasmissione>
+      <CodiceDestinatario>${escapeXml(source.destinationCode)}</CodiceDestinatario>
+    </DatiTrasmissione>
+    <CedentePrestatore>
+      <DatiAnagrafici>
+        <IdFiscaleIVA>
+          <IdPaese>${escapeXml(source.sender.countryCode)}</IdPaese>
+          <IdCodice>${escapeXml(source.sender.vatNumber)}</IdCodice>
+        </IdFiscaleIVA>
+        ${source.sender.fiscalCode ? `<CodiceFiscale>${escapeXml(source.sender.fiscalCode)}</CodiceFiscale>` : ""}
+        <Anagrafica>
+          <Denominazione>${escapeXml(source.seller.name)}</Denominazione>
+        </Anagrafica>
+      </DatiAnagrafici>
+      <Sede>
+        <Indirizzo>${escapeXml(source.seller.street ?? "")}</Indirizzo>
+        <CAP>${escapeXml(source.seller.postalCode ?? "")}</CAP>
+        <Comune>${escapeXml(source.seller.city ?? "")}</Comune>
+        <Nazione>${escapeXml(source.seller.country ?? "IT")}</Nazione>
+      </Sede>
+    </CedentePrestatore>
+    <CessionarioCommittente>
+      <DatiAnagrafici>
+        <IdFiscaleIVA>
+          <IdPaese>${escapeXml(splitTaxId(source.buyer.taxId).country ?? "IT")}</IdPaese>
+          <IdCodice>${escapeXml(splitTaxId(source.buyer.taxId).number)}</IdCodice>
+        </IdFiscaleIVA>
+        <Anagrafica>
+          <Denominazione>${escapeXml(source.buyer.name)}</Denominazione>
+        </Anagrafica>
+      </DatiAnagrafici>
+      <Sede>
+        <Indirizzo>${escapeXml(source.buyer.street ?? "")}</Indirizzo>
+        <CAP>${escapeXml(source.buyer.postalCode ?? "")}</CAP>
+        <Comune>${escapeXml(source.buyer.city ?? "")}</Comune>
+        <Nazione>${escapeXml(source.buyer.country ?? "IT")}</Nazione>
+      </Sede>
+    </CessionarioCommittente>
+  </FatturaElettronicaHeader>
+  <FatturaElettronicaBody>
+    <DatiGenerali>
+      <DatiGeneraliDocumento>
+        <TipoDocumento>TD01</TipoDocumento>
+        <Divisa>${escapeXml(source.currency)}</Divisa>
+        <Data>${today}</Data>
+        <Numero>${escapeXml(source.invoiceNumber)}</Numero>
+      </DatiGeneraliDocumento>
+    </DatiGenerali>
+    <DatiBeniServizi>
+${bodyLines}
+    </DatiBeniServizi>
+    <DatiRiepilogo>
+${riepilogo}
+    </DatiRiepilogo>
+  </FatturaElettronicaBody>
+</p:FatturaElettronica>`;
 }

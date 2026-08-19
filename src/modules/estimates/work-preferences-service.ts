@@ -7,7 +7,7 @@ export type WorkPreferences = Readonly<{
   changeOrderCreditPolicy: "AUTO_APPLY" | "REQUIRE_APPROVAL";
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
   taxDisplayMode: "EXCLUSIVE" | "INCLUSIVE";
-  einvoiceFormat: "factur-x" | "xrechnung" | null;
+  einvoiceFormat: "factur-x" | "xrechnung" | "fatturapa" | null;
   defaultPaperSize: "LETTER" | "A4" | "LEGAL";
   qualityCheckRequired: boolean;
   authorizationLinkTtlHours: number;
@@ -65,10 +65,11 @@ export async function getWorkPreferences(
     changeOrderCreditPolicy: organization.changeOrderCreditPolicy,
     invoiceLinePolicy: organization.invoiceLinePolicy,
     taxDisplayMode: organization.taxDisplayMode === "INCLUSIVE" ? "INCLUSIVE" : "EXCLUSIVE",
-    einvoiceFormat:
-      organization.einvoiceFormat === "factur-x" || organization.einvoiceFormat === "xrechnung"
-        ? organization.einvoiceFormat
-        : null,
+    einvoiceFormat: ["factur-x", "xrechnung", "fatturapa"].includes(
+      organization.einvoiceFormat ?? "",
+    )
+      ? (organization.einvoiceFormat as NonNullable<WorkPreferences["einvoiceFormat"]>)
+      : null,
     defaultPaperSize: organization.defaultPaperSize,
     qualityCheckRequired: organization.qualityCheckRequired,
     authorizationLinkTtlHours: organization.authorizationLinkTtlHours,
