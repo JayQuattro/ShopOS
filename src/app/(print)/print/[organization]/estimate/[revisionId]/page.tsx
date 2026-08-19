@@ -34,6 +34,7 @@ export default async function EstimatePrintPage({
       subtotalMinor: true,
       discountMinor: true,
       taxMinor: true,
+      taxInclusive: true,
       totalMinor: true,
       presentedAt: true,
       expiresAt: true,
@@ -156,7 +157,9 @@ export default async function EstimatePrintPage({
               </div>
             ) : null}
             <div className="flex justify-between">
-              <span className="text-neutral-500">Tax</span>
+              <span className="text-neutral-500">
+                Tax{revision.taxInclusive ? " (included in total)" : ""}
+              </span>
               <span className="tabular-nums">{money(revision.taxMinor)}</span>
             </div>
             <div className="mt-1 flex justify-between border-t border-neutral-900 pt-1 text-base font-bold">

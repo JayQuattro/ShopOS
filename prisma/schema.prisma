@@ -268,6 +268,7 @@ model Organization {
   workOrderNumberPrefix  String                       @default("RO-") @map("work_order_number_prefix") @db.VarChar(12)
   invoiceNumberPrefix    String                       @default("INV-") @map("invoice_number_prefix") @db.VarChar(12)
   taxId                  String?                      @map("tax_id") @db.VarChar(32)
+  taxDisplayMode         String                       @default("EXCLUSIVE") @map("tax_display_mode") @db.VarChar(12)
   appointmentReminderLeadHours Int                    @default(24) @map("appointment_reminder_lead_hours")
   noShowCutoffHours      Int                          @default(2) @map("no_show_cutoff_hours")
   pmReminderCooldownDays Int                          @default(30) @map("pm_reminder_cooldown_days")
@@ -1629,6 +1630,7 @@ model EstimateRevision {
   subtotalMinor        BigInt                 @map("subtotal_minor")
   discountMinor        BigInt                 @map("discount_minor")
   taxMinor             BigInt                 @map("tax_minor")
+  taxInclusive         Boolean                @default(false) @map("tax_inclusive")
   totalMinor           BigInt                 @map("total_minor")
   presentedAt          DateTime?              @map("presented_at") @db.Timestamptz(6)
   expiresAt            DateTime?              @map("expires_at") @db.Timestamptz(6)
@@ -1668,6 +1670,7 @@ model EstimateLine {
   taxable                Boolean
   taxRateBasisPoints     Int                     @map("tax_rate_basis_points")
   taxMinor               BigInt                  @map("tax_minor")
+  taxInclusive           Boolean                 @default(false) @map("tax_inclusive")
   totalMinor             BigInt                  @map("total_minor")
   authorizationRequired  Boolean                 @default(true) @map("authorization_required")
   position               Int
@@ -1746,6 +1749,7 @@ model Invoice {
   subtotalMinor  BigInt        @map("subtotal_minor")
   discountMinor  BigInt        @map("discount_minor")
   taxMinor       BigInt        @map("tax_minor")
+  taxInclusive   Boolean       @default(false) @map("tax_inclusive")
   totalMinor     BigInt        @map("total_minor")
   paidMinor      BigInt        @default(0) @map("paid_minor")
   paymentUrl     String?       @map("payment_url") @db.VarChar(2048)
@@ -1781,6 +1785,7 @@ model InvoiceLine {
   taxable              Boolean
   taxRateBasisPoints   Int            @map("tax_rate_basis_points")
   taxMinor             BigInt         @map("tax_minor")
+  taxInclusive         Boolean        @default(false) @map("tax_inclusive")
   totalMinor           BigInt         @map("total_minor")
   position             Int
   createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)

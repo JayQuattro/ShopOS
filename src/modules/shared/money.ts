@@ -83,7 +83,15 @@ export function calculateEstimate(
   return { currency, lines, ...totals };
 }
 
-export function calculateLine(input: PricedLineInput): CalculatedLine {
+/**
+ * Tax mode: EXCLUSIVE adds tax on top of the net price (US-style);
+ * INCLUSIVE means the entered price already contains the tax (VAT
+ * countries) — the line's total stays at its net and the tax portion is
+ * backed out for reporting. Historical documents snapshot their mode.
+ */
+export type TaxMode = "EXCLUSIVE" | "INCLUSIVE";
+
+export function calculateLine(input: PricedLineInput & { taxMode?: TaxMode }): CalculatedLine {
   assertNonNegativeSafeInteger(input.quantityMilli, "quantityMilli");
   assertSafeInteger(input.unitPriceMinor, "unitPriceMinor");
   assertNonNegativeSafeInteger(input.discountMinor, "discountMinor");
@@ -106,10 +114,16 @@ export function calculateLine(input: PricedLineInput): CalculatedLine {
   }
 
   const netMinor = grossMinor - input.discountMinor;
+  const inclusive = (input.taxMode ?? "EXCLUSIVE") === "INCLUSIVE" && input.taxable;
   const taxMinor = input.taxable
-    ? ratioRounded(BigInt(netMinor) * BigInt(input.taxRateBasisPoints), 10_000n)
+    ? inclusive
+      ? // Price contains the tax: back the net out of what the customer pays
+        // so the components always sum back to the total exactly.
+        netMinor -
+        ratioRounded(BigInt(netMinor) * 10_000n, BigInt(10_000 + input.taxRateBasisPoints))
+      : ratioRounded(BigInt(netMinor) * BigInt(input.taxRateBasisPoints), 10_000n)
     : 0;
-  const totalMinor = safeAdd(netMinor, taxMinor);
+  const totalMinor = inclusive ? netMinor : safeAdd(netMinor, taxMinor);
 
   return { ...input, grossMinor, netMinor, taxMinor, totalMinor };
 }

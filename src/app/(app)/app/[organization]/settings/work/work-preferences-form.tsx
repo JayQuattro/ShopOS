@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 type WorkPreferences = {
   changeOrderCreditPolicy: "AUTO_APPLY" | "REQUIRE_APPROVAL";
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
+  taxDisplayMode: "EXCLUSIVE" | "INCLUSIVE";
   defaultPaperSize: "LETTER" | "A4" | "LEGAL";
   qualityCheckRequired: boolean;
   authorizationLinkTtlHours: number;
@@ -143,6 +144,41 @@ export function WorkPreferencesForm() {
                     : "Require customer approval"}
                 </span>
                 <span className="block text-muted-foreground">{CREDIT_POLICY_HELP[value]}</span>
+              </span>
+            </label>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Tax display</CardTitle>
+          <CardDescription>
+            How entered prices relate to tax. Applies to new estimates.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {(["EXCLUSIVE", "INCLUSIVE"] as const).map((value) => (
+            <label key={value} className="flex items-start gap-3 text-sm">
+              <input
+                type="radio"
+                name="taxDisplayMode"
+                checked={preferences.taxDisplayMode === value}
+                onChange={() =>
+                  setPreferences((prev) => (prev ? { ...prev, taxDisplayMode: value } : prev))
+                }
+                disabled={pending}
+                className="mt-0.5 size-4"
+              />
+              <span>
+                <span className="font-medium">
+                  {value === "EXCLUSIVE" ? "Add tax on top (US-style)" : "Prices include tax (VAT)"}
+                </span>
+                <span className="block text-muted-foreground">
+                  {value === "EXCLUSIVE"
+                    ? "A $100 line at 8% tax charges the customer $108.00."
+                    : "A €100 line at 20% VAT charges the customer €100.00 — the VAT portion (€16.67) is reported separately and already inside the price."}
+                </span>
               </span>
             </label>
           ))}

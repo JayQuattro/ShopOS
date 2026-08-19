@@ -198,6 +198,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
     expect(preferences).toEqual({
       changeOrderCreditPolicy: "AUTO_APPLY",
       invoiceLinePolicy: "APPROVED_ONLY",
+      taxDisplayMode: "EXCLUSIVE",
       defaultPaperSize: "LETTER",
       qualityCheckRequired: true,
       authorizationLinkTtlHours: 72,
@@ -216,6 +217,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
     await updateWorkPreferences(dbModule.db, context(), {
       changeOrderCreditPolicy: "REQUIRE_APPROVAL",
       invoiceLinePolicy: "ALL_LINES",
+      taxDisplayMode: "EXCLUSIVE",
       defaultPaperSize: "A4",
       qualityCheckRequired: false,
       authorizationLinkTtlHours: 48,
@@ -230,6 +232,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
     expect(preferences).toEqual({
       changeOrderCreditPolicy: "REQUIRE_APPROVAL",
       invoiceLinePolicy: "ALL_LINES",
+      taxDisplayMode: "EXCLUSIVE",
       defaultPaperSize: "A4",
       qualityCheckRequired: false,
       authorizationLinkTtlHours: 48,
@@ -246,6 +249,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
     expect(audit?.after).toMatchObject({
       changeOrderCreditPolicy: "REQUIRE_APPROVAL",
       invoiceLinePolicy: "ALL_LINES",
+      taxDisplayMode: "EXCLUSIVE",
     });
   });
 
@@ -258,6 +262,7 @@ describe("work preferences (#130)", { skip: shouldSkip }, () => {
       updateWorkPreferences(dbModule.db, context(), {
         changeOrderCreditPolicy: "REQUIRE_APPROVAL",
         invoiceLinePolicy: "ALL_LINES",
+        taxDisplayMode: "EXCLUSIVE",
         defaultPaperSize: "LEGAL",
         qualityCheckRequired: true,
         authorizationLinkTtlHours: 72,
@@ -282,6 +287,7 @@ describe("work preferences gate effects (#163)", { skip: shouldSkip }, () => {
     await updateWorkPreferences(dbModule.db, context, {
       changeOrderCreditPolicy: "AUTO_APPLY",
       invoiceLinePolicy: "APPROVED_ONLY",
+      taxDisplayMode: "EXCLUSIVE",
       defaultPaperSize: "LETTER",
       qualityCheckRequired: true,
       authorizationLinkTtlHours: 48,
@@ -318,6 +324,7 @@ describe("work preferences gate effects (#163)", { skip: shouldSkip }, () => {
     await updateWorkPreferences(dbModule.db, context, {
       changeOrderCreditPolicy: "AUTO_APPLY",
       invoiceLinePolicy: "APPROVED_ONLY",
+      taxDisplayMode: "EXCLUSIVE",
       defaultPaperSize: "LETTER",
       qualityCheckRequired: true,
       authorizationLinkTtlHours: 72,
