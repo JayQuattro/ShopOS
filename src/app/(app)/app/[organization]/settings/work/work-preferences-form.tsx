@@ -11,6 +11,7 @@ type WorkPreferences = {
   changeOrderCreditPolicy: "AUTO_APPLY" | "REQUIRE_APPROVAL";
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
   taxDisplayMode: "EXCLUSIVE" | "INCLUSIVE";
+  einvoiceFormat: "factur-x" | "xrechnung" | null;
   defaultPaperSize: "LETTER" | "A4" | "LEGAL";
   qualityCheckRequired: boolean;
   authorizationLinkTtlHours: number;
@@ -178,6 +179,48 @@ export function WorkPreferencesForm() {
                   {value === "EXCLUSIVE"
                     ? "A $100 line at 8% tax charges the customer $108.00."
                     : "A €100 line at 20% VAT charges the customer €100.00 — the VAT portion (€16.67) is reported separately and already inside the price."}
+                </span>
+              </span>
+            </label>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">E-invoice format</CardTitle>
+          <CardDescription>
+            Legal machine-readable invoices for B2B mandates (Germany, France). Downloadable per
+            invoice once set.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {([null, "factur-x", "xrechnung"] as const).map((value) => (
+            <label key={value ?? "none"} className="flex items-start gap-3 text-sm">
+              <input
+                type="radio"
+                name="einvoiceFormat"
+                checked={preferences.einvoiceFormat === value}
+                onChange={() =>
+                  setPreferences((prev) => (prev ? { ...prev, einvoiceFormat: value } : prev))
+                }
+                disabled={pending}
+                className="mt-0.5 size-4"
+              />
+              <span>
+                <span className="font-medium">
+                  {value === null
+                    ? "None"
+                    : value === "factur-x"
+                      ? "Factur-X / ZUGFeRD (France, Germany CII)"
+                      : "XRechnung (Germany UBL)"}
+                </span>
+                <span className="block text-muted-foreground">
+                  {value === null
+                    ? "Invoices are PDF-only."
+                    : value === "factur-x"
+                      ? "EN16931 Cross Industry Invoice XML alongside the PDF."
+                      : "EN16931 UBL Invoice XML (XRechnung 3.0)."}
                 </span>
               </span>
             </label>

@@ -44,6 +44,7 @@ export function InvoicePanel({
     }>
   >([]);
   const [refundPending, setRefundPending] = useState<string | null>(null);
+  const [einvoicing, setEinvoicing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +101,34 @@ export function InvoicePanel({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not refund.");
       setRefundPending(null);
+    }
+  }
+
+  async function generateEInvoice() {
+    if (!invoice.id) return;
+    setEinvoicing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/einvoice`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const messages: Record<string, string> = {
+          no_format_configured: "Pick an e-invoice format in Settings → Work preferences first.",
+          invoice_not_issued: "Issue the invoice before generating the e-invoice.",
+        };
+        throw new Error(messages[body.error ?? ""] ?? "Could not generate the e-invoice.");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${invoice.number ?? "einvoice"}.xml`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not generate the e-invoice.");
+    } finally {
+      setEinvoicing(false);
     }
   }
 
@@ -291,6 +320,15 @@ export function InvoicePanel({
 
       {(invoice.status === "ISSUED" || invoice.status === "PARTIALLY_PAID") && balance > 0 ? (
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={generateEInvoice}
+            disabled={einvoicing}
+            title="Legal machine-readable XML (Factur-X / XRechnung)"
+          >
+            {einvoicing ? "Generating…" : "E-invoice XML"}
+          </Button>
           {paymentUrl ? (
             <>
               <a

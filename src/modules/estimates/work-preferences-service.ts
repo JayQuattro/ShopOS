@@ -7,6 +7,7 @@ export type WorkPreferences = Readonly<{
   changeOrderCreditPolicy: "AUTO_APPLY" | "REQUIRE_APPROVAL";
   invoiceLinePolicy: "APPROVED_ONLY" | "ALL_LINES";
   taxDisplayMode: "EXCLUSIVE" | "INCLUSIVE";
+  einvoiceFormat: "factur-x" | "xrechnung" | null;
   defaultPaperSize: "LETTER" | "A4" | "LEGAL";
   qualityCheckRequired: boolean;
   authorizationLinkTtlHours: number;
@@ -47,6 +48,7 @@ export async function getWorkPreferences(
       changeOrderCreditPolicy: true,
       invoiceLinePolicy: true,
       taxDisplayMode: true,
+      einvoiceFormat: true,
       defaultPaperSize: true,
       qualityCheckRequired: true,
       authorizationLinkTtlHours: true,
@@ -63,6 +65,10 @@ export async function getWorkPreferences(
     changeOrderCreditPolicy: organization.changeOrderCreditPolicy,
     invoiceLinePolicy: organization.invoiceLinePolicy,
     taxDisplayMode: organization.taxDisplayMode === "INCLUSIVE" ? "INCLUSIVE" : "EXCLUSIVE",
+    einvoiceFormat:
+      organization.einvoiceFormat === "factur-x" || organization.einvoiceFormat === "xrechnung"
+        ? organization.einvoiceFormat
+        : null,
     defaultPaperSize: organization.defaultPaperSize,
     qualityCheckRequired: organization.qualityCheckRequired,
     authorizationLinkTtlHours: organization.authorizationLinkTtlHours,
@@ -118,6 +124,7 @@ export async function updateWorkPreferences(
         changeOrderCreditPolicy: preferences.changeOrderCreditPolicy,
         invoiceLinePolicy: preferences.invoiceLinePolicy,
         taxDisplayMode: preferences.taxDisplayMode,
+        einvoiceFormat: preferences.einvoiceFormat,
         defaultPaperSize: preferences.defaultPaperSize,
         qualityCheckRequired: preferences.qualityCheckRequired,
         authorizationLinkTtlHours: preferences.authorizationLinkTtlHours,

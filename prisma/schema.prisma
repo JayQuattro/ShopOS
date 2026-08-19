@@ -223,6 +223,7 @@ model User {
   closedCashDrawers     CashDrawerSession[]               @relation("CashDrawerClosedBy")
   recordedDeposits      Deposit[]                         @relation("DepositRecordedBy")
   recordedRefunds       Refund[]                          @relation("RefundRecordedBy")
+  generatedEInvoices    EInvoiceDocument[]                @relation("EInvoiceGeneratedBy")
   drivenTransportJobs   TransportJob[]                    @relation("TransportDriver")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
@@ -269,6 +270,7 @@ model Organization {
   invoiceNumberPrefix    String                       @default("INV-") @map("invoice_number_prefix") @db.VarChar(12)
   taxId                  String?                      @map("tax_id") @db.VarChar(32)
   taxDisplayMode         String                       @default("EXCLUSIVE") @map("tax_display_mode") @db.VarChar(12)
+  einvoiceFormat         String?                      @map("einvoice_format") @db.VarChar(16)
   appointmentReminderLeadHours Int                    @default(24) @map("appointment_reminder_lead_hours")
   noShowCutoffHours      Int                          @default(2) @map("no_show_cutoff_hours")
   pmReminderCooldownDays Int                          @default(30) @map("pm_reminder_cooldown_days")
@@ -319,6 +321,7 @@ model Organization {
   cashDrawerSessions CashDrawerSession[]
   deposits            Deposit[]
   refunds             Refund[]
+  eInvoiceDocuments  EInvoiceDocument[]
   businessHours       LocationBusinessHour[]
   shopFees            ShopFee[]
   partOrders         PartOrder[]
@@ -1403,6 +1406,25 @@ model Refund {
   @@map("refunds")
 }
 
+model EInvoiceDocument {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  invoiceId        String    @map("invoice_id") @db.Uuid
+  format           String    @db.VarChar(32)
+  xml              String
+  contentHash      String    @map("content_hash") @db.VarChar(64)
+  generatedByUserId String   @map("generated_by_user_id") @db.Uuid
+  generatedAt      DateTime  @default(now()) @map("generated_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invoice          Invoice   @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+  generatedBy      User      @relation("EInvoiceGeneratedBy", fields: [generatedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, invoiceId], map: "e_invoice_documents_org_invoice_unique")
+  @@map("e_invoice_documents")
+}
+
 model Deposit {
   id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId   String    @map("organization_id") @db.Uuid
@@ -1765,6 +1787,7 @@ model Invoice {
   lines          InvoiceLine[]
   payments       Payment[]
   refunds        Refund[]
+  eInvoiceDocuments EInvoiceDocument[]
 
   @@unique([organizationId, locationId, number], map: "invoices_org_location_number_unique")
   @@unique([organizationId, locationId, workOrderId], map: "invoices_org_location_work_order_unique")
