@@ -13,6 +13,7 @@ type LocationRegional = {
   timeZone: string;
   currency: string | null;
   locale: string | null;
+  invoiceNumberPrefix: string | null;
 };
 
 /** One location: identity plus currency/locale overrides with live effect. */
@@ -29,6 +30,7 @@ export function LocationRegionalRow({
 }) {
   const [currency, setCurrency] = useState(location.currency ?? "");
   const [locale, setLocale] = useState(location.locale ?? "");
+  const [invoicePrefix, setInvoicePrefix] = useState(location.invoiceNumberPrefix ?? "");
   const [effective, setEffective] = useState({
     currency: effectiveCurrency,
     locale: effectiveLocale,
@@ -37,7 +39,10 @@ export function LocationRegionalRow({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const dirty = currency !== (location.currency ?? "") || locale !== (location.locale ?? "");
+  const dirty =
+    currency !== (location.currency ?? "") ||
+    locale !== (location.locale ?? "") ||
+    invoicePrefix !== (location.invoiceNumberPrefix ?? "");
 
   async function save() {
     setPending(true);
@@ -49,7 +54,11 @@ export function LocationRegionalRow({
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ currency: currency || null, locale: locale || null }),
+          body: JSON.stringify({
+            currency: currency || null,
+            locale: locale || null,
+            invoiceNumberPrefix: invoicePrefix || null,
+          }),
         },
       );
       if (!res.ok) {
@@ -102,6 +111,17 @@ export function LocationRegionalRow({
               disabled={pending}
               className="h-9 w-36 font-mono text-sm"
               aria-label={`Locale override for ${location.name}`}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Invoice series prefix
+            <Input
+              value={invoicePrefix}
+              onChange={(e) => setInvoicePrefix(e.target.value)}
+              placeholder="inherit"
+              disabled={pending}
+              className="h-9 w-32 font-mono text-sm"
+              aria-label={`Invoice series prefix for ${location.name}`}
             />
           </label>
           {dirty ? (

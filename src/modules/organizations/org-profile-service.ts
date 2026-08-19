@@ -13,7 +13,8 @@ export class OrgProfileFailed extends Error {
       | "invalid_website"
       | "invalid_country"
       | "invalid_currency"
-      | "invalid_locale",
+      | "invalid_locale"
+      | "invalid_tax_id",
   ) {
     super("The shop profile operation could not be completed.");
     this.name = "OrgProfileFailed";
@@ -33,6 +34,7 @@ export type ShopProfile = Readonly<{
   country: string | null;
   defaultCurrency: string;
   defaultLocale: string | null;
+  taxId: string | null;
 }>;
 
 /**
@@ -60,6 +62,7 @@ export async function getShopProfile(
       country: true,
       defaultCurrency: true,
       defaultLocale: true,
+      taxId: true,
     },
   });
   if (!organization) throw new OrgProfileFailed("organization_not_found");
@@ -89,6 +92,7 @@ export async function updateShopProfile(
     country?: string | null;
     defaultCurrency?: string;
     defaultLocale?: string | null;
+    taxId?: string | null;
   }>,
 ): Promise<void> {
   assertTenantAccess(context, { organizationId: context.organizationId }, "organizations.manage");
@@ -106,8 +110,17 @@ export async function updateShopProfile(
   const country = clean(profile.country);
   if (country && !/^[A-Za-z]{2}$/.test(country)) throw new OrgProfileFailed("invalid_country");
 
-  const defaultCurrency = (profile.defaultCurrency ?? "").trim().toUpperCase();
-  if (!/^[A-Z]{3}$/.test(defaultCurrency)) throw new OrgProfileFailed("invalid_currency");
+  const defaultCurrency =
+    profile.defaultCurrency !== undefined
+      ? profile.defaultCurrency.trim().toUpperCase()
+      : undefined;
+  if (defaultCurrency !== undefined && !/^[A-Z]{3}$/.test(defaultCurrency)) {
+    throw new OrgProfileFailed("invalid_currency");
+  }
+  const taxId = clean(profile.taxId);
+  if (taxId && !/^[A-Za-z0-9.\-/ ]{4,32}$/.test(taxId)) {
+    throw new OrgProfileFailed("invalid_tax_id");
+  }
   const defaultLocale = clean(profile.defaultLocale);
   if (
     defaultLocale &&
@@ -133,6 +146,7 @@ export async function updateShopProfile(
         country: true,
         defaultCurrency: true,
         defaultLocale: true,
+        taxId: true,
       },
     });
     if (!before) throw new OrgProfileFailed("organization_not_found");
@@ -148,8 +162,9 @@ export async function updateShopProfile(
       stateProvince: clean(profile.stateProvince),
       postalCode: clean(profile.postalCode),
       country: country ? country.toUpperCase() : null,
-      defaultCurrency,
+      ...(defaultCurrency !== undefined ? { defaultCurrency } : {}),
       defaultLocale,
+      taxId,
     };
 
     await transaction.organization.update({

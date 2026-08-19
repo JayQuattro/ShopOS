@@ -20,6 +20,7 @@ type Profile = {
   country: string | null;
   defaultCurrency: string;
   defaultLocale: string | null;
+  taxId: string | null;
 };
 
 /** Shop identity + contact details. Empty fields clear; website needs http(s). */
@@ -37,6 +38,7 @@ export function ProfileForm({ initial }: { initial: Profile }) {
     country: initial.country ?? "",
     defaultCurrency: initial.defaultCurrency ?? "USD",
     defaultLocale: initial.defaultLocale ?? "",
+    taxId: initial.taxId ?? "",
   });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +68,7 @@ export function ProfileForm({ initial }: { initial: Profile }) {
           invalid_country: "Country is a two-letter code, e.g. US.",
           invalid_currency: "Currency is a 3-letter code, like USD or CAD.",
           invalid_locale: "Locale looks like en-US, pt-BR, or fr-CA.",
+          invalid_tax_id: "Tax IDs are 4–32 letters, digits, dots, dashes, or slashes.",
           invalid_name: "Give the shop a name.",
         };
         throw new Error(messages[data.error] ?? "Could not save the profile.");
@@ -149,6 +152,11 @@ export function ProfileForm({ initial }: { initial: Profile }) {
           {field("country", "Country (2-letter)", "US")}
           {field("defaultCurrency", "Default currency (3-letter)", "USD")}
           {field("defaultLocale", "Default display locale (e.g. en-US, pt-BR — blank = en-US)", "")}
+          {field(
+            "taxId",
+            "Tax registration ID (VAT, EIN, GSTIN, RFC, CNPJ — shown on invoices)",
+            "",
+          )}
         </CardContent>
       </Card>
 

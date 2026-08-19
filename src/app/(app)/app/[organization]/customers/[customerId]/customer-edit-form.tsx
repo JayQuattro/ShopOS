@@ -12,6 +12,7 @@ export function CustomerEditForm({
   initialEmail,
   initialPhone,
   initialReference,
+  initialTaxId,
   initialInternalNotes,
   canWrite,
 }: {
@@ -20,6 +21,7 @@ export function CustomerEditForm({
   initialEmail: string;
   initialPhone: string;
   initialReference: string;
+  initialTaxId: string;
   initialInternalNotes: string;
   canWrite: boolean;
 }) {
@@ -28,6 +30,7 @@ export function CustomerEditForm({
   const [email, setEmail] = useState(initialEmail);
   const [phone, setPhone] = useState(initialPhone);
   const [reference, setReference] = useState(initialReference);
+  const [taxId, setTaxId] = useState(initialTaxId);
   const [internalNotes, setInternalNotes] = useState(initialInternalNotes);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export function CustomerEditForm({
       if (email !== initialEmail) body.primaryEmail = email || null;
       if (phone !== initialPhone) body.primaryPhone = phone || null;
       if (reference !== initialReference) body.organizationReference = reference;
+      if (taxId !== initialTaxId) body.taxId = taxId || null;
       if (internalNotes !== initialInternalNotes) body.internalNotes = internalNotes || null;
 
       const res = await fetch(`/api/customers/${customerId}`, {
@@ -90,6 +94,15 @@ export function CustomerEditForm({
           <Input
             value={reference}
             onChange={(e) => setReference(e.target.value)}
+            disabled={pending}
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-medium">
+          Tax ID (VAT / EIN / GSTIN — shown on invoices)
+          <Input
+            value={taxId}
+            onChange={(e) => setTaxId(e.target.value)}
+            placeholder="DE123456789"
             disabled={pending}
           />
         </label>

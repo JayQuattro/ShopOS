@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 const bodySchema = z.object({
   currency: z.string().trim().max(3).nullable().optional(),
   locale: z.string().trim().max(12).nullable().optional(),
+  invoiceNumberPrefix: z.string().trim().max(12).nullable().optional(),
 });
 
 export async function PUT(
@@ -40,6 +41,9 @@ export async function PUT(
       locationId,
       ...(parsed.data.currency !== undefined ? { currency: parsed.data.currency } : {}),
       ...(parsed.data.locale !== undefined ? { locale: parsed.data.locale } : {}),
+      ...(parsed.data.invoiceNumberPrefix !== undefined
+        ? { invoiceNumberPrefix: parsed.data.invoiceNumberPrefix }
+        : {}),
     });
     return Response.json(effective, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

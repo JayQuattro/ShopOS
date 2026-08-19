@@ -57,6 +57,7 @@ export async function updateCustomer(
     displayName?: string;
     primaryEmail?: string;
     primaryPhone?: string;
+    taxId?: string;
     internalNotes?: string;
     customerFacingNotes?: string;
   },
@@ -74,6 +75,7 @@ export async function updateCustomer(
     if (input.displayName !== undefined) data.displayName = input.displayName;
     if (input.primaryEmail !== undefined) data.primaryEmail = input.primaryEmail;
     if (input.primaryPhone !== undefined) data.primaryPhone = input.primaryPhone;
+    if (input.taxId !== undefined) data.taxId = input.taxId;
     if (input.internalNotes !== undefined) data.internalNotes = input.internalNotes;
     if (input.customerFacingNotes !== undefined)
       data.customerFacingNotes = input.customerFacingNotes;

@@ -267,6 +267,7 @@ model Organization {
   authorizationLinkTtlHours Int                       @default(72) @map("authorization_link_ttl_hours")
   workOrderNumberPrefix  String                       @default("RO-") @map("work_order_number_prefix") @db.VarChar(12)
   invoiceNumberPrefix    String                       @default("INV-") @map("invoice_number_prefix") @db.VarChar(12)
+  taxId                  String?                      @map("tax_id") @db.VarChar(32)
   appointmentReminderLeadHours Int                    @default(24) @map("appointment_reminder_lead_hours")
   noShowCutoffHours      Int                          @default(2) @map("no_show_cutoff_hours")
   pmReminderCooldownDays Int                          @default(30) @map("pm_reminder_cooldown_days")
@@ -372,6 +373,7 @@ model Location {
   timeZone       String             @map("time_zone") @db.VarChar(80)
   currency       String?            @db.VarChar(3)
   locale         String?            @db.VarChar(12)
+  invoiceNumberPrefix String?       @map("invoice_number_prefix") @db.VarChar(12)
   active         Boolean            @default(true)
   createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -713,6 +715,7 @@ model Customer {
   organizationReference String?      @map("organization_reference") @db.VarChar(64)
   primaryEmail          String?      @map("primary_email") @db.VarChar(320)
   primaryPhone          String?      @map("primary_phone") @db.VarChar(40)
+  taxId                 String?      @map("tax_id") @db.VarChar(32)
   isAccountCustomer     Boolean      @default(false) @map("is_account_customer")
   portalUserId          String?      @map("portal_user_id") @db.Uuid
   internalNotes         String?      @map("internal_notes")
@@ -1757,7 +1760,7 @@ model Invoice {
   payments       Payment[]
   refunds        Refund[]
 
-  @@unique([organizationId, number], map: "invoices_org_number_unique")
+  @@unique([organizationId, locationId, number], map: "invoices_org_location_number_unique")
   @@unique([organizationId, locationId, workOrderId], map: "invoices_org_location_work_order_unique")
   @@unique([organizationId, id], map: "invoices_org_id_unique")
   @@index([organizationId, locationId, status], map: "invoices_org_location_status_idx")
