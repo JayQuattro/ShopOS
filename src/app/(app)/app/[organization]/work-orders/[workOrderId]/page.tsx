@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge } from "@/components/shopos/status-badge";
+import { WorkOrderStatusBadge } from "@/components/shopos/status-badge";
 import { PageHeader } from "@/components/shopos/page-header";
 import { RecordList, RecordListRow } from "@/components/shopos/record-list";
 import { PageSection, SectionNav } from "@/components/shopos/section";
@@ -169,19 +169,7 @@ export default async function WorkOrderDetailPage({
                 Print authorization
               </a>
             </Button>
-            <StatusBadge
-              tone={
-                wo.status === "COMPLETED" || wo.status === "CLOSED"
-                  ? "ready"
-                  : wo.status === "IN_PROGRESS"
-                    ? "waiting"
-                    : wo.status === "BLOCKED"
-                      ? "attention"
-                      : "neutral"
-              }
-            >
-              {humanizeToken(wo.status)}
-            </StatusBadge>
+            <WorkOrderStatusBadge status={wo.status} />
           </div>
         }
       />

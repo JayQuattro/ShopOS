@@ -4,7 +4,7 @@ import { ListSearch } from "@/components/shopos/list-search";
 import { PageHeader } from "@/components/shopos/page-header";
 import { RecordList, RecordListRow } from "@/components/shopos/record-list";
 import { EmptyState } from "@/components/shopos/states";
-import { StatusBadge } from "@/components/shopos/status-badge";
+import { WorkOrderStatusBadge } from "@/components/shopos/status-badge";
 import { humanizeToken } from "@/lib/labels";
 import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
@@ -15,10 +15,10 @@ export default async function WorkOrdersPage({
   searchParams,
 }: {
   params: Promise<{ organization: string }>;
-  searchParams: Promise<{ new?: string; q?: string }>;
+  searchParams: Promise<{ new?: string; customer?: string; q?: string }>;
 }) {
   const { organization } = await params;
-  const { new: wantsNew, q: search } = await searchParams;
+  const { new: wantsNew, customer: preselectedCustomer, q: search } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
@@ -96,6 +96,7 @@ export default async function WorkOrdersPage({
           canCreate ? (
             <WorkOrderCreateForm
               startOpen={wantsNew === "1"}
+              preselectedCustomerId={preselectedCustomer}
               customers={customers as { id: string; displayName: string }[]}
               assets={assets as { id: string; displayName: string; customerId: string }[]}
               locations={(locations as { id: string; name: string }[]).map((l) => ({
@@ -149,19 +150,7 @@ export default async function WorkOrdersPage({
                   trailing={
                     <>
                       <Badge variant="outline">{humanizeToken(wo.workType)}</Badge>
-                      <StatusBadge
-                        tone={
-                          wo.status === "COMPLETED" || wo.status === "CLOSED"
-                            ? "ready"
-                            : wo.status === "IN_PROGRESS"
-                              ? "waiting"
-                              : wo.status === "BLOCKED" || wo.status === "CANCELLED"
-                                ? "attention"
-                                : "neutral"
-                        }
-                      >
-                        {humanizeToken(wo.status)}
-                      </StatusBadge>
+                      <WorkOrderStatusBadge status={wo.status} />
                     </>
                   }
                 />
