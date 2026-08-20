@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { PrismaClient } from "@/generated/prisma/client";
+import { convertReservation } from "@/modules/loaners/loaner-reservation-service";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 
 export type LoanerServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
@@ -86,6 +87,10 @@ export async function checkOutLoaner(
       select: { id: true },
     });
     if (openOnWorkOrder) throw new LoanerFailed("work_order_already_has_loaner");
+
+    // Any active reservation covering this moment converts — the promised
+    // window and the actual checkout agree.
+    await convertReservation(transaction, input.context.organizationId, asset.id);
 
     const checkout = await transaction.loanerCheckout.create({
       data: {
