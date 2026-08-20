@@ -840,6 +840,8 @@ model Asset {
   transportCustomerJobs TransportJob[] @relation("TransportCustomerAsset")
   transportFleetJobs    TransportJob[] @relation("TransportFleetAsset")
   isFleetVehicle    Boolean           @default(false) @map("is_fleet_vehicle")
+  registrationExpiresAt DateTime?     @map("registration_expires_at") @db.Timestamptz(6)
+  insuranceExpiresAt   DateTime?     @map("insurance_expires_at") @db.Timestamptz(6)
 
   @@unique([organizationId, id], map: "assets_org_id_unique")
   @@index([organizationId, customerId], map: "assets_org_customer_idx")

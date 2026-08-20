@@ -75,13 +75,26 @@ async function seedShop() {
       data: { id: locationId, organizationId: orgId, code: "MAIN", name: "Main", timeZone: "UTC" },
     }),
     dbModule.db.user.create({
-      data: { id: userId, email: `ag-${userId.slice(0, 8)}@example.test`, displayName: "Loaner Desk" },
+      data: {
+        id: userId,
+        email: `ag-${userId.slice(0, 8)}@example.test`,
+        displayName: "Loaner Desk",
+      },
     }),
     dbModule.db.user.create({
-      data: { id: portalUserId, email: `pg-${portalUserId.slice(0, 8)}@example.test`, displayName: "Portal Customer" },
+      data: {
+        id: portalUserId,
+        email: `pg-${portalUserId.slice(0, 8)}@example.test`,
+        displayName: "Portal Customer",
+      },
     }),
     dbModule.db.organizationMembership.create({
-      data: { id: membershipId, organizationId: orgId, userId, organizationWideLocationAccess: true },
+      data: {
+        id: membershipId,
+        organizationId: orgId,
+        userId,
+        organizationWideLocationAccess: true,
+      },
     }),
     dbModule.db.role.create({
       data: {
@@ -114,7 +127,14 @@ async function seedShop() {
       },
     }),
     dbModule.db.asset.create({
-      data: { id: vanId, organizationId: orgId, customerId, displayName: "Loaner Van", category: "van", isFleetVehicle: true },
+      data: {
+        id: vanId,
+        organizationId: orgId,
+        customerId,
+        displayName: "Loaner Van",
+        category: "van",
+        isFleetVehicle: true,
+      },
     }),
   ]);
 
@@ -207,12 +227,10 @@ describe("loaner agreements + portal view (#211)", { skip: shouldSkip }, () => {
     await loaners.checkInLoaner({
       db: dbModule.db,
       context: seed.context(),
-      checkoutId: (
-        await dbModule.db.loanerCheckout.findFirst({
-          where: { workOrderId: seed.workOrderId },
-          select: { id: true },
-        })
-      )!.id,
+      checkoutId: (await dbModule.db.loanerCheckout.findFirst({
+        where: { workOrderId: seed.workOrderId },
+        select: { id: true },
+      }))!.id,
     });
     view = await portal.getPortalShopView(dbModule.db, seed.portalUserId, seed.orgId);
     expect(view?.loaner).toBeNull();

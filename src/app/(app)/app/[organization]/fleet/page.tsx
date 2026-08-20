@@ -8,6 +8,7 @@ import { formatDate, formatDateTime } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listFleetCandidates, listFleetVehicles } from "@/modules/assets/fleet-service";
 import { SERVICE_CALL_KIND_LABELS } from "@/modules/service-calls/service-call-service";
+import { FleetDocsEditor } from "./fleet-docs-editor";
 import { FleetToggle } from "./fleet-toggle";
 
 export const dynamic = "force-dynamic";
@@ -87,6 +88,8 @@ export default async function FleetPage({ params }: { params: Promise<{ organiza
                     <th className="px-4 py-3 font-medium">Vehicle</th>
                     <th className="px-4 py-3 font-medium">Plate</th>
                     <th className="px-4 py-3 font-medium">Mileage</th>
+                    <th className="px-4 py-3 font-medium">Docs</th>
+                    <th className="px-4 py-3 font-medium">Service due</th>
                     <th className="px-4 py-3 font-medium">Reserved</th>
                     <th className="px-4 py-3 font-medium">Loaner</th>
                     <th className="px-4 py-3 font-medium">Roadside</th>
@@ -116,6 +119,70 @@ export default async function FleetPage({ params }: { params: Promise<{ organiza
                       </td>
                       <td className="px-4 py-3 font-mono tabular-nums">
                         {vehicle.mileage?.toLocaleString("en-US") ?? "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const soon = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+                          const items: Array<{ label: string; date: Date; overdue: boolean }> = [];
+                          if (vehicle.registrationExpiresAt) {
+                            items.push({
+                              label: "REG",
+                              date: vehicle.registrationExpiresAt,
+                              overdue: vehicle.registrationExpiresAt < new Date(),
+                            });
+                          }
+                          if (vehicle.insuranceExpiresAt) {
+                            items.push({
+                              label: "INS",
+                              date: vehicle.insuranceExpiresAt,
+                              overdue: vehicle.insuranceExpiresAt < new Date(),
+                            });
+                          }
+                          if (items.length === 0)
+                            return <span className="text-muted-foreground">—</span>;
+                          return (
+                            <span className="flex flex-col gap-0.5">
+                              {items.map((item) => (
+                                <Badge
+                                  key={item.label}
+                                  variant={
+                                    item.overdue
+                                      ? "destructive"
+                                      : item.date < soon
+                                        ? "default"
+                                        : "outline"
+                                  }
+                                  className="w-fit text-[10px]"
+                                >
+                                  {item.label} {formatDate(item.date, "UTC", "en-US")}
+                                  {item.overdue ? " · overdue" : ""}
+                                </Badge>
+                              ))}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-4 py-3">
+                        {vehicle.maintenanceDue.length === 0 ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <span className="flex flex-col gap-0.5">
+                            {vehicle.maintenanceDue.map((schedule) => (
+                              <span key={schedule.id} className="text-xs">
+                                🔧 {schedule.name}
+                                {schedule.dueInMiles !== null
+                                  ? schedule.dueInMiles <= 0
+                                    ? " · overdue"
+                                    : ` · in ${schedule.dueInMiles.toLocaleString("en-US")} mi`
+                                  : schedule.dueInDays !== null
+                                    ? schedule.dueInDays <= 0
+                                      ? " · overdue"
+                                      : ` · in ${schedule.dueInDays} d`
+                                    : ""}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {vehicle.loanerStatus.out ? (
@@ -179,7 +246,22 @@ export default async function FleetPage({ params }: { params: Promise<{ organiza
                       </td>
                       {canWrite ? (
                         <td className="px-4 py-3 text-right">
-                          <FleetToggle assetId={vehicle.id} assetName={vehicle.displayName} />
+                          <div className="flex flex-col items-end gap-2">
+                            <FleetToggle assetId={vehicle.id} assetName={vehicle.displayName} />
+                            <FleetDocsEditor
+                              assetId={vehicle.id}
+                              registration={
+                                vehicle.registrationExpiresAt
+                                  ? vehicle.registrationExpiresAt.toISOString().slice(0, 10)
+                                  : ""
+                              }
+                              insurance={
+                                vehicle.insuranceExpiresAt
+                                  ? vehicle.insuranceExpiresAt.toISOString().slice(0, 10)
+                                  : ""
+                              }
+                            />
+                          </div>
                         </td>
                       ) : null}
                     </tr>
