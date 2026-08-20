@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shopos/page-header";
 import { db } from "@/db/client";
 import { formatMoney } from "@/i18n/formatters";
@@ -7,6 +7,8 @@ import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listItems } from "@/modules/inventory/inventory-service";
 import { InventoryForm } from "./inventory-form";
 import { InterchangeLookup } from "./interchange-lookup";
+import { UomSummary } from "./uom-summary";
+import { WaitingByVendor } from "./waiting-by-vendor";
 import { ReorderPanel } from "./reorder-panel";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +83,17 @@ export default async function InventoryPage({
       </div>
 
       <ReorderPanel canWrite={context.permissions.has("work_orders.write")} />
+
+      <UomSummary />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Waiting on vendors</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WaitingByVendor />
+        </CardContent>
+      </Card>
 
       <InterchangeLookup />
 

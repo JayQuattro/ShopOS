@@ -55,6 +55,7 @@ const createOrderSchema = z.object({
       z.object({
         description: z.string().trim().min(2).max(300),
         partNumber: z.string().trim().max(120).optional(),
+        inventoryItemId: z.string().uuid().optional(),
         quantity: z.number().int().min(1),
         unitCostMinor: z.number().int().min(0),
       }),
@@ -109,11 +110,13 @@ export async function POST(
       context: tenantContext,
       workOrderId: id,
       supplierId: parsed.data.supplierId,
+      purpose: "JOB",
       lines: parsed.data.lines.map((line) => ({
         description: line.description,
         quantity: line.quantity,
         unitCostMinor: line.unitCostMinor,
         ...(line.partNumber ? { partNumber: line.partNumber } : {}),
+        ...(line.inventoryItemId ? { inventoryItemId: line.inventoryItemId } : {}),
       })),
       ...(parsed.data.note ? { note: parsed.data.note } : {}),
     });

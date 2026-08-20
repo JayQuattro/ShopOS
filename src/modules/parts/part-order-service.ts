@@ -88,6 +88,8 @@ export async function listSuppliers(
 export type PartOrderLineInput = Readonly<{
   description: string;
   partNumber?: string;
+  /** Explicit inventory link — receiving bumps this item's stock. */
+  inventoryItemId?: string;
   quantity: number;
   unitCostMinor: number;
 }>;
@@ -99,8 +101,10 @@ export type PartOrderLineInput = Readonly<{
  */
 export async function createPartOrder(
   input: PartServiceInput & {
-    workOrderId: string;
+    /** Required for JOB purpose; stock orders (REPLENISH/ALLOCATION) may omit it. */
+    workOrderId?: string;
     supplierId: string;
+    purpose?: "JOB" | "REPLENISH" | "ALLOCATION";
     lines: ReadonlyArray<PartOrderLineInput>;
     note?: string;
   },
@@ -124,8 +128,13 @@ export async function createPartOrder(
     }
   }
 
+  const purpose = input.purpose ?? "JOB";
+  if (purpose === "JOB" && !input.workOrderId) throw new PartOrderFailed("invalid_lines");
+
   return input.db.$transaction(async (transaction) => {
-    const workOrder = await loadWorkOrder(transaction, input.context, input.workOrderId);
+    const workOrder = input.workOrderId
+      ? await loadWorkOrder(transaction, input.context, input.workOrderId)
+      : null;
 
     const supplier = await transaction.partSupplier.findFirst({
       where: { id: input.supplierId, organizationId: input.context.organizationId },
@@ -138,15 +147,35 @@ export async function createPartOrder(
       select: { defaultCurrency: true },
     });
 
+    // Job orders inherit the work order's location; stock orders use the
+    // caller's first allowed location (receiving scope), or the single
+    // location for one-shop orgs.
+    let locationId = workOrder?.locationId ?? null;
+    if (!locationId) {
+      const firstAllowed = [...input.context.allowedLocationIds][0];
+      if (firstAllowed) {
+        locationId = firstAllowed;
+      } else {
+        const anyLocation = await transaction.location.findFirst({
+          where: { organizationId: input.context.organizationId, active: true },
+          orderBy: { code: "asc" },
+          select: { id: true },
+        });
+        locationId = anyLocation?.id ?? null;
+      }
+    }
+    if (!locationId) throw new PartOrderFailed("invalid_lines");
+
     const partOrder = await transaction.partOrder.create({
       data: {
         id: randomUUID(),
         organizationId: input.context.organizationId,
-        locationId: workOrder.locationId,
-        workOrderId: workOrder.id,
+        locationId,
+        ...(workOrder ? { workOrderId: workOrder.id } : {}),
         supplierId: supplier.id,
         status: "REQUESTED",
         source: "MANUAL",
+        purpose,
         currency: org?.defaultCurrency ?? "USD",
         ...(input.note ? { note: input.note.trim() } : {}),
         createdByUserId: input.context.actorId,
@@ -154,6 +183,20 @@ export async function createPartOrder(
     });
 
     for (const line of input.lines) {
+      // An explicit inventory link makes receiving systematic — the line
+      // knows which shelf to bump. Validated org-scoped.
+      let inventoryItemId: string | undefined;
+      if (line.inventoryItemId) {
+        const item = await transaction.inventoryItem.findFirst({
+          where: {
+            id: line.inventoryItemId,
+            organizationId: input.context.organizationId,
+          },
+          select: { id: true, partNumber: true },
+        });
+        if (!item) throw new PartOrderFailed("invalid_lines");
+        inventoryItemId = item.id;
+      }
       await transaction.partOrderLine.create({
         data: {
           id: randomUUID(),
@@ -161,6 +204,7 @@ export async function createPartOrder(
           partOrderId: partOrder.id,
           description: line.description.trim(),
           ...(line.partNumber ? { partNumber: line.partNumber.trim() } : {}),
+          ...(inventoryItemId ? { inventoryItemId } : {}),
           quantity: line.quantity,
           unitCostMinor: BigInt(line.unitCostMinor),
         },
@@ -168,8 +212,8 @@ export async function createPartOrder(
     }
 
     await recordActivity(transaction, input.context, {
-      workOrderId: workOrder.id,
-      locationId: workOrder.locationId,
+      workOrderId: workOrder?.id ?? null,
+      locationId,
       eventType: "parts.requested",
       summary: `Parts requested from ${supplier.name}: ${input.lines
         .map((line) => line.description.trim())
@@ -282,6 +326,14 @@ export async function receiveItems(
         where: { id: line.id },
         data: { receivedQuantity: line.receivedQuantity + receipt.quantity },
       });
+      // Systematic receiving: a linked line bumps its item's stock on
+      // receipt — no separate "→ stock" step to remember.
+      if (line.inventoryItemId) {
+        await transaction.inventoryItem.update({
+          where: { id: line.inventoryItemId },
+          data: { quantityOnHand: { increment: receipt.quantity } },
+        });
+      }
       newlyReceivedDescriptions.push(`${line.description} ×${receipt.quantity}`);
       lineMap.set(line.id, {
         ...line,
@@ -427,12 +479,14 @@ async function recordActivity(
   transaction: TransactionalClient,
   context: TenantContext,
   input: Readonly<{
-    workOrderId: string;
+    workOrderId: string | null;
     locationId: string;
     eventType: string;
     summary: string;
   }>,
 ): Promise<void> {
+  // Stock orders carry no work order — no activity event to hang them on.
+  if (!input.workOrderId) return;
   await transaction.activityEvent.create({
     data: {
       id: randomUUID(),
@@ -444,4 +498,165 @@ async function recordActivity(
       summary: input.summary,
     },
   });
+}
+
+// ─── Purchase history per item ──────────────────────────────────────────────
+
+export type PurchaseRecord = Readonly<{
+  orderedAt: Date | null;
+  supplierName: string;
+  quantity: number;
+  unitCostMinor: string;
+  currency: string;
+  purpose: string;
+}>;
+
+/**
+ * "Last bought X from Y": the item's purchase history across part orders —
+ * explicit inventory links first, falling back to part-number matches for
+ * lines ordered before the link existed.
+ */
+export async function listPurchaseHistory(
+  input: PartServiceInput & {
+    inventoryItemId: string;
+  },
+): Promise<readonly PurchaseRecord[]> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+
+  const item = await input.db.inventoryItem.findFirst({
+    where: { id: input.inventoryItemId, organizationId: input.context.organizationId },
+    select: { id: true, partNumber: true },
+  });
+  if (!item) throw new PartOrderFailed("order_not_found");
+
+  const rows = await input.db.partOrderLine.findMany({
+    where: {
+      organizationId: input.context.organizationId,
+      OR: [
+        { inventoryItemId: item.id },
+        ...(item.partNumber ? [{ partNumber: item.partNumber }] : []),
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      quantity: true,
+      unitCostMinor: true,
+      partOrder: {
+        select: {
+          orderedAt: true,
+          currency: true,
+          purpose: true,
+          supplier: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  return rows.map((row) => ({
+    orderedAt: row.partOrder.orderedAt,
+    supplierName: row.partOrder.supplier.name,
+    quantity: row.quantity,
+    unitCostMinor: row.unitCostMinor.toString(),
+    currency: row.partOrder.currency,
+    purpose: row.partOrder.purpose,
+  }));
+}
+
+// ─── Waiting on vendors ─────────────────────────────────────────────────────
+
+export type VendorWaitingGroup = Readonly<{
+  supplierId: string;
+  supplierName: string;
+  orders: ReadonlyArray<
+    Readonly<{
+      orderId: string;
+      status: string;
+      purpose: string;
+      orderedAt: Date | null;
+      trackingNumber: string | null;
+      workOrderNumber: string | null;
+      lines: ReadonlyArray<
+        Readonly<{
+          description: string;
+          partNumber: string | null;
+          quantity: number;
+          receivedQuantity: number;
+        }>
+      >;
+    }>
+  >;
+}>;
+
+/**
+ * Everything waiting on every vendor: open (REQUESTED/ORDERED) orders
+ * grouped by supplier, with per-line received progress and the job (when
+ * the order is job-specific).
+ */
+export async function listWaitingByVendor(
+  input: PartServiceInput,
+): Promise<readonly VendorWaitingGroup[]> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+
+  const orders = await input.db.partOrder.findMany({
+    where: {
+      organizationId: input.context.organizationId,
+      status: { in: ["REQUESTED", "ORDERED"] },
+      ...(input.context.organizationWideLocationAccess
+        ? {}
+        : { locationId: { in: [...input.context.allowedLocationIds] } }),
+    },
+    orderBy: { createdAt: "asc" },
+    take: 100,
+    select: {
+      id: true,
+      status: true,
+      purpose: true,
+      orderedAt: true,
+      trackingNumber: true,
+      supplierId: true,
+      supplier: { select: { name: true } },
+      workOrder: { select: { number: true } },
+      lines: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          description: true,
+          partNumber: true,
+          quantity: true,
+          receivedQuantity: true,
+        },
+      },
+    },
+  });
+
+  const groups = new Map<string, VendorWaitingGroup>();
+  for (const order of orders) {
+    const group = groups.get(order.supplierId) ?? {
+      supplierId: order.supplierId,
+      supplierName: order.supplier.name,
+      orders: [],
+    };
+    const next = [
+      ...group.orders,
+      {
+        orderId: order.id,
+        status: order.status,
+        purpose: order.purpose,
+        orderedAt: order.orderedAt,
+        trackingNumber: order.trackingNumber,
+        workOrderNumber: order.workOrder?.number ?? null,
+        lines: order.lines,
+      },
+    ];
+    groups.set(order.supplierId, { ...group, orders: next });
+  }
+  return [...groups.values()];
 }

@@ -644,3 +644,88 @@ export async function findInterchange(
     currency: item.currency,
   }));
 }
+
+// ─── UoM-aware stock view ───────────────────────────────────────────────────
+
+export type UomGroupSummary = Readonly<{
+  group: string;
+  /** Total stock in the group's base unit (e.g. total quarts). */
+  totalBaseUnits: number;
+  containers: ReadonlyArray<
+    Readonly<{
+      itemId: string;
+      partNumber: string;
+      name: string;
+      unitOfMeasure: string | null;
+      quantityOnHand: number;
+      /** This container's factor; null items count in whole units. */
+      factor: number | null;
+    }>
+  >;
+}>;
+
+/**
+ * Stock grouped by unit-of-measure group, totaled in base units — the
+ * "how much oil do I actually have" view across quarts, gallons, and drums.
+ */
+export async function uomSummary(
+  input: InventoryServiceInput,
+): Promise<readonly UomGroupSummary[]> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+
+  const where: Record<string, unknown> = {
+    organizationId: input.context.organizationId,
+    uomGroup: { not: null },
+  };
+  if (!input.context.organizationWideLocationAccess && input.context.allowedLocationIds.size > 0) {
+    where.OR = [
+      { locationId: { in: [...input.context.allowedLocationIds] } },
+      { locationId: null },
+    ];
+  }
+
+  const items = await input.db.inventoryItem.findMany({
+    where,
+    orderBy: { uomGroup: "asc" },
+    select: {
+      id: true,
+      partNumber: true,
+      name: true,
+      unitOfMeasure: true,
+      uomGroup: true,
+      uomFactorMilli: true,
+      quantityOnHand: true,
+    },
+  });
+
+  const groups = new Map<string, UomGroupSummary>();
+  for (const item of items) {
+    const groupName = item.uomGroup!;
+    const factor = item.uomFactorMilli !== null ? item.uomFactorMilli / 1000 : null;
+    const group = groups.get(groupName) ?? { group: groupName, totalBaseUnits: 0, containers: [] };
+    const next = {
+      ...group,
+      totalBaseUnits: group.totalBaseUnits + (factor ?? 1) * item.quantityOnHand,
+      containers: [
+        ...group.containers,
+        {
+          itemId: item.id,
+          partNumber: item.partNumber,
+          name: item.name,
+          unitOfMeasure: item.unitOfMeasure,
+          quantityOnHand: item.quantityOnHand,
+          factor,
+        },
+      ],
+    };
+    groups.set(groupName, next);
+  }
+  return [...groups.values()].map((group) => ({
+    ...group,
+    totalBaseUnits: Math.round(group.totalBaseUnits * 1000) / 1000,
+  }));
+}
