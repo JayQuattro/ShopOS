@@ -1002,6 +1002,17 @@ enum PartOrderSource {
   @@map("part_order_source")
 }
 
+enum PartOrderPurpose {
+  /// Job-specific: the part is for this work order only.
+  JOB        @map("job")
+  /// Stock replenishment: refills the shelf, not tied to a job.
+  REPLENISH  @map("replenish")
+  /// Stock order allocated to a planned upcoming job.
+  ALLOCATION @map("allocation")
+
+  @@map("part_order_purpose")
+}
+
 model ServiceTemplate {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
@@ -1179,6 +1190,7 @@ model InventoryItem {
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   location        Location? @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: SetNull)
   category        InventoryCategory? @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: SetNull)
+  orderLines      PartOrderLine[]
 
   @@unique([organizationId, id], map: "inventory_items_org_id_unique")
   @@unique([organizationId, locationId, partNumber], map: "inventory_items_org_loc_part_unique")
@@ -1724,10 +1736,11 @@ model PartOrder {
   id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId  String          @map("organization_id") @db.Uuid
   locationId      String          @map("location_id") @db.Uuid
-  workOrderId     String          @map("work_order_id") @db.Uuid
+  workOrderId     String?         @map("work_order_id") @db.Uuid
   supplierId      String          @map("supplier_id") @db.Uuid
   status          PartOrderStatus @default(REQUESTED)
   source          PartOrderSource @default(MANUAL) @map("source")
+  purpose         PartOrderPurpose @default(JOB)
   externalOrderId String?         @map("external_order_id") @db.VarChar(180)
   currency        String          @db.VarChar(3)
   trackingNumber  String?         @map("tracking_number") @db.VarChar(180)
@@ -1738,7 +1751,7 @@ model PartOrder {
   createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
   organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  workOrder       WorkOrder       @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  workOrder       WorkOrder?      @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
   supplier        PartSupplier    @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
   createdBy       User?           @relation("PartOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   lines           PartOrderLine[]
@@ -1746,6 +1759,7 @@ model PartOrder {
   @@unique([organizationId, id], map: "part_orders_org_id_unique")
   @@index([organizationId, workOrderId], map: "part_orders_org_wo_idx")
   @@index([organizationId, status], map: "part_orders_org_status_idx")
+  @@index([organizationId, supplierId, status], map: "part_orders_org_supplier_status_idx")
   @@map("part_orders")
 }
 
@@ -1755,6 +1769,7 @@ model PartOrderLine {
   partOrderId     String   @map("part_order_id") @db.Uuid
   description     String
   partNumber      String?  @map("part_number") @db.VarChar(120)
+  inventoryItemId String?  @map("inventory_item_id") @db.Uuid
   quantity        Int
   receivedQuantity Int    @default(0) @map("received_quantity")
   unitCostMinor   BigInt   @map("unit_cost_minor")
@@ -1763,8 +1778,10 @@ model PartOrderLine {
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   partOrder       PartOrder @relation(fields: [organizationId, partOrderId], references: [organizationId, id], onDelete: Cascade)
+  inventoryItem   InventoryItem? @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: SetNull)
 
   @@unique([organizationId, id], map: "part_order_lines_org_id_unique")
+  @@index([organizationId, inventoryItemId], map: "part_order_lines_org_item_idx")
   @@index([organizationId, partOrderId], map: "part_order_lines_org_order_idx")
   @@map("part_order_lines")
 }
@@ -1798,7 +1815,7 @@ model WorkOrderAsset {
   role            String   @default("primary") @db.VarChar(32)
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  workOrder       WorkOrder @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
+  workOrder       WorkOrder? @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Cascade)
   asset           Asset @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Cascade)
 
   @@unique([organizationId, workOrderId, assetId], map: "work_order_assets_org_wo_asset_unique")
