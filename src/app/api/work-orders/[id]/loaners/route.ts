@@ -44,6 +44,9 @@ const bodySchema = z.discriminatedUnion("action", [
     action: z.literal("check-out"),
     assetId: z.string().uuid(),
     outMileage: z.number().int().min(0).optional(),
+    fuelOut: z.number().int().min(0).max(100).optional(),
+    conditionNote: z.string().trim().max(1000).optional(),
+    acknowledgedBy: z.string().trim().min(2).max(180).optional(),
     note: z.string().trim().max(1000).optional(),
   }),
   z.object({
@@ -79,6 +82,9 @@ export async function POST(
         workOrderId: id,
         assetId: parsed.data.assetId,
         ...(parsed.data.outMileage !== undefined ? { outMileage: parsed.data.outMileage } : {}),
+        ...(parsed.data.fuelOut !== undefined ? { fuelOut: parsed.data.fuelOut } : {}),
+        ...(parsed.data.conditionNote ? { conditionNote: parsed.data.conditionNote } : {}),
+        ...(parsed.data.acknowledgedBy ? { acknowledgedBy: parsed.data.acknowledgedBy } : {}),
         ...(parsed.data.note ? { note: parsed.data.note } : {}),
       });
       return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });

@@ -173,6 +173,27 @@ export default async function PortalShopPage({
         </Card>
       </div>
 
+      {view.loaner ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Your loaner</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-1 text-sm">
+            <p className="font-medium">{view.loaner.assetName}</p>
+            <p className="text-muted-foreground">
+              Since {formatDate(view.loaner.checkedOutAt, "UTC", "en-US")}
+              {view.loaner.outMileage !== null
+                ? ` · ${view.loaner.outMileage.toLocaleString("en-US")} miles at pickup`
+                : ""}
+              {view.loaner.fuelOut !== null ? ` · fuel ${view.loaner.fuelOut}% at pickup` : ""}
+            </p>
+            {view.loaner.conditionNote ? (
+              <p className="text-muted-foreground">Noted at pickup: {view.loaner.conditionNote}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {view.organization.contactPhone || view.organization.contactEmail ? (
         <p className="text-sm text-muted-foreground">
           Questions? Contact the shop

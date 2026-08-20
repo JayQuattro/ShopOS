@@ -43,6 +43,13 @@ export type PortalShopView = Readonly<{
   workOrders: readonly PortalWorkOrder[];
   invoices: readonly PortalInvoice[];
   statement: CustomerStatement | null;
+  loaner: Readonly<{
+    assetName: string;
+    checkedOutAt: Date;
+    outMileage: number | null;
+    fuelOut: number | null;
+    conditionNote: string | null;
+  }> | null;
 }>;
 
 /**
@@ -120,54 +127,70 @@ export async function getPortalShopView(
   const customer = await resolvePortalCustomer(db, userId, organizationId);
   if (!customer) return null;
 
-  const [organization, vehicles, workOrders, invoices, statement] = await Promise.all([
-    db.organization.findUnique({
-      where: { id: organizationId },
-      select: { id: true, name: true, contactPhone: true, contactEmail: true },
-    }),
-    db.asset.findMany({
-      where: { organizationId, customerId: customer.customerId, status: { not: "SOLD" } },
-      orderBy: { displayName: "asc" },
-      take: 50,
-      select: { id: true, displayName: true, category: true },
-    }),
-    db.workOrder.findMany({
-      where: { organizationId, customerId: customer.customerId },
-      orderBy: { createdAt: "desc" },
-      take: 25,
-      select: {
-        id: true,
-        number: true,
-        status: true,
-        customerConcern: true,
-        promisedAt: true,
-        completedAt: true,
-        createdAt: true,
-        asset: { select: { displayName: true } },
-        trackerLink: { select: { token: true } },
-      },
-    }),
-    db.invoice.findMany({
-      where: {
-        organizationId,
-        workOrder: { customerId: customer.customerId },
-        status: { in: ["ISSUED", "PAID"] },
-      },
-      orderBy: { issuedAt: "desc" },
-      take: 25,
-      select: {
-        id: true,
-        number: true,
-        status: true,
-        currency: true,
-        totalMinor: true,
-        paidMinor: true,
-        issuedAt: true,
-        paymentUrl: true,
-      },
-    }),
-    buildCustomerStatement(db, organizationId, customer.customerId, new Date()),
-  ]);
+  const [organization, vehicles, workOrders, invoices, statement, loanerCheckout] =
+    await Promise.all([
+      db.organization.findUnique({
+        where: { id: organizationId },
+        select: { id: true, name: true, contactPhone: true, contactEmail: true },
+      }),
+      db.asset.findMany({
+        where: { organizationId, customerId: customer.customerId, status: { not: "SOLD" } },
+        orderBy: { displayName: "asc" },
+        take: 50,
+        select: { id: true, displayName: true, category: true },
+      }),
+      db.workOrder.findMany({
+        where: { organizationId, customerId: customer.customerId },
+        orderBy: { createdAt: "desc" },
+        take: 25,
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          customerConcern: true,
+          promisedAt: true,
+          completedAt: true,
+          createdAt: true,
+          asset: { select: { displayName: true } },
+          trackerLink: { select: { token: true } },
+        },
+      }),
+      db.invoice.findMany({
+        where: {
+          organizationId,
+          workOrder: { customerId: customer.customerId },
+          status: { in: ["ISSUED", "PAID"] },
+        },
+        orderBy: { issuedAt: "desc" },
+        take: 25,
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          currency: true,
+          totalMinor: true,
+          paidMinor: true,
+          issuedAt: true,
+          paymentUrl: true,
+        },
+      }),
+      buildCustomerStatement(db, organizationId, customer.customerId, new Date()),
+      db.loanerCheckout.findFirst({
+        where: {
+          organizationId,
+          checkedInAt: null,
+          workOrder: { customerId: customer.customerId },
+        },
+        orderBy: { checkedOutAt: "desc" },
+        select: {
+          asset: { select: { displayName: true } },
+          checkedOutAt: true,
+          outMileage: true,
+          fuelOut: true,
+          conditionNote: true,
+        },
+      }),
+    ]);
 
   if (!organization) return null;
 
@@ -193,5 +216,14 @@ export async function getPortalShopView(
     })),
     invoices,
     statement,
+    loaner: loanerCheckout
+      ? {
+          assetName: loanerCheckout.asset.displayName,
+          checkedOutAt: loanerCheckout.checkedOutAt,
+          outMileage: loanerCheckout.outMileage,
+          fuelOut: loanerCheckout.fuelOut,
+          conditionNote: loanerCheckout.conditionNote,
+        }
+      : null,
   };
 }
