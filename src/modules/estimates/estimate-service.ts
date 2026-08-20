@@ -26,7 +26,8 @@ export class EstimateFailed extends Error {
       | "invalid_currency"
       | "credit_line_not_allowed"
       | "revision_not_baseline"
-      | "revision_decided",
+      | "revision_decided"
+      | "invalid_option_group",
   ) {
     super("The estimate operation could not be completed.");
     this.name = "EstimateFailed";
@@ -110,6 +111,9 @@ export async function addLine(
     taxRateBasisPoints: number;
     taxRateId?: string;
     position: number;
+    /** Lines sharing an option group key are alternatives: the customer picks one. */
+    optionGroupKey?: string;
+    optionGroupLabel?: string;
   },
 ): Promise<Readonly<{ lineId: string }>> {
   assertTenantAccess(
@@ -117,6 +121,11 @@ export async function addLine(
     { organizationId: input.context.organizationId },
     "work_orders.write",
   );
+
+  // Option groups carry both a key (grouping) and a label (display) or neither.
+  if (Boolean(input.optionGroupKey) !== Boolean(input.optionGroupLabel)) {
+    throw new EstimateFailed("invalid_option_group");
+  }
 
   // Compute financial fields using the pure money kernel.
   return input.db.$transaction(async (transaction) => {
@@ -168,6 +177,8 @@ export async function addLine(
         organizationId: input.context.organizationId,
         estimateRevisionId: revision.id,
         serviceGroupKey: input.serviceGroupKey,
+        ...(input.optionGroupKey ? { optionGroupKey: input.optionGroupKey } : {}),
+        ...(input.optionGroupLabel ? { optionGroupLabel: input.optionGroupLabel } : {}),
         kind: input.kind,
         description: input.description,
         quantityMilli: input.quantityMilli,
