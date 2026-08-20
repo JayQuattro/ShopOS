@@ -1916,6 +1916,8 @@ model EstimateLine {
   organizationId         String                  @map("organization_id") @db.Uuid
   estimateRevisionId     String                  @map("estimate_revision_id") @db.Uuid
   serviceGroupKey        String                  @map("service_group_key") @db.VarChar(80)
+  optionGroupKey         String?                 @map("option_group_key") @db.VarChar(80)
+  optionGroupLabel       String?                 @map("option_group_label") @db.VarChar(160)
   kind                   PricedLineKind
   description            String
   quantityMilli          Int                     @map("quantity_milli")

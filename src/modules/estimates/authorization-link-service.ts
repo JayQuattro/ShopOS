@@ -171,7 +171,14 @@ export async function validateAuthorizationLink(
           organization: { select: { name: true } },
           lines: {
             orderBy: { position: "asc" },
-            select: { id: true, description: true, totalMinor: true, authorizationRequired: true },
+            select: {
+              id: true,
+              description: true,
+              totalMinor: true,
+              authorizationRequired: true,
+              optionGroupKey: true,
+              optionGroupLabel: true,
+            },
           },
         },
       },

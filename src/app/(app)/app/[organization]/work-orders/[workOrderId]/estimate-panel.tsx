@@ -31,6 +31,7 @@ type Line = {
   unitPriceMinor: string;
   totalMinor: string;
   position: number;
+  optionGroupLabel: string | null;
 };
 
 function documentLabel(rev: Revision): string {
@@ -265,6 +266,7 @@ export function EstimatePanel({
   const [linePrice, setLinePrice] = useState("0");
   const [lineTaxRate, setLineTaxRate] = useState("0"); // rate id, "0" (none), or "custom"
   const [lineCredit, setLineCredit] = useState(false);
+  const [lineOptionGroup, setLineOptionGroup] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -345,6 +347,16 @@ export function EstimatePanel({
                   lineCredit || lineTaxRate === "custom" ? parseInt(lineTaxRate, 10) || 0 : 0,
               }),
           position: lines.length + 1,
+          ...(lineOptionGroup.trim()
+            ? {
+                optionGroupKey: lineOptionGroup
+                  .trim()
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "-")
+                  .replace(/^-+|-+$/g, ""),
+                optionGroupLabel: lineOptionGroup.trim(),
+              }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -353,6 +365,7 @@ export function EstimatePanel({
       }
       await loadLines(selectedRevId);
       setLineDesc("");
+      setLineOptionGroup("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add the line.");
     } finally {
@@ -441,7 +454,14 @@ export function EstimatePanel({
                         {Number(line.unitPriceMinor) < 0 ? "CREDIT" : line.kind}
                       </Badge>
                     </td>
-                    <td className="py-2 pr-4">{line.description}</td>
+                    <td className="py-2 pr-4">
+                      {line.description}
+                      {line.optionGroupLabel ? (
+                        <Badge variant="secondary" className="ml-2 text-[10px]">
+                          option · {line.optionGroupLabel}
+                        </Badge>
+                      ) : null}
+                    </td>
                     <td className="py-2 pr-4 text-right font-mono tabular-nums">
                       {(line.quantityMilli / 1000).toFixed(1)}
                     </td>
@@ -507,6 +527,13 @@ export function EstimatePanel({
                 value={lineDesc}
                 onChange={(e) => setLineDesc(e.target.value)}
                 className="max-w-xs"
+              />
+              <Input
+                placeholder="Option group (optional)"
+                value={lineOptionGroup}
+                onChange={(e) => setLineOptionGroup(e.target.value)}
+                className="max-w-[200px]"
+                title="Lines that share an option group are alternatives — the customer picks one (e.g. regular vs premium oil change)"
               />
               <Input
                 type="number"

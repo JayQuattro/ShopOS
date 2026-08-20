@@ -7,20 +7,27 @@ import { addLine, EstimateFailed, removeLine } from "@/modules/estimates/estimat
 
 export const dynamic = "force-dynamic";
 
-const addLineSchema = z.object({
-  kind: z.enum(["LABOR", "PART", "FEE"]),
-  serviceGroupKey: z.string().trim().min(1).max(80),
-  description: z.string().trim().min(1).max(500),
-  quantityMilli: z.number().int().min(0),
-  // Negative unit prices are credit lines, allowed only on change orders
-  // (ADR 0014); the service rejects them for baseline revisions.
-  unitPriceMinor: z.number().int(),
-  discountMinor: z.number().int().min(0).default(0),
-  taxable: z.boolean(),
-  taxRateBasisPoints: z.number().int().min(0),
-  taxRateId: z.string().uuid().optional(),
-  position: z.number().int().min(1),
-});
+const addLineSchema = z
+  .object({
+    kind: z.enum(["LABOR", "PART", "FEE"]),
+    serviceGroupKey: z.string().trim().min(1).max(80),
+    description: z.string().trim().min(1).max(500),
+    quantityMilli: z.number().int().min(0),
+    // Negative unit prices are credit lines, allowed only on change orders
+    // (ADR 0014); the service rejects them for baseline revisions.
+    unitPriceMinor: z.number().int(),
+    discountMinor: z.number().int().min(0).default(0),
+    taxable: z.boolean(),
+    taxRateBasisPoints: z.number().int().min(0),
+    taxRateId: z.string().uuid().optional(),
+    position: z.number().int().min(1),
+    // Option groups: lines sharing a key are alternatives (customer picks one).
+    optionGroupKey: z.string().trim().min(1).max(80).optional(),
+    optionGroupLabel: z.string().trim().min(1).max(160).optional(),
+  })
+  .refine((data) => Boolean(data.optionGroupKey) === Boolean(data.optionGroupLabel), {
+    message: "optionGroupKey and optionGroupLabel must be provided together",
+  });
 
 export async function GET(
   _request: Request,
@@ -44,6 +51,8 @@ export async function GET(
         taxMinor: true,
         totalMinor: true,
         position: true,
+        optionGroupKey: true,
+        optionGroupLabel: true,
       },
     });
     return Response.json(
@@ -96,6 +105,8 @@ export async function POST(
       taxRateBasisPoints: parsed.data.taxRateBasisPoints,
       ...(parsed.data.taxRateId ? { taxRateId: parsed.data.taxRateId } : {}),
       position: parsed.data.position,
+      ...(parsed.data.optionGroupKey ? { optionGroupKey: parsed.data.optionGroupKey } : {}),
+      ...(parsed.data.optionGroupLabel ? { optionGroupLabel: parsed.data.optionGroupLabel } : {}),
     });
     return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {

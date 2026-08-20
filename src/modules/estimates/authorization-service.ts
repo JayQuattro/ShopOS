@@ -13,7 +13,8 @@ export class AuthorizationFailed extends Error {
       | "revision_not_presented"
       | "line_not_found"
       | "line_not_in_revision"
-      | "already_decided",
+      | "already_decided"
+      | "conflicting_options",
   ) {
     super("The authorization operation could not be completed.");
     this.name = "AuthorizationFailed";
@@ -68,28 +69,55 @@ export async function recordAuthorization(
       if (!revision) throw new AuthorizationFailed("revision_not_found");
       if (revision.status !== "PRESENTED") throw new AuthorizationFailed("revision_not_presented");
 
-      // Verify all referenced lines belong to this revision.
-      const lineIds = input.decisions.map((d) => d.estimateLineId);
-      const lines = await transaction.estimateLine.findMany({
+      // Load every line of the revision (not just the decided ones) so option
+      // groups can be resolved and siblings auto-declined.
+      const revisionLines = await transaction.estimateLine.findMany({
         where: {
-          id: { in: lineIds },
           organizationId: input.context.organizationId,
           estimateRevisionId: revision.id,
         },
-        select: { id: true, authorizationRequired: true },
+        select: { id: true, optionGroupKey: true },
       });
+      const revisionLineIds = revisionLines.map((line) => line.id);
+      const submittedIds = new Set(input.decisions.map((d) => d.estimateLineId));
 
-      if (lines.length !== lineIds.length) {
+      // Verify all referenced lines belong to this revision.
+      if (input.decisions.some((d) => !revisionLineIds.includes(d.estimateLineId))) {
         throw new AuthorizationFailed("line_not_in_revision");
       }
 
-      // Check that none of these lines already have a decision.
+      // Option groups are alternatives: at most one APPROVED per group.
+      const groupOfLine = new Map(revisionLines.map((line) => [line.id, line.optionGroupKey]));
+      const approvedPerGroup = new Map<string, number>();
+      for (const decision of input.decisions) {
+        if (decision.decision !== "APPROVED") continue;
+        const group = groupOfLine.get(decision.estimateLineId);
+        if (!group) continue;
+        const count = (approvedPerGroup.get(group) ?? 0) + 1;
+        if (count > 1) throw new AuthorizationFailed("conflicting_options");
+        approvedPerGroup.set(group, count);
+      }
+
+      // Check that none of the submitted lines already have a decision.
       const existingDecisions = await transaction.authorizationDecision.findMany({
-        where: { estimateLineId: { in: lineIds } },
+        where: { estimateLineId: { in: revisionLineIds } },
         select: { estimateLineId: true },
       });
-      if (existingDecisions.length > 0) {
+      const previouslyDecided = new Set(existingDecisions.map((d) => d.estimateLineId));
+      if (input.decisions.some((d) => previouslyDecided.has(d.estimateLineId))) {
         throw new AuthorizationFailed("already_decided");
+      }
+
+      // Choosing one option implies declining its alternatives: undecided
+      // siblings of an approved option get an explicit DECLINED decision so
+      // the record (and the invoice) is unambiguous.
+      const autoDeclined: string[] = [];
+      for (const [group] of approvedPerGroup) {
+        for (const line of revisionLines) {
+          if (line.optionGroupKey !== group) continue;
+          if (submittedIds.has(line.id) || previouslyDecided.has(line.id)) continue;
+          autoDeclined.push(line.id);
+        }
       }
 
       // Create the authorization record.
@@ -106,7 +134,7 @@ export async function recordAuthorization(
         },
       });
 
-      // Create per-line decisions.
+      // Create per-line decisions (submitted plus auto-declined siblings).
       for (const decision of input.decisions) {
         await transaction.authorizationDecision.create({
           data: {
@@ -117,10 +145,21 @@ export async function recordAuthorization(
           },
         });
       }
+      for (const lineId of autoDeclined) {
+        await transaction.authorizationDecision.create({
+          data: {
+            organizationId: input.context.organizationId,
+            authorizationId: authorization.id,
+            estimateLineId: lineId,
+            decision: "DECLINED",
+          },
+        });
+      }
 
       // Activity event.
       const approvedCount = input.decisions.filter((d) => d.decision === "APPROVED").length;
-      const declinedCount = input.decisions.filter((d) => d.decision === "DECLINED").length;
+      const declinedCount =
+        input.decisions.filter((d) => d.decision === "DECLINED").length + autoDeclined.length;
       await transaction.activityEvent.create({
         data: {
           id: randomUUID(),
@@ -209,6 +248,8 @@ export async function getAuthorizationState(
       totalMinor: string;
       decision: "APPROVED" | "DECLINED" | "PENDING";
       authorizationRequired: boolean;
+      optionGroupKey: string | null;
+      optionGroupLabel: string | null;
     }>;
   }>
 > {
@@ -226,7 +267,14 @@ export async function getAuthorizationState(
 
   const lines = await input.db.estimateLine.findMany({
     where: { estimateRevisionId: revision.id },
-    select: { id: true, authorizationRequired: true, description: true, totalMinor: true },
+    select: {
+      id: true,
+      authorizationRequired: true,
+      description: true,
+      totalMinor: true,
+      optionGroupKey: true,
+      optionGroupLabel: true,
+    },
   });
 
   const decisions = await input.db.authorizationDecision.findMany({
@@ -247,6 +295,8 @@ export async function getAuthorizationState(
       totalMinor: line.totalMinor.toString(),
       authorizationRequired: line.authorizationRequired,
       decision: (decisionMap.get(line.id) as "APPROVED" | "DECLINED" | undefined) ?? "PENDING",
+      optionGroupKey: line.optionGroupKey,
+      optionGroupLabel: line.optionGroupLabel,
     })),
   };
 }
