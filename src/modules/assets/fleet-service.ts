@@ -17,8 +17,16 @@ export type FleetVehicle = Readonly<{
   plateJurisdiction: string | null;
   mileage: number | null;
   status: string;
+  registrationExpiresAt: Date | null;
+  insuranceExpiresAt: Date | null;
   loanerStatus: Readonly<{ out: boolean; workOrderNumber: string | null; since: Date | null }>;
   openServiceCalls: ReadonlyArray<{ id: string; kind: string; status: string }>;
+  maintenanceDue: ReadonlyArray<{
+    id: string;
+    name: string;
+    dueInMiles: number | null;
+    dueInDays: number | null;
+  }>;
 }>;
 
 /**
@@ -64,6 +72,8 @@ export async function listFleetVehicles(
       id: true,
       displayName: true,
       status: true,
+      registrationExpiresAt: true,
+      insuranceExpiresAt: true,
       automotiveProfile: {
         select: { licensePlate: true, plateJurisdiction: true, lastKnownMileage: true },
       },
@@ -77,24 +87,66 @@ export async function listFleetVehicles(
         where: { status: { in: ["DISPATCHED", "EN_ROUTE", "ON_SCENE"] } },
         select: { id: true, kind: true, status: true },
       },
+      maintenanceSchedules: {
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          intervalMiles: true,
+          intervalMonths: true,
+          lastServicedAt: true,
+          lastServicedMileage: true,
+        },
+      },
     },
   });
 
+  const today = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+
   return vehicles.map((vehicle) => {
     const openLoaner = vehicle.loanerCheckouts[0];
+    const mileage = vehicle.automotiveProfile?.lastKnownMileage ?? null;
+    const maintenanceDue = vehicle.maintenanceSchedules.flatMap((schedule) => {
+      const dueInMiles =
+        schedule.intervalMiles !== null &&
+        schedule.intervalMiles !== undefined &&
+        mileage !== null &&
+        schedule.lastServicedMileage !== null
+          ? schedule.lastServicedMileage + schedule.intervalMiles - mileage
+          : null;
+      const dueInDays =
+        schedule.intervalMonths !== null && schedule.intervalMonths !== undefined
+          ? Math.ceil(
+              ((schedule.lastServicedAt ? schedule.lastServicedAt.getTime() : today) +
+                schedule.intervalMonths * 30 * DAY -
+                today) /
+                DAY,
+            )
+          : null;
+      // Only surface schedules that are actually due (or within 500 miles).
+      const due =
+        (dueInMiles !== null && dueInMiles <= 500) || (dueInDays !== null && dueInDays <= 30);
+      return due
+        ? [{ id: schedule.id, name: schedule.name, dueInMiles, dueInDays: dueInDays }]
+        : [];
+    });
     return {
       id: vehicle.id,
       displayName: vehicle.displayName,
       licensePlate: vehicle.automotiveProfile?.licensePlate ?? null,
       plateJurisdiction: vehicle.automotiveProfile?.plateJurisdiction ?? null,
-      mileage: vehicle.automotiveProfile?.lastKnownMileage ?? null,
+      mileage,
       status: vehicle.status,
+      registrationExpiresAt: vehicle.registrationExpiresAt,
+      insuranceExpiresAt: vehicle.insuranceExpiresAt,
       loanerStatus: {
         out: openLoaner !== undefined,
         workOrderNumber: openLoaner?.workOrder.number ?? null,
         since: openLoaner?.checkedOutAt ?? null,
       },
       openServiceCalls: vehicle.serviceCalls,
+      maintenanceDue,
     };
   });
 }
