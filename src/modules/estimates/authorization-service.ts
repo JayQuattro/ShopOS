@@ -248,6 +248,8 @@ export async function getAuthorizationState(
       totalMinor: string;
       decision: "APPROVED" | "DECLINED" | "PENDING";
       authorizationRequired: boolean;
+      serviceGroupKey: string;
+      serviceGroupLabel: string | null;
       optionGroupKey: string | null;
       optionGroupLabel: string | null;
     }>;
@@ -272,6 +274,8 @@ export async function getAuthorizationState(
       authorizationRequired: true,
       description: true,
       totalMinor: true,
+      serviceGroupKey: true,
+      serviceGroupLabel: true,
       optionGroupKey: true,
       optionGroupLabel: true,
     },
@@ -295,6 +299,8 @@ export async function getAuthorizationState(
       totalMinor: line.totalMinor.toString(),
       authorizationRequired: line.authorizationRequired,
       decision: (decisionMap.get(line.id) as "APPROVED" | "DECLINED" | undefined) ?? "PENDING",
+      serviceGroupKey: line.serviceGroupKey,
+      serviceGroupLabel: line.serviceGroupLabel,
       optionGroupKey: line.optionGroupKey,
       optionGroupLabel: line.optionGroupLabel,
     })),

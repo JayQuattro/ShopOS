@@ -30,6 +30,8 @@ type EstimateData = {
     description: string;
     totalMinor: string;
     authorizationRequired: boolean;
+    serviceGroupKey: string;
+    serviceGroupLabel: string | null;
     optionGroupKey: string | null;
     optionGroupLabel: string | null;
   }>;
@@ -286,10 +288,26 @@ export default function AuthorizePage() {
               };
               type Segment =
                 | { type: "line"; line: EstimateData["lines"][number] }
+                | { type: "job"; key: string; label: string | null }
                 | ({ type: "group" } & GroupSegment);
               const segments: Segment[] = [];
               const groups = new Map<string, GroupSegment>();
+              let currentJobKey: string | null = null;
               for (const line of data.lines) {
+                // Start a new job section whenever the service group changes
+                // (lines are ordered, so this keeps jobs contiguous).
+                if (line.serviceGroupKey !== currentJobKey) {
+                  currentJobKey = line.serviceGroupKey;
+                  segments.push({
+                    type: "job",
+                    key: line.serviceGroupKey,
+                    label:
+                      line.serviceGroupLabel ??
+                      (line.serviceGroupKey === "general"
+                        ? null
+                        : line.serviceGroupKey.replace(/[_-]+/g, " ")),
+                  });
+                }
                 if (!line.optionGroupKey) {
                   segments.push({ type: "line", line });
                   continue;
@@ -331,6 +349,17 @@ export default function AuthorizePage() {
                 ) : null;
 
               return segments.map((segment) => {
+                if (segment.type === "job") {
+                  if (!segment.label) return null;
+                  return (
+                    <p
+                      key={`job-${segment.key}`}
+                      className="pt-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                    >
+                      {segment.label}
+                    </p>
+                  );
+                }
                 if (segment.type === "group") {
                   const chosen = segment.lines.find((l) => decisions[l.id] === "APPROVED");
                   const noneChosen =

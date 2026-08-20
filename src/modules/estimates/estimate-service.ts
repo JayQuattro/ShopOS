@@ -111,6 +111,8 @@ export async function addLine(
     taxRateBasisPoints: number;
     taxRateId?: string;
     position: number;
+    /** Job grouping on the document ("Front brakes"); label rides for display. */
+    serviceGroupLabel?: string;
     /** Lines sharing an option group key are alternatives: the customer picks one. */
     optionGroupKey?: string;
     optionGroupLabel?: string;
@@ -177,6 +179,7 @@ export async function addLine(
         organizationId: input.context.organizationId,
         estimateRevisionId: revision.id,
         serviceGroupKey: input.serviceGroupKey,
+        ...(input.serviceGroupLabel ? { serviceGroupLabel: input.serviceGroupLabel } : {}),
         ...(input.optionGroupKey ? { optionGroupKey: input.optionGroupKey } : {}),
         ...(input.optionGroupLabel ? { optionGroupLabel: input.optionGroupLabel } : {}),
         kind: input.kind,

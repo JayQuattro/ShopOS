@@ -176,6 +176,8 @@ export async function validateAuthorizationLink(
               description: true,
               totalMinor: true,
               authorizationRequired: true,
+              serviceGroupKey: true,
+              serviceGroupLabel: true,
               optionGroupKey: true,
               optionGroupLabel: true,
             },
