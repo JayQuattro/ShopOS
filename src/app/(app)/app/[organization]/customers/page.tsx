@@ -1,27 +1,43 @@
-import Link from "next/link";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { ListSearch } from "@/components/shopos/list-search";
 import { PageHeader } from "@/components/shopos/page-header";
+import { RecordList, RecordListRow } from "@/components/shopos/record-list";
+import { EmptyState } from "@/components/shopos/states";
+import { humanizeToken } from "@/lib/labels";
 import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { CustomerCreateForm } from "./customer-create-form";
 
 export default async function CustomersPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organization: string }>;
+  searchParams: Promise<{ q?: string }>;
 }) {
   const { organization } = await params;
+  const { q: search } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
   }
 
+  const query = search?.trim() ?? "";
   const customers = await db.customer.findMany({
     where: {
       organizationId: context.organizationId,
       archivedAt: null,
+      ...(query
+        ? {
+            OR: [
+              { displayName: { contains: query, mode: "insensitive" } },
+              { primaryEmail: { contains: query, mode: "insensitive" } },
+              { primaryPhone: { contains: query, mode: "insensitive" } },
+              { organizationReference: { contains: query, mode: "insensitive" } },
+            ],
+          }
+        : {}),
     },
     orderBy: { displayName: "asc" },
     select: {
@@ -44,46 +60,47 @@ export default async function CustomersPage({
         actions={context.permissions.has("customers.write") ? <CustomerCreateForm /> : undefined}
       />
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <ListSearch
+          action={`/app/${context.organizationId}/customers`}
+          query={query}
+          placeholder="Search name, email, phone, ref…"
+        />
+        <p className="text-sm text-muted-foreground">
+          {customers.length} customer{customers.length === 1 ? "" : "s"}
+        </p>
+      </div>
+
       <Card>
         <CardContent className="p-0">
           {customers.length === 0 ? (
-            <p className="px-6 py-8 text-center text-sm text-muted-foreground">No customers yet.</p>
+            query ? (
+              <EmptyState
+                title="No customers match your search"
+                description={`Nothing found for “${query}”. Try a name, email, phone, or reference.`}
+              />
+            ) : (
+              <EmptyState
+                title="No customers yet"
+                description="Add your first customer to start recording service history."
+              />
+            )
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Name</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
-                  <th className="px-4 py-3 font-medium">Ref</th>
-                  <th className="px-4 py-3 font-medium">Email</th>
-                  <th className="px-4 py-3 font-medium">Phone</th>
-                  <th className="px-4 py-3 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {customers.map((c) => (
-                  <tr key={c.id} className="border-b border-border/60 hover:bg-muted/30">
-                    <td className="px-4 py-3 font-medium">{c.displayName}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline">{c.kind.toLowerCase()}</Badge>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-muted-foreground">
-                      {c.organizationReference ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{c.primaryEmail ?? "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{c.primaryPhone ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/app/${context.organizationId}/customers/${c.id}`}
-                        className="text-link underline-offset-4 hover:underline"
-                      >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <RecordList>
+              {customers.map((c) => (
+                <RecordListRow
+                  key={c.id}
+                  href={`/app/${context.organizationId}/customers/${c.id}`}
+                  title={c.displayName}
+                  description={
+                    [c.organizationReference, c.primaryEmail, c.primaryPhone]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+                  }
+                  trailing={<Badge variant="outline">{humanizeToken(c.kind)}</Badge>}
+                />
+              ))}
+            </RecordList>
           )}
         </CardContent>
       </Card>

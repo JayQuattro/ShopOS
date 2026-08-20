@@ -226,7 +226,7 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
       {canCreateWorkOrders ? (
         <Link
           href={`${baseHref}/work-orders?new=1`}
-          className="flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          className="flex min-h-[var(--control-height)] items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
         >
           <Plus className="size-4" />
           New work order
@@ -258,7 +258,7 @@ export function Sidebar({ organizationId, permissions }: SidebarProps) {
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    "flex min-h-[var(--control-height)] items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                     active
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/50",
