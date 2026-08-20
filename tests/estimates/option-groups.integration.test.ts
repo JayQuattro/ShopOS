@@ -334,6 +334,166 @@ describe("estimate option groups", { skip: shouldSkip }, () => {
     ).rejects.toMatchObject({ reason: "invalid_option_group" });
   });
 
+  it("reorders lines across job groups and reassigns positions", async () => {
+    const { createDraftRevision, addLine, reorderLines } =
+      await import("@/modules/estimates/estimate-service");
+    const seed = await seedWorkOrder();
+    const context = seed.context();
+
+    const rev = await createDraftRevision({
+      db: dbModule.db,
+      context,
+      workOrderId: seed.workOrderId,
+      currency: "USD",
+    });
+    for (const [position, description, group] of [
+      [1, "Tune-up line", "tune-up"],
+      [2, "Brake rotor", "front-brakes"],
+      [3, "Brake pads", "front-brakes"],
+    ] as const) {
+      await addLine({
+        db: dbModule.db,
+        context,
+        revisionId: rev.revisionId,
+        kind: "PART",
+        serviceGroupKey: group,
+        description,
+        quantityMilli: 1000,
+        unitPriceMinor: 1000,
+        discountMinor: 0,
+        taxable: false,
+        taxRateBasisPoints: 0,
+        position,
+      });
+    }
+
+    const lines = await dbModule.db.estimateLine.findMany({
+      where: { estimateRevisionId: rev.revisionId },
+      select: { id: true, description: true },
+    });
+    const byDescription = new Map(lines.map((l) => [l.description, l.id]));
+
+    // Drag "Brake pads" above "Brake rotor" and move the tune-up line into
+    // the brakes job in the same save.
+    await reorderLines({
+      db: dbModule.db,
+      context,
+      revisionId: rev.revisionId,
+      items: [
+        { lineId: byDescription.get("Brake pads")!, serviceGroupKey: "front-brakes" },
+        { lineId: byDescription.get("Brake rotor")!, serviceGroupKey: "front-brakes" },
+        { lineId: byDescription.get("Tune-up line")!, serviceGroupKey: "front-brakes" },
+      ],
+    });
+
+    const after = await dbModule.db.estimateLine.findMany({
+      where: { estimateRevisionId: rev.revisionId },
+      orderBy: { position: "asc" },
+      select: { description: true, position: true, serviceGroupKey: true },
+    });
+    expect(after.map((l) => l.description)).toEqual(["Brake pads", "Brake rotor", "Tune-up line"]);
+    expect(after.map((l) => l.position)).toEqual([1, 2, 3]);
+    expect(after.every((l) => l.serviceGroupKey === "front-brakes")).toBe(true);
+  });
+
+  it("rejects an order payload that is not exactly the revision's lines", async () => {
+    const { createDraftRevision, addLine, reorderLines } =
+      await import("@/modules/estimates/estimate-service");
+    const seed = await seedWorkOrder();
+    const context = seed.context();
+
+    const rev = await createDraftRevision({
+      db: dbModule.db,
+      context,
+      workOrderId: seed.workOrderId,
+      currency: "USD",
+    });
+    await addLine({
+      db: dbModule.db,
+      context,
+      revisionId: rev.revisionId,
+      kind: "PART",
+      serviceGroupKey: "general",
+      description: "Only line",
+      quantityMilli: 1000,
+      unitPriceMinor: 1000,
+      discountMinor: 0,
+      taxable: false,
+      taxRateBasisPoints: 0,
+      position: 1,
+    });
+
+    await expect(
+      reorderLines({
+        db: dbModule.db,
+        context,
+        revisionId: rev.revisionId,
+        items: [],
+      }),
+    ).rejects.toMatchObject({ reason: "items_mismatch" });
+  });
+
+  it("renames a job group: key and label move together, conflicts refused", async () => {
+    const { createDraftRevision, addLine, renameServiceGroup } =
+      await import("@/modules/estimates/estimate-service");
+    const seed = await seedWorkOrder();
+    const context = seed.context();
+
+    const rev = await createDraftRevision({
+      db: dbModule.db,
+      context,
+      workOrderId: seed.workOrderId,
+      currency: "USD",
+    });
+    for (const [group, label, position] of [
+      ["front-brakes", "Front brakes", 1],
+      ["tune-up", "Tune up", 2],
+    ] as const) {
+      await addLine({
+        db: dbModule.db,
+        context,
+        revisionId: rev.revisionId,
+        kind: "PART",
+        serviceGroupKey: group,
+        description: `${label} line`,
+        quantityMilli: 1000,
+        unitPriceMinor: 1000,
+        discountMinor: 0,
+        taxable: false,
+        taxRateBasisPoints: 0,
+        position,
+        serviceGroupLabel: label,
+      });
+    }
+
+    const renamed = await renameServiceGroup({
+      db: dbModule.db,
+      context,
+      revisionId: rev.revisionId,
+      key: "front-brakes",
+      label: "Front Brake Service!",
+    });
+    expect(renamed.key).toBe("front-brake-service");
+
+    const lines = await dbModule.db.estimateLine.findMany({
+      where: { estimateRevisionId: rev.revisionId, serviceGroupKey: "front-brake-service" },
+      select: { serviceGroupLabel: true },
+    });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.serviceGroupLabel).toBe("Front Brake Service!");
+
+    // Renaming onto an existing group's slug is a conflict, not a merge.
+    await expect(
+      renameServiceGroup({
+        db: dbModule.db,
+        context,
+        revisionId: rev.revisionId,
+        key: "front-brake-service",
+        label: "Tune Up",
+      }),
+    ).rejects.toMatchObject({ reason: "group_name_conflict" });
+  });
+
   it("stores service group labels and exposes them for grouped rendering", async () => {
     const { createDraftRevision, addLine, presentRevision } =
       await import("@/modules/estimates/estimate-service");

@@ -27,7 +27,10 @@ export class EstimateFailed extends Error {
       | "credit_line_not_allowed"
       | "revision_not_baseline"
       | "revision_decided"
-      | "invalid_option_group",
+      | "invalid_option_group"
+      | "items_mismatch"
+      | "group_name_conflict"
+      | "invalid_group_label",
   ) {
     super("The estimate operation could not be completed.");
     this.name = "EstimateFailed";
@@ -202,6 +205,133 @@ export async function addLine(
     await recomputeTotals(transaction, revision.id);
 
     return { lineId: line.id };
+  });
+}
+
+/**
+ * Reorders draft lines and moves them between job groups. The payload is the
+ * complete ordered list (lineId plus destination serviceGroupKey); positions
+ * are reassigned 1..N to match. Destination labels resolve from lines already
+ * in that group, so a dragged line inherits the group's display name.
+ */
+export async function reorderLines(
+  input: EstimateServiceInput & {
+    revisionId: string;
+    items: ReadonlyArray<Readonly<{ lineId: string; serviceGroupKey: string }>>;
+  },
+): Promise<void> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.write",
+  );
+
+  await input.db.$transaction(async (transaction) => {
+    const revision = await loadRevisionForMutation(transaction, input.context, input.revisionId);
+    if (revision.status !== "DRAFT") throw new EstimateFailed("revision_not_draft");
+
+    const existing = await transaction.estimateLine.findMany({
+      where: {
+        organizationId: input.context.organizationId,
+        estimateRevisionId: revision.id,
+      },
+      select: { id: true, serviceGroupKey: true, serviceGroupLabel: true },
+    });
+    const existingIds = new Set(existing.map((line) => line.id));
+    const itemIds = input.items.map((item) => item.lineId);
+
+    // The payload must be exactly the revision's lines — no dupes, none missing.
+    if (
+      itemIds.length !== existing.length ||
+      new Set(itemIds).size !== itemIds.length ||
+      itemIds.some((id) => !existingIds.has(id))
+    ) {
+      throw new EstimateFailed("items_mismatch");
+    }
+
+    // Destination labels come from lines already in each destination group.
+    const labelByKey = new Map<string, string>();
+    for (const line of existing) {
+      if (line.serviceGroupLabel && !labelByKey.has(line.serviceGroupKey)) {
+        labelByKey.set(line.serviceGroupKey, line.serviceGroupLabel);
+      }
+    }
+
+    // Two-phase reposition: park everything far out of range first so the
+    // (revision, position) unique constraint never collides mid-update.
+    let parked = 0;
+    for (const line of existing) {
+      parked += 1;
+      await transaction.estimateLine.update({
+        where: { id: line.id },
+        data: { position: 100_000 + parked },
+      });
+    }
+    let position = 0;
+    for (const item of input.items) {
+      position += 1;
+      const label = labelByKey.get(item.serviceGroupKey);
+      await transaction.estimateLine.update({
+        where: { id: item.lineId },
+        data: {
+          position,
+          serviceGroupKey: item.serviceGroupKey,
+          ...(label ? { serviceGroupLabel: label } : { serviceGroupLabel: null }),
+        },
+      });
+    }
+
+    await recomputeTotals(transaction, revision.id);
+  });
+}
+
+/**
+ * Renames a job group on a draft revision: every line in the group moves to
+ * the new slugified key and carries the new label.
+ */
+export async function renameServiceGroup(
+  input: EstimateServiceInput & { revisionId: string; key: string; label: string },
+): Promise<Readonly<{ key: string }>> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.write",
+  );
+
+  const label = input.label.trim();
+  if (label.length < 1 || label.length > 160) throw new EstimateFailed("invalid_group_label");
+
+  return input.db.$transaction(async (transaction) => {
+    const revision = await loadRevisionForMutation(transaction, input.context, input.revisionId);
+    if (revision.status !== "DRAFT") throw new EstimateFailed("revision_not_draft");
+
+    const newKey = label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (newKey.length < 1) throw new EstimateFailed("invalid_group_label");
+
+    if (newKey !== input.key) {
+      const clash = await transaction.estimateLine.findFirst({
+        where: {
+          estimateRevisionId: revision.id,
+          serviceGroupKey: newKey,
+        },
+        select: { id: true },
+      });
+      if (clash) throw new EstimateFailed("group_name_conflict");
+    }
+
+    await transaction.estimateLine.updateMany({
+      where: {
+        organizationId: input.context.organizationId,
+        estimateRevisionId: revision.id,
+        serviceGroupKey: input.key,
+      },
+      data: { serviceGroupKey: newKey, serviceGroupLabel: label },
+    });
+
+    return { key: newKey };
   });
 }
 
