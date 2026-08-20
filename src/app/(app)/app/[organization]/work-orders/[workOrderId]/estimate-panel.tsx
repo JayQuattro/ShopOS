@@ -498,39 +498,41 @@ export function EstimatePanel({
 
           {loadingLines ? (
             <p className="text-sm text-muted-foreground">Loading lines…</p>
-          ) : lines.length === 0 && isDraft && canWrite ? (
-            <EmptyState
-              title="Start the estimate"
-              description="Group the work into jobs like Front brakes or Tune up — or just add a single line."
-              action={
-                <div className="flex flex-wrap justify-center gap-2">
-                  <Button variant="outline" onClick={addPendingJobGroup}>
-                    <Plus className="size-4" aria-hidden />
-                    Add job group
-                  </Button>
-                  <Button onClick={() => openFormForJob(null)}>Add line</Button>
-                </div>
-              }
-            />
+          ) : isDraft && canWrite ? (
+            lines.length === 0 && pendingJobGroups.length === 0 ? (
+              <EmptyState
+                title="Start the estimate"
+                description="Group the work into jobs like Front brakes or Tune up — or just add a single line."
+                action={
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button variant="outline" onClick={addPendingJobGroup}>
+                      <Plus className="size-4" aria-hidden />
+                      Add job group
+                    </Button>
+                    <Button onClick={() => openFormForJob(null)}>Add line</Button>
+                  </div>
+                }
+              />
+            ) : (
+              <EstimateLinesEditor
+                revisionId={selectedRev.id}
+                currency={selectedRev.currency}
+                lines={lines}
+                pendingGroups={pendingJobGroups}
+                onPendingLabelChange={(key, label) =>
+                  setPendingJobGroups((current) =>
+                    current.map((entry) => (entry.key === key ? { ...entry, label } : entry)),
+                  )
+                }
+                onRemovePending={(key) =>
+                  setPendingJobGroups((current) => current.filter((entry) => entry.key !== key))
+                }
+                onChanged={() => (selectedRevId ? loadLines(selectedRevId) : undefined)}
+                onRequestAddToGroup={(label: string) => openFormForJob(label)}
+              />
+            )
           ) : lines.length === 0 ? (
             <p className="text-sm text-muted-foreground">No lines on this document.</p>
-          ) : isDraft ? (
-            <EstimateLinesEditor
-              revisionId={selectedRev.id}
-              currency={selectedRev.currency}
-              lines={lines}
-              pendingGroups={pendingJobGroups}
-              onPendingLabelChange={(key, label) =>
-                setPendingJobGroups((current) =>
-                  current.map((entry) => (entry.key === key ? { ...entry, label } : entry)),
-                )
-              }
-              onRemovePending={(key) =>
-                setPendingJobGroups((current) => current.filter((entry) => entry.key !== key))
-              }
-              onChanged={() => (selectedRevId ? loadLines(selectedRevId) : undefined)}
-              onRequestAddToGroup={(label: string) => openFormForJob(label)}
-            />
           ) : (
             <table className="w-full text-sm">
               <thead>
