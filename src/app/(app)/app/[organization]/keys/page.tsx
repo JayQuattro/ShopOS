@@ -1,18 +1,28 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { ListSearch } from "@/components/shopos/list-search";
 import { PageHeader } from "@/components/shopos/page-header";
+import { EmptyState } from "@/components/shopos/states";
 import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
-import { KeyRow } from "./key-row";
+import { KeyCard } from "./key-card";
 
 export const dynamic = "force-dynamic";
 
 /**
  * The key board: every vehicle still in the shop with its key tag and where
  * the key lives. Editable in place — this page answers "where are the keys"
- * at a glance, including jobs waiting on parts or pickup.
+ * at a glance, including jobs waiting on parts or pickup. Built as a card
+ * grid with full-size controls for wall-mounted tablet use.
  */
-export default async function KeysPage({ params }: { params: Promise<{ organization: string }> }) {
+export default async function KeysPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ organization: string }>;
+  searchParams: Promise<{ q?: string }>;
+}) {
   const { organization } = await params;
+  const { q: search } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
@@ -54,8 +64,22 @@ export default async function KeysPage({ params }: { params: Promise<{ organizat
 
   const canWrite = context.permissions.has("work_orders.write");
   const orgId = context.organizationId;
-  const withKeys = workOrders.filter((wo) => wo.keyTag);
-  const missing = workOrders.filter((wo) => !wo.keyTag);
+  const query = search?.trim().toLowerCase() ?? "";
+  const filtered = query
+    ? workOrders.filter((wo) =>
+        [
+          wo.number,
+          wo.customer.displayName,
+          wo.asset?.displayName ?? "",
+          wo.keyTag ?? "",
+          wo.keyLocation ?? "",
+        ].some((field) => field.toLowerCase().includes(query)),
+      )
+    : workOrders;
+
+  const withKeys = filtered.filter((wo) => wo.keyTag);
+  const missing = filtered.filter((wo) => !wo.keyTag);
+  const missingTotal = workOrders.filter((wo) => !wo.keyTag).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,52 +89,54 @@ export default async function KeysPage({ params }: { params: Promise<{ organizat
         breadcrumbs={[{ label: "Keys" }]}
       />
 
-      <Card>
-        <CardContent className="p-0">
-          {workOrders.length === 0 ? (
-            <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-              No vehicles in the shop right now.
-            </p>
-          ) : (
-            <>
-              <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
-                {workOrders.length} open job{workOrders.length === 1 ? "" : "s"} · {missing.length}{" "}
-                without a key tag
-              </p>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="px-4 py-3 font-medium">Job</th>
-                    <th className="px-4 py-3 font-medium">Customer / vehicle</th>
-                    <th className="px-4 py-3 font-medium">Where it is</th>
-                    <th className="px-4 py-3 font-medium">Key tag</th>
-                    <th className="px-4 py-3 font-medium">Key location</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...withKeys, ...missing].map((wo) => (
-                    <KeyRow
-                      key={wo.id}
-                      canWrite={canWrite}
-                      workOrder={{
-                        id: wo.id,
-                        number: wo.number,
-                        stage: wo.vehicleStage,
-                        bay: wo.bayLabel,
-                        customerName: wo.customer.displayName,
-                        assetName: wo.asset?.displayName ?? null,
-                        keyTag: wo.keyTag,
-                        keyLocation: wo.keyLocation,
-                        href: `/app/${orgId}/work-orders/${wo.id}`,
-                      }}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <ListSearch
+          action={`/app/${orgId}/keys`}
+          query={search?.trim() ?? ""}
+          placeholder="Search RO #, tag, customer, vehicle…"
+        />
+        <p className="text-sm text-muted-foreground">
+          {filtered.length} job{filtered.length === 1 ? "" : "s"}
+          {missingTotal > 0 ? ` · ${missingTotal} without a key tag` : ""}
+        </p>
+      </div>
+
+      {workOrders.length === 0 ? (
+        <Card>
+          <CardContent className="p-0">
+            <EmptyState title="No vehicles in the shop right now" />
+          </CardContent>
+        </Card>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <CardContent className="p-0">
+            <EmptyState
+              title="No jobs match your search"
+              description={`Nothing found for “${search?.trim()}”. Try an RO number, tag, or customer name.`}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[...withKeys, ...missing].map((wo) => (
+            <KeyCard
+              key={wo.id}
+              canWrite={canWrite}
+              workOrder={{
+                id: wo.id,
+                number: wo.number,
+                stage: wo.vehicleStage,
+                bay: wo.bayLabel,
+                customerName: wo.customer.displayName,
+                assetName: wo.asset?.displayName ?? null,
+                keyTag: wo.keyTag,
+                keyLocation: wo.keyLocation,
+                href: `/app/${orgId}/work-orders/${wo.id}`,
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
