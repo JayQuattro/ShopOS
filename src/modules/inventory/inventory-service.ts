@@ -25,18 +25,41 @@ export async function createItem(
   input: InventoryServiceInput & {
     partNumber: string;
     name: string;
+    locationId?: string | null;
+    oeNumber?: string;
+    brand?: string;
+    categoryId?: string;
+    uomGroup?: string;
+    unitOfMeasure?: string;
+    uomFactorMilli?: number;
+    condition?: "new" | "used" | "refurb";
+    hasCore?: boolean;
+    coreValueMinor?: number;
+    consumable?: boolean;
+    nonSaleable?: boolean;
     quantityOnHand?: number;
     reorderPoint?: number;
     unitCostMinor?: number;
     currency?: string;
     binLocation?: string;
+    notes?: string;
   },
 ): Promise<Readonly<{ itemId: string }>> {
-  assertTenantAccess(
-    input.context,
-    { organizationId: input.context.organizationId },
-    "work_orders.write",
-  );
+  // Location-scoped items verify location access; org-wide (null) items
+  // are managed by any writer and inherited by every location.
+  if (input.locationId) {
+    assertTenantAccess(
+      input.context,
+      { organizationId: input.context.organizationId, locationId: input.locationId },
+      "work_orders.write",
+    );
+  } else {
+    assertTenantAccess(
+      input.context,
+      { organizationId: input.context.organizationId },
+      "work_orders.write",
+    );
+  }
 
   const partNumber = input.partNumber.trim();
   const name = input.name.trim();
@@ -48,9 +71,18 @@ export async function createItem(
       throw new InventoryFailed("invalid_quantity");
     }
   }
+  if (input.coreValueMinor !== undefined && !input.hasCore) {
+    throw new InventoryFailed("invalid_quantity");
+  }
 
+  // Uniqueness is per location (null = shared org stock): the same part
+  // number can live at two shops with independent on-hand.
   const existing = await input.db.inventoryItem.findFirst({
-    where: { organizationId: input.context.organizationId, partNumber },
+    where: {
+      organizationId: input.context.organizationId,
+      partNumber,
+      ...(input.locationId ? { locationId: input.locationId } : { locationId: null }),
+    },
     select: { id: true },
   });
   if (existing) throw new InventoryFailed("duplicate_part_number");
@@ -59,13 +91,28 @@ export async function createItem(
     data: {
       id: randomUUID(),
       organizationId: input.context.organizationId,
+      ...(input.locationId ? { locationId: input.locationId } : {}),
       partNumber,
       name,
+      ...(input.oeNumber ? { oeNumber: input.oeNumber.trim() } : {}),
+      ...(input.brand ? { brand: input.brand.trim() } : {}),
+      ...(input.categoryId ? { categoryId: input.categoryId } : {}),
+      ...(input.uomGroup ? { uomGroup: input.uomGroup.trim() } : {}),
+      ...(input.unitOfMeasure ? { unitOfMeasure: input.unitOfMeasure.trim() } : {}),
+      ...(input.uomFactorMilli !== undefined ? { uomFactorMilli: input.uomFactorMilli } : {}),
+      ...(input.condition ? { condition: input.condition } : {}),
+      ...(input.hasCore !== undefined ? { hasCore: input.hasCore } : {}),
+      ...(input.coreValueMinor !== undefined
+        ? { coreValueMinor: BigInt(input.coreValueMinor) }
+        : {}),
+      ...(input.consumable !== undefined ? { consumable: input.consumable } : {}),
+      ...(input.nonSaleable !== undefined ? { nonSaleable: input.nonSaleable } : {}),
       ...(input.quantityOnHand ? { quantityOnHand: input.quantityOnHand } : {}),
       ...(input.reorderPoint ? { reorderPoint: input.reorderPoint } : {}),
       ...(input.unitCostMinor ? { unitCostMinor: BigInt(input.unitCostMinor) } : {}),
       ...(input.currency ? { currency: input.currency } : {}),
       ...(input.binLocation ? { binLocation: input.binLocation.trim() } : {}),
+      ...(input.notes ? { notes: input.notes.trim() } : {}),
     },
   });
   return { itemId: item.id };
@@ -173,6 +220,16 @@ export type InventoryItemSummary = Readonly<{
   id: string;
   partNumber: string;
   name: string;
+  locationId: string | null;
+  oeNumber: string | null;
+  brand: string | null;
+  categoryId: string | null;
+  uomGroup: string | null;
+  unitOfMeasure: string | null;
+  condition: string;
+  hasCore: boolean;
+  consumable: boolean;
+  nonSaleable: boolean;
   quantityOnHand: number;
   reorderPoint: number;
   unitCostMinor: string;
@@ -184,7 +241,13 @@ export type InventoryItemSummary = Readonly<{
 /** Lists stock; low-stock (at/below reorder point) sorts first when asked. */
 export async function listItems(
   input: InventoryServiceInput,
-  options?: Readonly<{ lowOnly?: boolean }>,
+  options?: Readonly<{
+    lowOnly?: boolean;
+    locationId?: string;
+    categoryId?: string;
+    consumablesOnly?: boolean;
+    oeNumber?: string;
+  }>,
 ): Promise<readonly InventoryItemSummary[]> {
   assertTenantAccess(
     input.context,
@@ -192,8 +255,24 @@ export async function listItems(
     "work_orders.read",
   );
 
+  // Location scope: a location-restricted viewer sees their own stock plus
+  // org-wide (null-location) items; org-wide viewers see everything.
+  const where: Record<string, unknown> = { organizationId: input.context.organizationId };
+  if (!input.context.organizationWideLocationAccess && input.context.allowedLocationIds.size > 0) {
+    where.OR = [
+      { locationId: { in: [...input.context.allowedLocationIds] } },
+      { locationId: null },
+    ];
+  }
+  if (options?.locationId) {
+    where.OR = [{ locationId: options.locationId }, { locationId: null }];
+  }
+  if (options?.categoryId) where.categoryId = options.categoryId;
+  if (options?.consumablesOnly) where.consumable = true;
+  if (options?.oeNumber) where.oeNumber = options.oeNumber.trim();
+
   const items = await input.db.inventoryItem.findMany({
-    where: { organizationId: input.context.organizationId },
+    where,
     orderBy: [{ name: "asc" }],
     take: 500,
     select: {
@@ -205,6 +284,16 @@ export async function listItems(
       unitCostMinor: true,
       currency: true,
       binLocation: true,
+      locationId: true,
+      oeNumber: true,
+      brand: true,
+      categoryId: true,
+      uomGroup: true,
+      unitOfMeasure: true,
+      condition: true,
+      hasCore: true,
+      consumable: true,
+      nonSaleable: true,
     },
   });
 
@@ -212,6 +301,16 @@ export async function listItems(
     id: item.id,
     partNumber: item.partNumber,
     name: item.name,
+    locationId: item.locationId,
+    oeNumber: item.oeNumber,
+    brand: item.brand,
+    categoryId: item.categoryId,
+    uomGroup: item.uomGroup,
+    unitOfMeasure: item.unitOfMeasure,
+    condition: item.condition,
+    hasCore: item.hasCore,
+    consumable: item.consumable,
+    nonSaleable: item.nonSaleable,
     quantityOnHand: item.quantityOnHand,
     reorderPoint: item.reorderPoint,
     unitCostMinor: item.unitCostMinor.toString(),
@@ -413,4 +512,135 @@ export async function createReorderFromSuggestions(
 
     return { partOrderId: partOrder.id };
   });
+}
+
+// ─── Categories ─────────────────────────────────────────────────────────────
+
+export async function listCategories(
+  input: InventoryServiceInput,
+): Promise<
+  readonly Readonly<{ id: string; name: string; sortOrder: number; itemCount: number }>[]
+> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+
+  const categories = await input.db.inventoryCategory.findMany({
+    where: { organizationId: input.context.organizationId },
+    orderBy: { sortOrder: "asc" },
+    select: {
+      id: true,
+      name: true,
+      sortOrder: true,
+      _count: { select: { items: true } },
+    },
+  });
+  return categories.map((category) => ({
+    id: category.id,
+    name: category.name,
+    sortOrder: category.sortOrder,
+    itemCount: category._count.items,
+  }));
+}
+
+export async function createCategory(
+  input: InventoryServiceInput & { name: string; sortOrder?: number },
+): Promise<Readonly<{ categoryId: string }>> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.write",
+  );
+
+  const name = input.name.trim();
+  if (name.length < 2 || name.length > 120) throw new InventoryFailed("invalid_name");
+
+  const existing = await input.db.inventoryCategory.findFirst({
+    where: { organizationId: input.context.organizationId, name },
+    select: { id: true },
+  });
+  if (existing) throw new InventoryFailed("duplicate_part_number");
+
+  const maxOrder = await input.db.inventoryCategory.aggregate({
+    where: { organizationId: input.context.organizationId },
+    _max: { sortOrder: true },
+  });
+
+  const category = await input.db.inventoryCategory.create({
+    data: {
+      id: randomUUID(),
+      organizationId: input.context.organizationId,
+      name,
+      sortOrder: input.sortOrder ?? (maxOrder._max.sortOrder ?? 0) + 1,
+    },
+    select: { id: true },
+  });
+  return { categoryId: category.id };
+}
+
+// ─── Interchange lookup ─────────────────────────────────────────────────────
+
+export type InterchangeMatch = Readonly<{
+  itemId: string;
+  partNumber: string;
+  brand: string | null;
+  name: string;
+  locationId: string | null;
+  quantityOnHand: number;
+  unitCostMinor: string;
+  currency: string;
+}>;
+
+/**
+ * Parts that interchange on the same OE number — different manufacturers'
+ * aftermarket numbers for the same factory part. The shop's substitution
+ * cheat sheet: what fits when the brand you stock is out.
+ */
+export async function findInterchange(
+  input: InventoryServiceInput & { oeNumber: string },
+): Promise<readonly InterchangeMatch[]> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+
+  const where: Record<string, unknown> = {
+    organizationId: input.context.organizationId,
+    oeNumber: input.oeNumber.trim(),
+  };
+  if (!input.context.organizationWideLocationAccess && input.context.allowedLocationIds.size > 0) {
+    where.OR = [
+      { locationId: { in: [...input.context.allowedLocationIds] } },
+      { locationId: null },
+    ];
+  }
+
+  const items = await input.db.inventoryItem.findMany({
+    where,
+    orderBy: { name: "asc" },
+    take: 50,
+    select: {
+      id: true,
+      partNumber: true,
+      brand: true,
+      name: true,
+      locationId: true,
+      quantityOnHand: true,
+      unitCostMinor: true,
+      currency: true,
+    },
+  });
+  return items.map((item) => ({
+    itemId: item.id,
+    partNumber: item.partNumber,
+    brand: item.brand,
+    name: item.name,
+    locationId: item.locationId,
+    quantityOnHand: item.quantityOnHand,
+    unitCostMinor: item.unitCostMinor.toString(),
+    currency: item.currency,
+  }));
 }
