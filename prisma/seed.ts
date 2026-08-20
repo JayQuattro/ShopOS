@@ -1229,6 +1229,7 @@ async function seedOperationalDemo(): Promise<void> {
   await seedDepositDemo();
   await seedInspectionTemplateDemo();
   await seedBoardStagesDemo();
+  await seedInventoryDepthDemo();
 }
 
 /** Roadside demo calls; idempotent so re-seeding older databases backfills. */
@@ -1460,6 +1461,183 @@ async function seedDepositDemo(): Promise<void> {
       recordedByUserId: ids.owner,
       note: "Left at drop-off for the next service.",
     },
+  });
+}
+
+/** Demo inventory depth: categories, OE interchanges, UoM groups, supplies. */
+async function seedInventoryDepthDemo(): Promise<void> {
+  const existing = await db.inventoryItem.findFirst({
+    where: { oeNumber: "OE-45022" },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  const categories = [
+    { id: "00000000-0000-4000-8000-0000000009b1", name: "Brakes", sortOrder: 1 },
+    { id: "00000000-0000-4000-8000-0000000009b2", name: "Filters", sortOrder: 2 },
+    { id: "00000000-0000-4000-8000-0000000009b3", name: "Fluids & oils", sortOrder: 3 },
+    { id: "00000000-0000-4000-8000-0000000009b4", name: "Shop supplies", sortOrder: 4 },
+  ];
+  for (const category of categories) {
+    await db.inventoryCategory.upsert({
+      where: { organizationId_name: { organizationId: ids.organization, name: category.name } },
+      update: {},
+      create: {
+        id: category.id,
+        organizationId: ids.organization,
+        name: category.name,
+        sortOrder: category.sortOrder,
+      },
+    });
+  }
+
+  // Interchange set: three aftermarket numbers, one OE, different brands.
+  await db.inventoryItem.createMany({
+    data: [
+      {
+        id: "00000000-0000-4000-8000-0000000009c1",
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        partNumber: "BRK-AIS-45022",
+        oeNumber: "OE-45022",
+        brand: "Aisin",
+        categoryId: categories[0]!.id,
+        name: "Brake pads, front",
+        quantityOnHand: 6,
+        reorderPoint: 2,
+        unitCostMinor: 4_250n,
+        binLocation: "A-01",
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009c2",
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        partNumber: "BRK-BOC-45022",
+        oeNumber: "OE-45022",
+        brand: "Bosch",
+        categoryId: categories[0]!.id,
+        name: "Brake pads, front",
+        quantityOnHand: 3,
+        reorderPoint: 2,
+        unitCostMinor: 3_980n,
+        binLocation: "A-02",
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009c3",
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        partNumber: "BRK-PLY-45022X",
+        oeNumber: "OE-45022",
+        brand: "PowerStop",
+        categoryId: categories[0]!.id,
+        name: "Brake pads, front (ceramic)",
+        condition: "new",
+        quantityOnHand: 0,
+        reorderPoint: 2,
+        unitCostMinor: 6_100n,
+        binLocation: "A-03",
+      },
+    ],
+  });
+
+  // UoM grouping: the same 5W-30 in quarts and gallons (and a drum at Durham).
+  await db.inventoryItem.createMany({
+    data: [
+      {
+        id: "00000000-0000-4000-8000-0000000009c4",
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        partNumber: "OIL-5W30-QT",
+        categoryId: categories[2]!.id,
+        name: "Motor oil 5W-30 (quart)",
+        uomGroup: "volume",
+        unitOfMeasure: "quart",
+        uomFactorMilli: 1000,
+        quantityOnHand: 24,
+        reorderPoint: 12,
+        unitCostMinor: 549n,
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009c5",
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        partNumber: "OIL-5W30-GAL",
+        categoryId: categories[2]!.id,
+        name: "Motor oil 5W-30 (gallon)",
+        uomGroup: "volume",
+        unitOfMeasure: "gallon",
+        uomFactorMilli: 4000,
+        quantityOnHand: 5,
+        reorderPoint: 3,
+        unitCostMinor: 1_899n,
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009c6",
+        organizationId: ids.organization,
+        locationId: ids.durham,
+        partNumber: "OIL-5W30-DRUM",
+        categoryId: categories[2]!.id,
+        name: "Motor oil 5W-30 (drum)",
+        uomGroup: "volume",
+        unitOfMeasure: "drum",
+        uomFactorMilli: 208000,
+        quantityOnHand: 1,
+        reorderPoint: 1,
+        unitCostMinor: 42_000n,
+      },
+    ],
+  });
+
+  // Supplies: reordered, never sold; a cored refurb alternator.
+  await db.inventoryItem.createMany({
+    data: [
+      {
+        id: "00000000-0000-4000-8000-0000000009c7",
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        partNumber: "SUP-RAG-50",
+        categoryId: categories[3]!.id,
+        name: "Shop rags (50-pack)",
+        consumable: true,
+        nonSaleable: true,
+        quantityOnHand: 8,
+        reorderPoint: 4,
+        unitCostMinor: 1_200n,
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009c8",
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        partNumber: "SUP-NIT-BOX",
+        categoryId: categories[3]!.id,
+        name: "Nitrile gloves, box",
+        uomGroup: "each",
+        unitOfMeasure: "box",
+        uomFactorMilli: 1000,
+        consumable: true,
+        nonSaleable: true,
+        quantityOnHand: 3,
+        reorderPoint: 5,
+        unitCostMinor: 1_850n,
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000009c9",
+        organizationId: ids.organization,
+        locationId: ids.raleigh,
+        partNumber: "ALT-REF-21012",
+        oeNumber: "OE-31100",
+        brand: "Rebuilt",
+        categoryId: categories[0]!.id,
+        name: "Alternator (refurb)",
+        condition: "refurb",
+        hasCore: true,
+        coreValueMinor: 2_500n,
+        quantityOnHand: 1,
+        reorderPoint: 1,
+        unitCostMinor: 13_500n,
+        binLocation: "E-07",
+      },
+    ],
   });
 }
 
