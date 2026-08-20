@@ -9,6 +9,7 @@ import { formatDate, formatMoney } from "@/i18n/formatters";
 import { formatAddressForDisplay } from "@/i18n/address-formats";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { AccountToggle } from "../../billing/account-toggle";
+import { AddAssetForm } from "./add-asset-form";
 import { ContactForm } from "./contact-form";
 import { AddressForm } from "./address-form";
 import { CustomerEditForm } from "./customer-edit-form";
@@ -304,10 +305,12 @@ export default async function CustomerDetailPage({
         </Card>
       ) : null}
 
+      <AddAssetForm customerId={customer.id} />
+
       {customer.assets.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Assets</CardTitle>
+            <CardTitle className="text-base">Vehicles & assets</CardTitle>
           </CardHeader>
           <CardContent>
             <table className="w-full text-sm">

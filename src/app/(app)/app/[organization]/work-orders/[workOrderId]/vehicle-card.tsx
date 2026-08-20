@@ -1,118 +1,180 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-const STAGES: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "", label: "Not staged" },
-  { value: "WAITING", label: "Checked in — waiting for a bay" },
-  { value: "IN_BAY", label: "In the bay" },
-  { value: "ON_LIFT", label: "On the lift" },
-  { value: "TEST_DRIVE", label: "Out on a test drive" },
-  { value: "WAITING_PARTS", label: "Waiting on parts" },
-  { value: "READY_FOR_PICKUP", label: "Ready for pickup" },
-  { value: "PICKED_UP", label: "Picked up" },
-];
+type AssetOption = { id: string; displayName: string; customerId: string };
 
-type Bay = { id: string; name: string };
+const STAGES = [
+  ["WAITING", "Checked in"],
+  ["IN_BAY", "In the bay"],
+  ["ON_LIFT", "On the lift"],
+  ["TEST_DRIVE", "Test drive"],
+  ["WAITING_PARTS", "Waiting on parts"],
+  ["READY_FOR_PICKUP", "Ready for pickup"],
+  ["PICKED_UP", "Picked up"],
+] as const;
 
+/** Vehicle + custody card: which vehicle, which bay, where it is. */
 export function VehicleCard({
   workOrderId,
-  locationId,
   stage,
   bayLabel,
+  currentAssetId,
+  customerAssets,
   canWrite,
 }: {
   workOrderId: string;
   locationId: string;
   stage: string | null;
   bayLabel: string | null;
+  currentAssetId: string | null;
+  customerAssets: ReadonlyArray<AssetOption>;
   canWrite: boolean;
 }) {
   const [selectedStage, setSelectedStage] = useState(stage ?? "");
   const [bay, setBay] = useState(bayLabel ?? "");
-  const [bays, setBays] = useState<Bay[]>([]);
+  const [assetId, setAssetId] = useState(currentAssetId ?? "");
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const res = await fetch(`/api/locations/${locationId}/bays`);
-          if (res.ok && !cancelled) {
-            const data = await res.json();
-            setBays(data.bays ?? []);
-          }
-        } catch {
-          // Bay suggestions are optional chrome.
-        }
-      })();
-    }, 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [locationId]);
-
-  const dirty = selectedStage !== (stage ?? "") || bay !== (bayLabel ?? "");
-
-  async function save() {
+  async function saveVehicle(nextAssetId: string | null) {
     setPending(true);
+    setError(null);
     try {
-      await fetch(`/api/work-orders/${workOrderId}/vehicle`, {
+      const res = await fetch(`/api/work-orders/${workOrderId}/asset`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stage: selectedStage === "" ? null : selectedStage,
-          bayLabel: bay,
-        }),
+        body: JSON.stringify({ assetId: nextAssetId }),
       });
-      window.location.reload();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const messages: Record<string, string> = {
+          asset_not_for_customer: "That vehicle belongs to a different customer.",
+        };
+        throw new Error(messages[data.error ?? ""] ?? "Could not update the vehicle.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update the vehicle.");
     } finally {
       setPending(false);
     }
   }
 
+  async function saveStage() {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/work-orders/${workOrderId}/vehicle`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(selectedStage ? { stage: selectedStage } : { stage: null }),
+          bayLabel: bay.trim() || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Could not update the stage.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update the stage.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const select =
+    "h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm";
+  const dirty = selectedStage !== (stage ?? "") || bay !== (bayLabel ?? "");
+
   return (
-    <div className="flex flex-col gap-2">
-      <select
-        value={selectedStage}
-        onChange={(e) => setSelectedStage(e.target.value)}
-        disabled={!canWrite || pending}
-        className="h-[var(--control-height)] w-full rounded-md border border-input bg-background px-2 text-sm"
-        aria-label="Vehicle stage"
-      >
-        {STAGES.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <div className="flex gap-2">
-        <Input
-          value={bay}
-          onChange={(e) => setBay(e.target.value)}
-          placeholder={bays.length > 0 ? "Spot" : "Spot (Bay 2, Lift 3…)"}
-          list="shopos-bays"
-          disabled={!canWrite || pending}
-          className="text-sm"
-        />
-        {bays.length > 0 ? (
-          <datalist id="shopos-bays">
-            {bays.map((option) => (
-              <option key={option.id} value={option.name} />
-            ))}
-          </datalist>
-        ) : null}
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Vehicle</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
         {canWrite ? (
-          <Button size="sm" variant="outline" onClick={save} disabled={pending || !dirty}>
-            {pending ? "…" : "Save"}
-          </Button>
+          <label className="grid gap-1 text-sm font-medium">
+            Vehicle on this job
+            <select
+              value={assetId}
+              onChange={(e) => {
+                setAssetId(e.target.value);
+                void saveVehicle(e.target.value || null);
+              }}
+              disabled={pending}
+              className={select}
+              aria-label="Vehicle on this job"
+            >
+              <option value="">No vehicle — general work</option>
+              {customerAssets.map((asset) => (
+                <option key={asset.id} value={asset.id}>
+                  {asset.displayName}
+                </option>
+              ))}
+            </select>
+            {customerAssets.length === 0 ? (
+              <span className="text-xs text-muted-foreground">
+                No vehicles for this customer — add one from their profile.
+              </span>
+            ) : null}
+          </label>
         ) : null}
-      </div>
-    </div>
+
+        {canWrite ? (
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="grid gap-1 text-sm font-medium">
+              Stage
+              <select
+                value={selectedStage}
+                onChange={(e) => setSelectedStage(e.target.value)}
+                disabled={pending}
+                className={select}
+                aria-label="Vehicle stage"
+              >
+                <option value="">Not checked in</option>
+                {STAGES.map(([value, text]) => (
+                  <option key={value} value={value}>
+                    {text}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              Bay
+              <Input
+                value={bay}
+                onChange={(e) => setBay(e.target.value)}
+                placeholder="Bay 2"
+                disabled={pending}
+                className="h-[var(--control-height)] w-28 text-sm"
+                aria-label="Bay"
+              />
+            </label>
+            {dirty ? (
+              <button
+                type="button"
+                onClick={() => void saveStage()}
+                disabled={pending}
+                className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              >
+                {pending ? "Saving…" : "Save"}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {stage ? (
+              <Badge variant="secondary">
+                {STAGES.find(([value]) => value === stage)?.[1] ?? stage}
+              </Badge>
+            ) : null}
+            {bayLabel ? <Badge variant="outline">{bayLabel}</Badge> : null}
+          </div>
+        )}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      </CardContent>
+    </Card>
   );
 }

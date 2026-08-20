@@ -38,6 +38,8 @@ export type CreateWorkOrderInput = Readonly<{
   promisedAt?: Date;
 }>;
 
+/** Concern may arrive empty when the RO is opened before the conversation; a visible default keeps history honest. */
+
 export type ListWorkOrdersInput = Readonly<{
   status?: string;
   customerId?: string;
