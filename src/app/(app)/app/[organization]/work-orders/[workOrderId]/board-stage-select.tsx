@@ -49,7 +49,7 @@ export function BoardStageSelect({
         aria-label="Board stage"
         className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
       >
-        <option value="">Built-in stage</option>
+        <option value="">Follow shop stage</option>
         {stages.map((stage) => (
           <option key={stage.id} value={stage.id}>
             {stage.label}

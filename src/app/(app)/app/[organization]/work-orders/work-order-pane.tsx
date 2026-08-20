@@ -1,10 +1,16 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkOrderStatusBadge } from "@/components/shopos/status-badge";
-import { PageHeader } from "@/components/shopos/page-header";
 import { RecordList, RecordListRow } from "@/components/shopos/record-list";
 import { WorkOrderTabs } from "./work-order-tabs";
 import { humanizeToken } from "@/lib/labels";
@@ -13,7 +19,7 @@ import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listAssignableTechnicians } from "@/modules/work-orders/assignment-service";
 import { listLoanerCandidates } from "@/modules/assets/fleet-service";
-import { WorkOrderContextBar } from "./work-order-context-bar";
+import { WorkOrderHeader } from "./work-order-header";
 import { AssignmentSelect } from "./[workOrderId]/assignment-select";
 import { VehicleCard } from "./[workOrderId]/vehicle-card";
 import { BoardStageSelect } from "./[workOrderId]/board-stage-select";
@@ -160,41 +166,26 @@ export async function WorkOrderDetailPane({
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title={wo.number}
-        breadcrumbs={[
-          { label: "Work orders", href: `/app/${context.organizationId}/work-orders` },
-          { label: wo.number },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" asChild>
-              <a
-                href={`/print/${context.organizationId}/repair-order/${wo.id}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Print RO
-              </a>
-            </Button>
-            <Button variant="outline" asChild>
-              <a
-                href={`/print/${context.organizationId}/authorization/${wo.id}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Print authorization
-              </a>
-            </Button>
-            <WorkOrderStatusBadge status={wo.status} />
-          </div>
-        }
-      />
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink href={`/app/${context.organizationId}/work-orders`}>
+              Work orders
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{wo.number}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
 
-      <WorkOrderContextBar
-        customerName={wo.customer.displayName}
-        customerId={wo.customer.id}
+      <WorkOrderHeader
+        number={wo.number}
         organizationId={context.organizationId}
+        statusBadge={<WorkOrderStatusBadge status={wo.status} />}
+        customerId={wo.customer.id}
+        customerName={wo.customer.displayName}
         vehicleName={wo.asset?.displayName ?? null}
         locationName={wo.location?.name ?? null}
         estimateMinor={wo.estimateRevisions[0]?.totalMinor ?? null}
@@ -202,7 +193,91 @@ export async function WorkOrderDetailPane({
         invoiceMinor={wo.invoice ? wo.invoice.totalMinor : null}
         paidMinor={wo.invoice ? wo.invoice.paidMinor : null}
         currency={wo.estimateRevisions[0]?.currency ?? wo.invoice?.currency ?? "USD"}
-      />
+      >
+        <Card>
+          <CardContent className="py-4">
+            <p className="text-xs text-muted-foreground">Technician</p>
+            <AssignmentSelect
+              workOrderId={wo.id}
+              technicians={technicians}
+              assignedUserId={wo.assignedTechnicianUserId}
+              assisting={wo.assistingTechnicians.map((entry) => ({
+                userId: entry.userId,
+                displayName: entry.user.displayName,
+              }))}
+              canWrite={context.permissions.has("work_orders.write")}
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex flex-col gap-3 py-4">
+            <VehicleCard
+              workOrderId={wo.id}
+              locationId={wo.locationId}
+              stage={wo.vehicleStage}
+              bayLabel={wo.bayLabel}
+              currentAssetId={wo.assetId}
+              customerAssets={customerAssets.map((asset) => ({
+                id: asset.id,
+                displayName: asset.displayName,
+                customerId: asset.customerId,
+              }))}
+              canWrite={context.permissions.has("work_orders.write")}
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4">
+            <p className="text-xs text-muted-foreground">Board column</p>
+            <BoardStageSelect
+              workOrderId={wo.id}
+              stages={boardStages.map((stage) => ({ id: stage.id, label: stage.label }))}
+              currentStageId={wo.boardStageId}
+              canWrite={context.permissions.has("work_orders.write")}
+            />
+            <p className="mt-3 text-xs text-muted-foreground">
+              Key: {wo.keyTag ? <span className="font-mono">{wo.keyTag}</span> : "no tag"}
+              {wo.keyLocation ? ` · ${wo.keyLocation}` : ""} ·{" "}
+              <Link
+                href={`/app/${context.organizationId}/keys`}
+                className="text-link underline-offset-4 hover:underline"
+              >
+                key board
+              </Link>
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3 border-t border-border pt-3 text-sm">
+              <a
+                href={`/print/${context.organizationId}/repair-order/${wo.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-link underline-offset-4 hover:underline"
+              >
+                Print RO
+              </a>
+              <a
+                href={`/print/${context.organizationId}/authorization/${wo.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-link underline-offset-4 hover:underline"
+              >
+                Print authorization
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <StatusTransitionPanel
+              workOrderId={wo.id}
+              currentStatus={wo.status}
+              canWrite={context.permissions.has("work_orders.write")}
+            />
+          </CardContent>
+        </Card>
+      </WorkOrderHeader>
 
       <WorkOrderTabs
         tabs={[
@@ -211,73 +286,6 @@ export async function WorkOrderDetailPane({
             label: "Jobs & estimate",
             content: (
               <>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  <Card>
-                    <CardContent className="py-4">
-                      <p className="text-xs text-muted-foreground">Technician</p>
-                      <AssignmentSelect
-                        workOrderId={wo.id}
-                        technicians={technicians}
-                        assignedUserId={wo.assignedTechnicianUserId}
-                        assisting={wo.assistingTechnicians.map((entry) => ({
-                          userId: entry.userId,
-                          displayName: entry.user.displayName,
-                        }))}
-                        canWrite={context.permissions.has("work_orders.write")}
-                      />
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="flex flex-col gap-3 py-4">
-                      <VehicleCard
-                        workOrderId={wo.id}
-                        locationId={wo.locationId}
-                        stage={wo.vehicleStage}
-                        bayLabel={wo.bayLabel}
-                        currentAssetId={wo.assetId}
-                        customerAssets={customerAssets.map((asset) => ({
-                          id: asset.id,
-                          displayName: asset.displayName,
-                          customerId: asset.customerId,
-                        }))}
-                        canWrite={context.permissions.has("work_orders.write")}
-                      />
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="py-4">
-                      <BoardStageSelect
-                        workOrderId={wo.id}
-                        stages={boardStages.map((stage) => ({ id: stage.id, label: stage.label }))}
-                        currentStageId={wo.boardStageId}
-                        canWrite={context.permissions.has("work_orders.write")}
-                      />
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        Key: {wo.keyTag ? <span className="font-mono">{wo.keyTag}</span> : "no tag"}
-                        {wo.keyLocation ? ` · ${wo.keyLocation}` : ""} ·{" "}
-                        <Link
-                          href={`/app/${context.organizationId}/keys`}
-                          className="text-link underline-offset-4 hover:underline"
-                        >
-                          key board
-                        </Link>
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">Status</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <StatusTransitionPanel
-                        workOrderId={wo.id}
-                        currentStatus={wo.status}
-                        canWrite={context.permissions.has("work_orders.write")}
-                      />
-                    </CardContent>
-                  </Card>
-                </div>
-
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">Customer concern</CardTitle>
