@@ -2,23 +2,64 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { ListSearch } from "@/components/shopos/list-search";
 import { PageHeader } from "@/components/shopos/page-header";
+import { EmptyState } from "@/components/shopos/states";
 import { db } from "@/db/client";
 import { formatDate, formatDateTime } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listFleetCandidates, listFleetVehicles } from "@/modules/assets/fleet-service";
 import { SERVICE_CALL_KIND_LABELS } from "@/modules/service-calls/service-call-service";
+import { humanizeToken } from "@/lib/labels";
 import { FleetDocsEditor } from "./fleet-docs-editor";
 import { FleetToggle } from "./fleet-toggle";
 
 export const dynamic = "force-dynamic";
 
+type FleetVehicle = Awaited<ReturnType<typeof listFleetVehicles>>[number];
+
+/** Registration/insurance expiry badges with overdue and due-soon states. */
+function fleetDocBadges(vehicle: FleetVehicle): Array<{
+  label: string;
+  date: Date;
+  overdue: boolean;
+  soon: boolean;
+}> {
+  const now = Date.now();
+  const soonThreshold = now + 30 * 24 * 60 * 60 * 1000;
+  const docs: Array<{ label: string; date: Date; overdue: boolean; soon: boolean }> = [];
+  if (vehicle.registrationExpiresAt) {
+    docs.push({
+      label: "REG",
+      date: vehicle.registrationExpiresAt,
+      overdue: vehicle.registrationExpiresAt.getTime() < now,
+      soon: vehicle.registrationExpiresAt.getTime() < soonThreshold,
+    });
+  }
+  if (vehicle.insuranceExpiresAt) {
+    docs.push({
+      label: "INS",
+      date: vehicle.insuranceExpiresAt,
+      overdue: vehicle.insuranceExpiresAt.getTime() < now,
+      soon: vehicle.insuranceExpiresAt.getTime() < soonThreshold,
+    });
+  }
+  return docs;
+}
+
 /**
  * The shop's own vehicles: fleet membership (the explicit signal loaner and
  * roadside pickers prefer), live loaner state, and open roadside assignments.
  */
-export default async function FleetPage({ params }: { params: Promise<{ organization: string }> }) {
+export default async function FleetPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ organization: string }>;
+  searchParams: Promise<{ q?: string }>;
+}) {
   const { organization } = await params;
+  const { q: search } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
@@ -58,6 +99,17 @@ export default async function FleetPage({ params }: { params: Promise<{ organiza
   const orgId = context.organizationId;
   const outCount = vehicles.filter((vehicle) => vehicle.loanerStatus.out).length;
 
+  const query = search?.trim().toLowerCase() ?? "";
+  const shown = query
+    ? vehicles.filter((vehicle) =>
+        [
+          vehicle.displayName,
+          vehicle.licensePlate ?? "",
+          vehicle.loanerStatus.workOrderNumber ?? "",
+        ].some((field) => field.toLowerCase().includes(query)),
+      )
+    : vehicles;
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -70,208 +122,174 @@ export default async function FleetPage({ params }: { params: Promise<{ organiza
         <FleetToggle candidates={candidates.map((asset) => ({ ...asset }))} add />
       ) : null}
 
-      <Card>
-        <CardContent className="p-0">
-          {vehicles.length === 0 ? (
-            <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-              No fleet vehicles marked yet. Mark a shop vehicle above — or from its asset page — and
-              it becomes the first choice for loaners and roadside dispatch.
-            </p>
-          ) : (
-            <>
-              <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
-                {vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"} · {outCount} out on loan
-              </p>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="px-4 py-3 font-medium">Vehicle</th>
-                    <th className="px-4 py-3 font-medium">Plate</th>
-                    <th className="px-4 py-3 font-medium">Mileage</th>
-                    <th className="px-4 py-3 font-medium">Docs</th>
-                    <th className="px-4 py-3 font-medium">Service due</th>
-                    <th className="px-4 py-3 font-medium">Reserved</th>
-                    <th className="px-4 py-3 font-medium">Loaner</th>
-                    <th className="px-4 py-3 font-medium">Roadside</th>
-                    {canWrite ? <th className="px-4 py-3 font-medium"></th> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {vehicles.map((vehicle) => (
-                    <tr key={vehicle.id} className="border-b border-border/60 hover:bg-muted/30">
-                      <td className="px-4 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <ListSearch
+          action={`/app/${orgId}/fleet`}
+          query={search?.trim() ?? ""}
+          placeholder="Search vehicle, plate, loan…"
+        />
+        <p className="text-sm text-muted-foreground">
+          {vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"} · {outCount} out on loan
+        </p>
+      </div>
+
+      {vehicles.length === 0 ? (
+        <Card>
+          <CardContent className="p-0">
+            <EmptyState
+              title="No fleet vehicles marked yet"
+              description="Mark a shop vehicle above — or from its asset page — and it becomes the first choice for loaners and roadside dispatch."
+            />
+          </CardContent>
+        </Card>
+      ) : shown.length === 0 ? (
+        <Card>
+          <CardContent className="p-0">
+            <EmptyState
+              title="No fleet vehicles match your search"
+              description={`Nothing found for “${search?.trim()}”.`}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {shown.map((vehicle) => {
+            const docs = fleetDocBadges(vehicle);
+            return (
+              <Card key={vehicle.id}>
+                <CardContent className="flex flex-col gap-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/app/${orgId}/assets/${vehicle.id}`}
+                        className="text-sm font-medium text-link underline-offset-4 hover:underline"
+                      >
+                        {vehicle.displayName}
+                      </Link>
+                      <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                        {[
+                          vehicle.licensePlate
+                            ? `${vehicle.licensePlate}${vehicle.plateJurisdiction ? ` · ${vehicle.plateJurisdiction}` : ""}`
+                            : null,
+                          vehicle.mileage ? `${vehicle.mileage.toLocaleString("en-US")} mi` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "No plate or mileage"}
+                      </p>
+                    </div>
+                    {vehicle.loanerStatus.out ? (
+                      <Badge variant="secondary">out on loan</Badge>
+                    ) : (
+                      <Badge variant="outline">available</Badge>
+                    )}
+                  </div>
+
+                  {vehicle.status !== "ACTIVE" ? (
+                    <Badge variant="outline" className="w-fit text-[10px]">
+                      {humanizeToken(vehicle.status)}
+                    </Badge>
+                  ) : null}
+
+                  {vehicle.loanerStatus.out ? (
+                    <p className="text-xs text-muted-foreground">
+                      {vehicle.loanerStatus.workOrderNumber ? (
                         <Link
-                          href={`/app/${orgId}/assets/${vehicle.id}`}
-                          className="text-link underline-offset-4 hover:underline"
+                          href={`/app/${orgId}/work-orders`}
+                          className="font-mono text-link underline-offset-4 hover:underline"
                         >
-                          {vehicle.displayName}
+                          {vehicle.loanerStatus.workOrderNumber}
                         </Link>
-                        {vehicle.status !== "ACTIVE" ? (
-                          <Badge variant="outline" className="ml-2 text-[10px]">
-                            {vehicle.status.toLowerCase()}
-                          </Badge>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs">
-                        {vehicle.licensePlate
-                          ? `${vehicle.licensePlate}${vehicle.plateJurisdiction ? ` · ${vehicle.plateJurisdiction}` : ""}`
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 font-mono tabular-nums">
-                        {vehicle.mileage?.toLocaleString("en-US") ?? "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        {(() => {
-                          const soon = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-                          const items: Array<{ label: string; date: Date; overdue: boolean }> = [];
-                          if (vehicle.registrationExpiresAt) {
-                            items.push({
-                              label: "REG",
-                              date: vehicle.registrationExpiresAt,
-                              overdue: vehicle.registrationExpiresAt < new Date(),
-                            });
-                          }
-                          if (vehicle.insuranceExpiresAt) {
-                            items.push({
-                              label: "INS",
-                              date: vehicle.insuranceExpiresAt,
-                              overdue: vehicle.insuranceExpiresAt < new Date(),
-                            });
-                          }
-                          if (items.length === 0)
-                            return <span className="text-muted-foreground">—</span>;
-                          return (
-                            <span className="flex flex-col gap-0.5">
-                              {items.map((item) => (
-                                <Badge
-                                  key={item.label}
-                                  variant={
-                                    item.overdue
-                                      ? "destructive"
-                                      : item.date < soon
-                                        ? "default"
-                                        : "outline"
-                                  }
-                                  className="w-fit text-[10px]"
-                                >
-                                  {item.label} {formatDate(item.date, "UTC", "en-US")}
-                                  {item.overdue ? " · overdue" : ""}
-                                </Badge>
-                              ))}
-                            </span>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-4 py-3">
-                        {vehicle.maintenanceDue.length === 0 ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : (
-                          <span className="flex flex-col gap-0.5">
-                            {vehicle.maintenanceDue.map((schedule) => (
-                              <span key={schedule.id} className="text-xs">
-                                🔧 {schedule.name}
-                                {schedule.dueInMiles !== null
-                                  ? schedule.dueInMiles <= 0
-                                    ? " · overdue"
-                                    : ` · in ${schedule.dueInMiles.toLocaleString("en-US")} mi`
-                                  : schedule.dueInDays !== null
-                                    ? schedule.dueInDays <= 0
-                                      ? " · overdue"
-                                      : ` · in ${schedule.dueInDays} d`
-                                    : ""}
-                              </span>
-                            ))}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {vehicle.loanerStatus.out ? (
-                          <span className="text-xs">
-                            <Badge variant="secondary" className="mr-2 text-[10px]">
-                              out
-                            </Badge>
-                            {vehicle.loanerStatus.workOrderNumber ? (
-                              <Link
-                                href={`/app/${orgId}/work-orders`}
-                                className="font-mono text-link underline-offset-4 hover:underline"
-                              >
-                                {vehicle.loanerStatus.workOrderNumber}
-                              </Link>
-                            ) : null}
-                            {vehicle.loanerStatus.since
-                              ? ` since ${formatDateTime(vehicle.loanerStatus.since, "UTC", "en-US")}`
-                              : ""}
-                          </span>
-                        ) : (
-                          <Badge variant="outline" className="text-[10px]">
-                            available
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {(reservationsByAsset.get(vehicle.id) ?? []).length === 0 ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : (
-                          <ul className="flex flex-col gap-0.5">
-                            {(reservationsByAsset.get(vehicle.id) ?? []).map((entry, index) => (
-                              <li key={index} className="text-xs">
-                                📅 {entry.window}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {vehicle.openServiceCalls.length === 0 ? (
-                          <span className="text-muted-foreground">—</span>
-                        ) : (
-                          <span className="flex flex-wrap gap-1">
-                            {vehicle.openServiceCalls.map((call) => (
-                              <Link
-                                key={call.id}
-                                href={`/app/${orgId}/roadside/${call.id}`}
-                                className="rounded-full"
-                              >
-                                <Badge variant="secondary" className="text-[10px]">
-                                  {
-                                    SERVICE_CALL_KIND_LABELS[
-                                      call.kind as keyof typeof SERVICE_CALL_KIND_LABELS
-                                    ]
-                                  }
-                                </Badge>
-                              </Link>
-                            ))}
-                          </span>
-                        )}
-                      </td>
-                      {canWrite ? (
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex flex-col items-end gap-2">
-                            <FleetToggle assetId={vehicle.id} assetName={vehicle.displayName} />
-                            <FleetDocsEditor
-                              assetId={vehicle.id}
-                              registration={
-                                vehicle.registrationExpiresAt
-                                  ? vehicle.registrationExpiresAt.toISOString().slice(0, 10)
-                                  : ""
-                              }
-                              insurance={
-                                vehicle.insuranceExpiresAt
-                                  ? vehicle.insuranceExpiresAt.toISOString().slice(0, 10)
-                                  : ""
-                              }
-                            />
-                          </div>
-                        </td>
                       ) : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </CardContent>
-      </Card>
+                      {vehicle.loanerStatus.since
+                        ? ` since ${formatDateTime(vehicle.loanerStatus.since, "UTC", "en-US")}`
+                        : ""}
+                    </p>
+                  ) : null}
+
+                  {docs.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {docs.map((doc) => (
+                        <Badge
+                          key={doc.label}
+                          variant={doc.overdue ? "destructive" : doc.soon ? "default" : "outline"}
+                          className="text-[10px]"
+                        >
+                          {doc.label} {formatDate(doc.date, "UTC", "en-US")}
+                          {doc.overdue ? " · overdue" : ""}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {vehicle.maintenanceDue.length > 0 ? (
+                    <div className="flex flex-col gap-0.5">
+                      {vehicle.maintenanceDue.map((schedule) => (
+                        <p key={schedule.id} className="text-xs">
+                          🔧 {schedule.name}
+                          {schedule.dueInMiles !== null
+                            ? schedule.dueInMiles <= 0
+                              ? " · overdue"
+                              : ` · in ${schedule.dueInMiles.toLocaleString("en-US")} mi`
+                            : schedule.dueInDays !== null
+                              ? schedule.dueInDays <= 0
+                                ? " · overdue"
+                                : ` · in ${schedule.dueInDays} d`
+                              : ""}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {(reservationsByAsset.get(vehicle.id) ?? []).length > 0 ? (
+                    <div className="flex flex-col gap-0.5">
+                      {(reservationsByAsset.get(vehicle.id) ?? []).map((entry, index) => (
+                        <p key={index} className="text-xs">
+                          📅 {entry.window}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {vehicle.openServiceCalls.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {vehicle.openServiceCalls.map((call) => (
+                        <Link key={call.id} href={`/app/${orgId}/roadside/${call.id}`}>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {
+                              SERVICE_CALL_KIND_LABELS[
+                                call.kind as keyof typeof SERVICE_CALL_KIND_LABELS
+                              ]
+                            }
+                          </Badge>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {canWrite ? (
+                    <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                      <FleetToggle assetId={vehicle.id} assetName={vehicle.displayName} />
+                      <FleetDocsEditor
+                        assetId={vehicle.id}
+                        registration={
+                          vehicle.registrationExpiresAt
+                            ? vehicle.registrationExpiresAt.toISOString().slice(0, 10)
+                            : ""
+                        }
+                        insurance={
+                          vehicle.insuranceExpiresAt
+                            ? vehicle.insuranceExpiresAt.toISOString().slice(0, 10)
+                            : ""
+                        }
+                      />
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

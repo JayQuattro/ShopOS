@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/shopos/page-header";
+import { RecordList, RecordListRow } from "@/components/shopos/record-list";
 import { db } from "@/db/client";
 import { formatDateTime } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
@@ -218,36 +219,24 @@ export default async function RoadsidePage({
             <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
               Recently finished
             </p>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">When</th>
-                  <th className="px-4 py-3 font-medium">Kind</th>
-                  <th className="px-4 py-3 font-medium">Customer</th>
-                  <th className="px-4 py-3 font-medium">Outcome</th>
-                  <th className="px-4 py-3 font-medium">Work order</th>
-                </tr>
-              </thead>
-              <tbody>
-                {finished.map((call) => (
-                  <tr key={call.id} className="border-b border-border/60 hover:bg-muted/30">
-                    <td className="px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground">
-                      {formatDateTime(
-                        call.completedAt ?? call.cancelledAt ?? call.createdAt,
-                        "UTC",
-                        "en-US",
-                      )}
-                    </td>
-                    <td className="px-4 py-3">{SERVICE_CALL_KIND_LABELS[call.kind]}</td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/app/${orgId}/roadside/${call.id}`}
-                        className="text-link underline-offset-4 hover:underline"
-                      >
-                        {call.customerName}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
+            <RecordList>
+              {finished.map((call) => (
+                <RecordListRow
+                  key={call.id}
+                  href={`/app/${orgId}/roadside/${call.id}`}
+                  title={call.customerName}
+                  description={`${SERVICE_CALL_KIND_LABELS[call.kind]} · ${formatDateTime(
+                    call.completedAt ?? call.cancelledAt ?? call.createdAt,
+                    "UTC",
+                    "en-US",
+                  )}`}
+                  trailing={
+                    <>
+                      {call.workOrderNumber ? (
+                        <span className="font-mono text-xs tabular-nums">
+                          {call.workOrderNumber}
+                        </span>
+                      ) : null}
                       {call.status === "COMPLETED" ? (
                         <Badge variant="secondary" className="text-[10px]">
                           completed
@@ -257,12 +246,11 @@ export default async function RoadsidePage({
                           cancelled — {call.cancelReason ?? ""}
                         </Badge>
                       )}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs">{call.workOrderNumber ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </>
+                  }
+                />
+              ))}
+            </RecordList>
           </CardContent>
         </Card>
       ) : null}
