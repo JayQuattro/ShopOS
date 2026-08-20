@@ -54,6 +54,9 @@ export function LoanerPanel({
   const [reservePending, setReservePending] = useState(false);
   const [reserveError, setReserveError] = useState<string | null>(null);
   const [outMileage, setOutMileage] = useState("");
+  const [fuelOut, setFuelOut] = useState("");
+  const [conditionNote, setConditionNote] = useState("");
+  const [acknowledgedBy, setAcknowledgedBy] = useState("");
 
   async function load() {
     const res = await fetch(`/api/work-orders/${workOrderId}/loaners`);
@@ -284,6 +287,37 @@ export function LoanerPanel({
                 disabled={pending}
               />
             </label>
+            <label className="grid gap-1 text-sm font-medium">
+              Fuel %
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={fuelOut}
+                onChange={(e) => setFuelOut(e.target.value)}
+                placeholder="e.g. 75"
+                className="w-20"
+                disabled={pending}
+              />
+            </label>
+            <label className="grid flex-1 gap-1 text-sm font-medium">
+              Condition at pickup
+              <Input
+                value={conditionNote}
+                onChange={(e) => setConditionNote(e.target.value)}
+                placeholder="Scratch on rear door, full tank promised back…"
+                disabled={pending}
+              />
+            </label>
+            <label className="grid flex-1 gap-1 text-sm font-medium">
+              Acknowledged by
+              <Input
+                value={acknowledgedBy}
+                onChange={(e) => setAcknowledgedBy(e.target.value)}
+                placeholder="Customer name at hand-off"
+                disabled={pending}
+              />
+            </label>
             <Button
               size="sm"
               disabled={pending || !assetId}
@@ -293,6 +327,9 @@ export function LoanerPanel({
                     action: "check-out",
                     assetId,
                     ...(outMileage !== "" ? { outMileage: Number(outMileage) } : {}),
+                    ...(fuelOut !== "" ? { fuelOut: Number(fuelOut) } : {}),
+                    ...(conditionNote.trim() ? { conditionNote: conditionNote.trim() } : {}),
+                    ...(acknowledgedBy.trim() ? { acknowledgedBy: acknowledgedBy.trim() } : {}),
                   },
                   "Loaner checked out.",
                 )

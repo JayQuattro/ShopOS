@@ -32,6 +32,10 @@ export type LoanerCheckoutSummary = Readonly<{
   checkedInAt: Date | null;
   outMileage: number | null;
   inMileage: number | null;
+  fuelOut: number | null;
+  conditionNote: string | null;
+  acknowledgedBy: string | null;
+  acknowledgedAt: Date | null;
   note: string | null;
 }>;
 
@@ -41,6 +45,9 @@ export async function checkOutLoaner(
     workOrderId: string;
     assetId: string;
     outMileage?: number;
+    fuelOut?: number;
+    conditionNote?: string;
+    acknowledgedBy?: string;
     note?: string;
   },
 ): Promise<Readonly<{ checkoutId: string }>> {
@@ -53,6 +60,13 @@ export async function checkOutLoaner(
   if (
     input.outMileage !== undefined &&
     (!Number.isSafeInteger(input.outMileage) || input.outMileage < 0)
+  ) {
+    throw new LoanerFailed("invalid_mileage");
+  }
+
+  if (
+    input.fuelOut !== undefined &&
+    (!Number.isSafeInteger(input.fuelOut) || input.fuelOut < 0 || input.fuelOut > 100)
   ) {
     throw new LoanerFailed("invalid_mileage");
   }
@@ -100,6 +114,11 @@ export async function checkOutLoaner(
         workOrderId: workOrder.id,
         assetId: asset.id,
         ...(input.outMileage !== undefined ? { outMileage: input.outMileage } : {}),
+        ...(input.fuelOut !== undefined ? { fuelOut: input.fuelOut } : {}),
+        ...(input.conditionNote ? { conditionNote: input.conditionNote.trim() } : {}),
+        ...(input.acknowledgedBy
+          ? { acknowledgedBy: input.acknowledgedBy.trim(), acknowledgedAt: new Date() }
+          : {}),
         ...(input.note ? { note: input.note.trim() } : {}),
       },
     });
@@ -189,6 +208,10 @@ export async function listOpenLoaners(
       checkedInAt: true,
       outMileage: true,
       inMileage: true,
+      fuelOut: true,
+      conditionNote: true,
+      acknowledgedBy: true,
+      acknowledgedAt: true,
       note: true,
       asset: { select: { displayName: true, customer: { select: { displayName: true } } } },
       workOrder: { select: { number: true, customer: { select: { displayName: true } } } },
@@ -205,6 +228,10 @@ export async function listOpenLoaners(
     checkedInAt: checkout.checkedInAt,
     outMileage: checkout.outMileage,
     inMileage: checkout.inMileage,
+    fuelOut: checkout.fuelOut,
+    conditionNote: checkout.conditionNote,
+    acknowledgedBy: checkout.acknowledgedBy,
+    acknowledgedAt: checkout.acknowledgedAt,
     note: checkout.note,
   }));
 }
@@ -230,6 +257,10 @@ export async function listLoanersForWorkOrder(
       checkedInAt: true,
       outMileage: true,
       inMileage: true,
+      fuelOut: true,
+      conditionNote: true,
+      acknowledgedBy: true,
+      acknowledgedAt: true,
       note: true,
       asset: { select: { displayName: true } },
       workOrder: { select: { customer: { select: { displayName: true } } } },
@@ -246,6 +277,10 @@ export async function listLoanersForWorkOrder(
     checkedInAt: checkout.checkedInAt,
     outMileage: checkout.outMileage,
     inMileage: checkout.inMileage,
+    fuelOut: checkout.fuelOut,
+    conditionNote: checkout.conditionNote,
+    acknowledgedBy: checkout.acknowledgedBy,
+    acknowledgedAt: checkout.acknowledgedAt,
     note: checkout.note,
   }));
 }
