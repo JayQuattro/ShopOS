@@ -1,32 +1,47 @@
 # ShopOS
 
-ShopOS is an open-source, SaaS-first operations platform for repair, maintenance, fabrication, and
-customer-asset service businesses.
+**Open-source shop operations for repair, maintenance, fabrication, and any business that services
+customer-owned assets.** Automotive repair is the first market, but the core language — customers,
+assets, work orders, estimates, parts, invoices — is deliberately general.
 
-The project is in its bootstrap phase. The current repository establishes the product and architecture
-contracts, database foundation, tenant authorization primitives, financial calculation kernel,
-demonstration shell, transactional organization onboarding, an initial SaaS control plane, and
-automated tests. The complete customer-to-payment workflow described in the roadmap is not yet
-implemented.
+ShopOS runs as a single deployable stack you can self-host, with your data in your own PostgreSQL.
+Every external dependency (payments, maps, video, storage) sits behind a provider interface — no
+vendor is required to read your own records, and there is no crippled community edition.
 
-## Principles
+[![Work board](docs/screenshots/work-board.png)](docs/screenshots/work-board.png)
+[![Work order](docs/screenshots/work-order-detail.png)](docs/screenshots/work-order-detail.png)
+[![Key board](docs/screenshots/key-board.png)](docs/screenshots/key-board.png)
+[![Roadside](docs/screenshots/roadside.png)](docs/screenshots/roadside.png)
 
-- One modular monolith with clear business boundaries
-- PostgreSQL as the primary store
-- Server-enforced organization and location isolation
-- Prisma ORM with reviewed SQL migrations for PostgreSQL-specific tenant constraints
-- Better Auth with Prisma-backed sessions, organization membership, MFA, passkeys, and isolated SSO
-- General Customer, Asset, and Work Order language
-- Immutable financial and authorization history
-- No proprietary runtime or intentionally crippled community edition
+## What's in it today
 
-## Local development
+The full customer-to-payment workflow is implemented and covered by 640+ integration tests,
+including cross-tenant denial paths:
 
-Prerequisites:
+- **Work orders** with an enforced 10-state lifecycle, board view, canned jobs, tasks, labor time,
+  quality checks, and a tabbed detail screen with a multi-RO workspace
+- **Estimating** the way shops think: lines grouped into jobs (drag and drop), good/better/best
+  option groups the customer picks from, immutable revisions, change orders, and line-level
+  authorization via signed links, email, or staff recording
+- **Digital vehicle inspections** with photos and video, flowing into estimates with evidence
+  attached, plus a customer tracker link and portal
+- **Parts and inventory**: suppliers, purpose-tracked orders, receiving, waiting-on-vendor board,
+  OE/aftermarket numbers, interchange, units of measure, cores, reorder points
+- **Billing and payments**: invoice series with tax IDs and VAT handling, AR aging and statements,
+  deposits, split tender, refunds, cash drawer reconciliation — card payments through your own
+  Stripe / Square / Adyen / Mollie / Mercado Pago / Razorpay account, or cash/check with no
+  processor at all
+- **Beyond the bay**: roadside dispatch with routing, pickup & delivery, fleet and loaners,
+  key board, declined-work follow-ups
+- **International-ready**: regional formats per location, stacked taxes, e-invoicing formats
+  (Factur-X, XRechnung, FatturaPA), E.164 phones, holiday calendars, country-aware addresses
 
-- Node.js 24 LTS
-- pnpm 11
-- Docker with Compose, or an existing PostgreSQL 17-compatible database
+See the [feature tour](docs/features.md) for the complete, honest inventory — including what is
+**not** built yet.
+
+## Try it in five minutes
+
+Prerequisites: Node.js 24 LTS, pnpm 11, Docker (or an existing PostgreSQL 17-compatible database).
 
 ```bash
 cp .env.example .env
@@ -38,37 +53,67 @@ pnpm db:seed
 pnpm dev
 ```
 
-Open `http://localhost:3000`. The health endpoint is `http://localhost:3000/api/health`.
+Open `http://localhost:3000` and sign in with the seeded demo accounts:
 
-The seed is deterministic and intended only for local development. Its credentials and behavior will be
-documented when authentication is implemented.
+| Who             | Sign-in                                     | Notes              |
+| --------------- | ------------------------------------------- | ------------------ |
+| Shop owner      | `owner@example.test` / `demo-password-123`  | full access        |
+| Technician      | `maria@example.test`                        | magic-link sign-in |
+| Customer portal | `driver@example.test` / `demo-password-123` | `/portal`          |
+
+The seed is deterministic and loaded with a realistic shop: customers, vehicles, work orders at
+every lifecycle stage, estimates with options, parts orders, invoices, and payments.
 
 ## Self-hosted deployment
 
-ShopOS runs without any ShopOS-operated service. Build the production container and run it behind a
-TLS-terminating reverse proxy with PostgreSQL and the background worker:
+ShopOS runs without any ShopOS-operated service:
 
 ```bash
-# Set required environment variables
 export POSTGRES_PASSWORD=your-secure-password
 export BETTER_AUTH_SECRET=your-at-least-32-char-secret
 export BETTER_AUTH_URL=https://shop.example.com
 
-# Run the full stack (web + worker + postgres)
-docker compose -f compose.production.yaml up -d
-
-# Apply migrations as a release step
+docker compose -f compose.production.yaml up -d          # web + worker + postgres
 docker compose -f compose.production.yaml exec web pnpm db:migrate
 ```
 
 See [Deployment architecture](docs/deployment-architecture.md) for multi-host, HA, and
-cloud-managed deployment guidance, backup/restore strategy, and the IaC boundary.
+cloud-managed guidance, backup/restore, and the IaC boundary.
 
-## Integration tests
+## Feedback and contributing
 
-Integration tests run against a dedicated `shopos_test` PostgreSQL database and exercise real
-migrations, constraints, transactions, and tenant-scoped denial paths. The `docker compose up`
-PostgreSQL service auto-creates `shopos_test` via an init script.
+This project is heading toward its initial open-source release and early feedback shapes it:
+
+- **Try the demo flow above and tell us what's missing for your shop** — open a
+  [discussion](../../discussions) with your use case, or an [issue](../../issues) for anything
+  broken or confusing.
+- Real-world gaps from working shops (yours) are the highest-value reports: what did you look for
+  and not find? Where did the flow fight you?
+- Code contributions follow the repository conventions in `AGENTS.md` and the docs below; the
+  quality gate (`pnpm check && pnpm build`) is the arbiter.
+
+## Documentation
+
+- [Feature tour](docs/features.md) — what works today
+- [Product vision](docs/product-vision.md) · [Domain language](docs/domain-language.md) ·
+  [Domain model](docs/domain-model.md)
+- [Architecture](docs/architecture.md) · [Tenancy and permissions](docs/tenancy-and-permissions.md)
+- [Integration strategy](docs/integration-strategy.md) ·
+  [Localization and translation](docs/localization-and-translation.md)
+- [UI, UX, and design system](docs/ui-ux-design-system.md) · [Mobile strategy](docs/mobile-strategy.md)
+- [Deployment principles](docs/deployment-principles.md) · [Roadmap](docs/roadmap.md)
+- [Architectural decisions](docs/adr)
+
+## Development
+
+```bash
+pnpm check   # lint + format + typecheck + tests (the local quality gate)
+pnpm build   # production build
+```
+
+Integration tests run against a dedicated `shopos_test` database (auto-created by the compose
+PostgreSQL service) and exercise real migrations, constraints, transactions, and tenant-scoped
+denial paths:
 
 ```bash
 docker compose up -d postgres
@@ -76,72 +121,18 @@ DATABASE_URL=postgres://shopos:shopos@localhost:5432/shopos_test pnpm db:migrate
 pnpm test
 ```
 
-Tests skip cleanly when PostgreSQL is unreachable (no Docker required for unit tests). The CI
-workflow (`.github/workflows/quality.yml`) provisions the test database in a service container and
-runs the full gate on every push and pull request.
+Unit tests run without Docker; integration tests skip cleanly when PostgreSQL is unreachable.
 
-## Platform administration
+Platform administration lives at `/platform` behind an explicit, MFA-gated operator grant
+(`pnpm platform:bootstrap-operator --email operator@example.com --role admin`). It is intentionally
+separate from organization membership.
 
-The SaaS control plane is available at `/platform` to users with an explicit platform-operator grant.
-It is separate from organization membership and requires verified email plus two-factor
-authentication. Bootstrap the first operator from a trusted console after that user enrolls MFA:
+## Status and license
 
-```bash
-pnpm platform:bootstrap-operator --email operator@example.com --role admin
-```
+Implemented vs planned capabilities are tracked honestly in the
+[feature tour](docs/features.md). Headline gaps today: SSO federation for customer organizations,
+production email delivery adapters, native mobile apps, and full locale-prefixed routing.
 
-The command is intentionally one-time and audited. Do not use an environment-variable email allowlist
-or make platform operators members of customer organizations.
-
-## Quality checks
-
-```bash
-pnpm check
-pnpm build
-```
-
-## Documentation
-
-- [Product vision](docs/product-vision.md)
-- [Domain language](docs/domain-language.md)
-- [Domain model](docs/domain-model.md)
-- [Architecture](docs/architecture.md)
-- [Tenancy and permissions](docs/tenancy-and-permissions.md)
-- [Integration strategy](docs/integration-strategy.md)
-- [Localization and translation](docs/localization-and-translation.md)
-- [Mobile strategy](docs/mobile-strategy.md)
-- [UI, UX, and design system](docs/ui-ux-design-system.md)
-- [Design system maintenance](docs/design-system-maintenance.md)
-- [Deployment principles](docs/deployment-principles.md)
-- [Roadmap](docs/roadmap.md)
-- [Planning and issue tracking](docs/planning-and-tracking.md)
-- [Architectural decisions](docs/adr)
-
-## Current limitations
-
-The complete customer-to-payment operational workflow is implemented: customers (with contacts and
-addresses), assets (with automotive and equipment typed profiles), work orders (with optional/multi
-assets, a 10-state state machine with enforcement, and activity feed), estimate revisions (immutable
-once presented, with supersession), authorizations (line-level approval/decline with enforcement,
-plus expiring revocable customer authorization links), invoices (immutable snapshots from completed
-work), and payments (partial and full, with auto-closeout). The operational UI covers the full
-lifecycle with dashboard metrics, list/detail pages, create/edit forms, and status transition
-actions.
-
-Authentication (sign-in, sign-up, verification, recovery, magic link, email OTP, MFA, passkeys) is
-implemented behind a platform-level delivery boundary with the console adapter in development and
-a safe null adapter in production. Tenant-aware request context rebuilds permissions from
-server-side records on every protected request. Organization onboarding, the SaaS control plane
-(platform operators, entitlements, plans, organization lifecycle), and membership/role/location
-management are implemented with adversarial integration tests. A transactional-outbox dispatcher
-(`pnpm worker`) drains recorded events with tenant-context revalidation.
-
-Not yet implemented: billing webhook reconciliation, real email provider adapters, SSO
-(SAML/OIDC/Microsoft/Google), support access/impersonation, native mobile apps, full locale-prefixed
-routing, and file storage. The schema and module boundaries prepare for these but must not be
-mistaken for implemented behavior.
-
-## License
-
-No license has been selected yet. Until an OSI-approved license is added, the source is visible but
-should not be described as legally open source. Selecting the license is an early governance task.
+No license has been selected yet. Until an OSI-approved license is added, the source is visible
+but should not be described as legally open source — selecting the license is the immediate
+governance task ahead of the first release.
