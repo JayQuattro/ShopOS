@@ -1,9 +1,14 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SummaryCard } from "@/components/shopos/states";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/shopos/page-header";
+import { PageSection } from "@/components/shopos/section";
+import { RecordList, RecordListRow } from "@/components/shopos/record-list";
+import { EmptyState } from "@/components/shopos/states";
+import { WorkOrderStatusBadge } from "@/components/shopos/status-badge";
+import { humanizeToken } from "@/lib/labels";
 import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
 import { MaintenancePanel } from "./maintenance-panel";
@@ -59,147 +64,183 @@ export default async function AssetDetailPage({
     );
   }
 
+  const newWorkOrderHref = `/app/${context.organizationId}/work-orders?new=1&customer=${asset.customer.id}`;
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title={asset.displayName}
+        description={humanizeToken(asset.status)}
         breadcrumbs={[
           { label: "Assets", href: `/app/${context.organizationId}/assets` },
           { label: asset.displayName },
         ]}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {context.permissions.has("work_orders.write") ? (
+              <Button asChild>
+                <Link href={newWorkOrderHref}>New work order</Link>
+              </Button>
+            ) : null}
+          </div>
+        }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard label="Category" value={<Badge variant="outline">{asset.category}</Badge>} />
-        <SummaryCard label="Manufacturer" value={asset.manufacturer ?? "—"} />
-        <SummaryCard label="Model" value={asset.model ?? "—"} />
-        <SummaryCard label="Year" value={asset.modelYear?.toString() ?? "—"} />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <SummaryCard label="Serial number" value={asset.serialNumber ?? "—"} />
-        <SummaryCard
-          label="Status"
-          value={
-            <Badge variant={asset.status === "ACTIVE" ? "default" : "secondary"}>
-              {asset.status.toLowerCase()}
-            </Badge>
-          }
-        />
-        <SummaryCard
-          label="Owner"
-          value={
-            <Link
-              href={`/app/${context.organizationId}/customers/${asset.customer.id}`}
-              className="text-link underline-offset-4 hover:underline"
-            >
-              {asset.customer.displayName}
-            </Link>
-          }
-        />
-      </div>
+      <PageSection id="overview" title="Overview">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Owner</p>
+              <Link
+                href={`/app/${context.organizationId}/customers/${asset.customer.id}`}
+                className="font-medium text-link underline-offset-4 hover:underline"
+              >
+                {asset.customer.displayName}
+              </Link>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Category</p>
+              <div className="mt-1">
+                <Badge variant="outline">{humanizeToken(asset.category)}</Badge>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Make / model</p>
+              <p className="font-medium">
+                {[asset.manufacturer, asset.model].filter(Boolean).join(" ") || "—"}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Year · serial</p>
+              <p className="font-medium">
+                {[asset.modelYear?.toString(), asset.serialNumber].filter(Boolean).join(" · ") ||
+                  "—"}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </PageSection>
 
       {asset.automotiveProfile ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Automotive profile</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <SummaryCard
-                label="VIN"
-                value={<span className="font-mono">{asset.automotiveProfile.vin ?? "—"}</span>}
-              />
-              <SummaryCard label="Trim" value={asset.automotiveProfile.trim ?? "—"} />
-              <SummaryCard label="Engine" value={asset.automotiveProfile.engine ?? "—"} />
-              <SummaryCard label="Drivetrain" value={asset.automotiveProfile.drivetrain ?? "—"} />
-              <SummaryCard
-                label="License plate"
-                value={asset.automotiveProfile.licensePlate ?? "—"}
-              />
-              <SummaryCard
-                label="Transmission"
-                value={asset.automotiveProfile.transmission ?? "—"}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <PageSection id="profile" title="Vehicle details">
+          <Card>
+            <CardContent className="grid gap-4 py-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">VIN</p>
+                <p className="font-mono font-medium">{asset.automotiveProfile.vin ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">License plate</p>
+                <p className="font-mono font-medium">
+                  {asset.automotiveProfile.licensePlate ?? "—"}
+                  {asset.automotiveProfile.plateJurisdiction
+                    ? ` · ${asset.automotiveProfile.plateJurisdiction}`
+                    : ""}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Mileage</p>
+                <p className="font-medium tabular-nums">
+                  {asset.automotiveProfile.lastKnownMileage
+                    ? asset.automotiveProfile.lastKnownMileage.toLocaleString("en-US")
+                    : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Engine</p>
+                <p className="font-medium">{asset.automotiveProfile.engine ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Transmission</p>
+                <p className="font-medium">{asset.automotiveProfile.transmission ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Drivetrain · trim</p>
+                <p className="font-medium">
+                  {[asset.automotiveProfile.drivetrain, asset.automotiveProfile.trim]
+                    .filter(Boolean)
+                    .join(" · ") || "—"}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </PageSection>
       ) : null}
 
       {asset.equipmentProfile ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Equipment profile</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <SummaryCard label="Engine model" value={asset.equipmentProfile.engineModel ?? "—"} />
-              <SummaryCard label="Fuel type" value={asset.equipmentProfile.fuelType ?? "—"} />
-              <SummaryCard
-                label="Category"
-                value={asset.equipmentProfile.equipmentCategory ?? "—"}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <PageSection id="profile" title="Equipment details">
+          <Card>
+            <CardContent className="grid gap-4 py-4 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Engine model</p>
+                <p className="font-medium">{asset.equipmentProfile.engineModel ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Fuel type</p>
+                <p className="font-medium">{asset.equipmentProfile.fuelType ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Category</p>
+                <p className="font-medium">{asset.equipmentProfile.equipmentCategory ?? "—"}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </PageSection>
       ) : null}
 
-      <MaintenancePanel
-        assetId={asset.id}
-        isAutomobile={asset.category === "automobile"}
-        canWrite={context.permissions.has("assets.write")}
-      />
+      <PageSection id="maintenance" title="Maintenance schedule">
+        <MaintenancePanel
+          assetId={asset.id}
+          isAutomobile={asset.category === "automobile"}
+          canWrite={context.permissions.has("assets.write")}
+        />
+      </PageSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Service history</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <PageSection id="history" title="Service history" description="Last 25 visits.">
+        <Card>
           {asset.workOrders.length === 0 ? (
-            <p className="py-4 text-sm text-muted-foreground">No service history yet.</p>
+            <CardContent>
+              <EmptyState
+                title="No service history yet"
+                description="Start the first work order with the button up top."
+              />
+            </CardContent>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="py-2 pr-4 font-medium">Date</th>
-                  <th className="py-2 pr-4 font-medium">RO #</th>
-                  <th className="py-2 pr-4 font-medium">Status</th>
-                  <th className="py-2 pr-4 font-medium text-right">Invoiced</th>
-                  <th className="py-2 pr-4 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
+            <CardContent className="p-0">
+              <RecordList>
                 {asset.workOrders.map((wo) => (
-                  <tr key={wo.id} className="border-b border-border/60">
-                    <td className="py-3 pr-4 whitespace-nowrap font-mono text-xs tabular-nums">
-                      {formatDate(wo.createdAt, "UTC", "en-US")}
-                    </td>
-                    <td className="py-3 pr-4 font-mono">{wo.number}</td>
-                    <td className="py-3 pr-4 capitalize">
-                      {wo.status.replace(/_/g, " ").toLowerCase()}
-                    </td>
-                    <td className="py-3 pr-4 text-right font-mono tabular-nums">
-                      {wo.invoice ? (
-                        formatMoney(Number(wo.invoice.totalMinor), wo.invoice.currency, "en-US")
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 pr-4">
-                      <Link
-                        href={`/app/${context.organizationId}/work-orders/${wo.id}`}
-                        className="text-link underline-offset-4 hover:underline"
-                      >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
+                  <RecordListRow
+                    key={wo.id}
+                    href={`/app/${context.organizationId}/work-orders/${wo.id}`}
+                    title={wo.customerConcern?.trim() || "Service visit"}
+                    description={`#${wo.number} · ${formatDate(wo.createdAt, "UTC", "en-US")}`}
+                    trailing={
+                      <>
+                        {wo.invoice ? (
+                          <span className="font-mono text-sm tabular-nums">
+                            {formatMoney(
+                              Number(wo.invoice.totalMinor),
+                              wo.invoice.currency,
+                              "en-US",
+                            )}
+                          </span>
+                        ) : null}
+                        <WorkOrderStatusBadge status={wo.status} />
+                      </>
+                    }
+                  />
                 ))}
-              </tbody>
-            </table>
+              </RecordList>
+            </CardContent>
           )}
-        </CardContent>
-      </Card>
+        </Card>
+      </PageSection>
     </div>
   );
 }

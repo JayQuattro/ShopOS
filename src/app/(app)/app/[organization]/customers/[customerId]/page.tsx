@@ -1,9 +1,14 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shopos/page-header";
-import { SummaryCard } from "@/components/shopos/states";
+import { PageSection } from "@/components/shopos/section";
+import { RecordList, RecordListRow } from "@/components/shopos/record-list";
+import { EmptyState } from "@/components/shopos/states";
+import { WorkOrderStatusBadge } from "@/components/shopos/status-badge";
+import { humanizeToken } from "@/lib/labels";
 import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
 import { formatAddressForDisplay } from "@/i18n/address-formats";
@@ -50,7 +55,14 @@ export default async function CustomerDetailPage({
       assets: {
         where: { status: { not: "SOLD" } },
         orderBy: { displayName: "asc" },
-        select: { id: true, displayName: true, category: true, manufacturer: true, model: true },
+        select: {
+          id: true,
+          displayName: true,
+          category: true,
+          manufacturer: true,
+          model: true,
+          modelYear: true,
+        },
       },
       workOrders: {
         orderBy: { createdAt: "desc" },
@@ -123,21 +135,31 @@ export default async function CustomerDetailPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title={customer.displayName}
-        description={`${customer.kind.toLowerCase()} customer${customer.isAccountCustomer ? " · billed on account" : ""}`}
+        description={`${humanizeToken(customer.kind)} customer${customer.isAccountCustomer ? " · billed on account" : ""}`}
         breadcrumbs={[
           { label: "Customers", href: `/app/${context.organizationId}/customers` },
           { label: customer.displayName },
         ]}
         actions={
-          <div className="flex items-center gap-2">
-            <a
-              href={`/print/${context.organizationId}/customer/${customer.id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-            >
-              Print
-            </a>
+          <div className="flex flex-wrap items-center gap-2">
+            {context.permissions.has("work_orders.write") ? (
+              <Button asChild>
+                <Link
+                  href={`/app/${context.organizationId}/work-orders?new=1&customer=${customer.id}`}
+                >
+                  New work order
+                </Link>
+              </Button>
+            ) : null}
+            <Button variant="outline" asChild>
+              <a
+                href={`/print/${context.organizationId}/customer/${customer.id}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Print
+              </a>
+            </Button>
             {context.permissions.has("customers.write") ? (
               <CustomerEditForm
                 customerId={customer.id}
@@ -154,255 +176,264 @@ export default async function CustomerDetailPage({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <SummaryCard label="Visits" value={String(visitCount)} />
-        <SummaryCard
-          label="Billing"
-          value={
-            context.permissions.has("customers.write") ? (
-              <AccountToggle
-                orgId={context.organizationId}
-                customerId={customer.id}
-                isAccount={customer.isAccountCustomer}
-              />
-            ) : customer.isAccountCustomer ? (
-              "On account"
-            ) : (
-              "Pay at pickup"
-            )
-          }
-        />
-        <SummaryCard
-          label="Lifetime invoiced"
-          value={
-            lifetimeByCurrency.size === 0
-              ? "—"
-              : [...lifetimeByCurrency.entries()]
-                  .map(([currency, minor]) => formatMoney(minor, currency, "en-US"))
-                  .join(" · ")
-          }
-        />
-        <SummaryCard
-          label="Last visit"
-          value={lastVisit ? formatDate(lastVisit.createdAt, "UTC", "en-US") : "—"}
-        />
-      </div>
+      <PageSection id="overview" title="Overview">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Visits</p>
+              <p className="text-lg font-semibold tabular-nums">{visitCount}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Billing</p>
+              <div className="mt-0.5">
+                {context.permissions.has("customers.write") ? (
+                  <AccountToggle
+                    orgId={context.organizationId}
+                    customerId={customer.id}
+                    isAccount={customer.isAccountCustomer}
+                  />
+                ) : (
+                  <p className="text-lg font-semibold">
+                    {customer.isAccountCustomer ? "On account" : "Pay at pickup"}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Lifetime invoiced</p>
+              <p className="text-lg font-semibold tabular-nums">
+                {lifetimeByCurrency.size === 0
+                  ? "—"
+                  : [...lifetimeByCurrency.entries()]
+                      .map(([currency, minor]) => formatMoney(minor, currency, "en-US"))
+                      .join(" · ")}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Last visit</p>
+              <p className="text-lg font-semibold tabular-nums">
+                {lastVisit ? formatDate(lastVisit.createdAt, "UTC", "en-US") : "—"}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Profile</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CustomerEditForm
-            customerId={customer.id}
-            initialDisplayName={customer.displayName}
-            initialEmail={customer.primaryEmail ?? ""}
-            initialPhone={customer.primaryPhone ?? ""}
-            initialReference={customer.organizationReference ?? ""}
-            initialTaxId={customer.taxId ?? ""}
-            initialInternalNotes={customer.internalNotes ?? ""}
-            canWrite={context.permissions.has("customers.write")}
-          />
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardContent className="py-4">
-            <p className="text-xs text-muted-foreground">Reference</p>
-            <p className="font-mono font-medium">{customer.organizationReference ?? "—"}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-4">
-            <p className="text-xs text-muted-foreground">Email</p>
-            <p className="font-medium">{customer.primaryEmail ?? "—"}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-4">
-            <p className="text-xs text-muted-foreground">Phone</p>
-            <p className="font-medium">{customer.primaryPhone ?? "—"}</p>
-          </CardContent>
-        </Card>
-      </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Reference</p>
+              <p className="font-mono font-medium">{customer.organizationReference ?? "—"}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Email</p>
+              {customer.primaryEmail ? (
+                <a
+                  href={`mailto:${customer.primaryEmail}`}
+                  className="font-medium text-link underline-offset-4 hover:underline"
+                >
+                  {customer.primaryEmail}
+                </a>
+              ) : (
+                <p className="font-medium">—</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Phone</p>
+              {customer.primaryPhone ? (
+                <a
+                  href={`tel:${customer.primaryPhone}`}
+                  className="font-medium text-link underline-offset-4 hover:underline"
+                >
+                  {customer.primaryPhone}
+                </a>
+              ) : (
+                <p className="font-medium">—</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </PageSection>
 
       {customer.contacts.length > 0 || context.permissions.has("customers.write") ? (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Contacts</CardTitle>
-            {context.permissions.has("customers.write") ? (
-              <ContactForm customerId={customer.id} />
-            ) : null}
-          </CardHeader>
-          <CardHeader>
-            <CardTitle className="text-base">Contacts</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="py-2 pr-4 font-medium">Name</th>
-                  <th className="py-2 pr-4 font-medium">Role</th>
-                  <th className="py-2 pr-4 font-medium">Email</th>
-                  <th className="py-2 pr-4 font-medium">Phone</th>
-                  {context.permissions.has("customers.write") ? <th></th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {customer.contacts.map((c) => (
-                  <tr key={c.id} className="border-b border-border/60">
-                    <td className="py-3 pr-4 font-medium">
-                      {c.isPrimary ? "★ " : ""}
-                      {c.name}
-                    </td>
-                    <td className="py-3 pr-4 text-muted-foreground">{c.role ?? "—"}</td>
-                    <td className="py-3 pr-4">{c.email ?? "—"}</td>
-                    <td className="py-3 pr-4">{c.phone ?? "—"}</td>
-                    {context.permissions.has("customers.write") ? (
-                      <td className="py-2 pr-2">
-                        <RemoveButton
-                          apiPath={`/api/customers/${customer.id}/contacts/${c.id}`}
-                          label={c.name}
-                        />
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+        <PageSection id="contacts" title="Contacts" description="People to call at this account.">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Contacts</CardTitle>
+              {context.permissions.has("customers.write") ? (
+                <ContactForm customerId={customer.id} />
+              ) : null}
+            </CardHeader>
+            {customer.contacts.length > 0 ? (
+              <CardContent className="p-0">
+                <RecordList>
+                  {customer.contacts.map((c) => (
+                    <RecordListRow
+                      key={c.id}
+                      title={
+                        <>
+                          {c.name}
+                          {c.isPrimary ? (
+                            <Badge variant="secondary" className="ml-2 text-[10px]">
+                              primary
+                            </Badge>
+                          ) : null}
+                        </>
+                      }
+                      description={
+                        [c.role, c.phone, c.email].filter(Boolean).join(" · ") || undefined
+                      }
+                      trailing={
+                        context.permissions.has("customers.write") ? (
+                          <RemoveButton
+                            apiPath={`/api/customers/${customer.id}/contacts/${c.id}`}
+                            label={c.name}
+                          />
+                        ) : null
+                      }
+                    />
+                  ))}
+                </RecordList>
+              </CardContent>
+            ) : (
+              <CardContent>
+                <p className="text-sm text-muted-foreground">No additional contacts yet.</p>
+              </CardContent>
+            )}
+          </Card>
+        </PageSection>
       ) : null}
 
       {customer.addresses.length > 0 || context.permissions.has("customers.write") ? (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Addresses</CardTitle>
-            {context.permissions.has("customers.write") ? (
-              <AddressForm customerId={customer.id} />
-            ) : null}
-          </CardHeader>
-          <CardContent>
-            {customer.addresses.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No addresses yet.</p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {customer.addresses.map((a) => (
-                  <div key={a.id} className="rounded-md border border-border p-3">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      {a.isPrimary ? "★ " : ""}
-                      {a.label}
-                    </p>
-                    <p className="text-sm">{a.line1}</p>
-                    {a.line2 ? <p className="text-sm">{a.line2}</p> : null}
-                    <p className="text-sm text-muted-foreground">{formatAddressForDisplay(a)}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <PageSection id="addresses" title="Addresses">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Addresses</CardTitle>
+              {context.permissions.has("customers.write") ? (
+                <AddressForm customerId={customer.id} />
+              ) : null}
+            </CardHeader>
+            <CardContent>
+              {customer.addresses.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No addresses yet.</p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {customer.addresses.map((a) => (
+                    <div key={a.id} className="rounded-md border border-border p-3">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {a.isPrimary ? "★ " : ""}
+                        {a.label}
+                      </p>
+                      <p className="text-sm">{a.line1}</p>
+                      {a.line2 ? <p className="text-sm">{a.line2}</p> : null}
+                      <p className="text-sm text-muted-foreground">{formatAddressForDisplay(a)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </PageSection>
       ) : null}
 
-      <AddAssetForm customerId={customer.id} />
-
-      {customer.assets.length > 0 ? (
+      <PageSection id="vehicles" title="Vehicles & assets">
+        {context.permissions.has("customers.write") ? (
+          <AddAssetForm customerId={customer.id} />
+        ) : null}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Vehicles & assets</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="py-2 pr-4 font-medium">Asset</th>
-                  <th className="py-2 pr-4 font-medium">Category</th>
-                  <th className="py-2 pr-4 font-medium">Make / Model</th>
-                </tr>
-              </thead>
-              <tbody>
+          {customer.assets.length > 0 ? (
+            <CardContent className="p-0">
+              <RecordList>
                 {customer.assets.map((a) => (
-                  <tr key={a.id} className="border-b border-border/60">
-                    <td className="py-3 pr-4 font-medium">{a.displayName}</td>
-                    <td className="py-3 pr-4">
-                      <Badge variant="outline">{a.category}</Badge>
-                    </td>
-                    <td className="py-3 pr-4 text-muted-foreground">
-                      {[a.manufacturer, a.model].filter(Boolean).join(" ") || "—"}
-                    </td>
-                  </tr>
+                  <RecordListRow
+                    key={a.id}
+                    href={`/app/${context.organizationId}/assets/${a.id}`}
+                    title={a.displayName}
+                    description={
+                      [a.modelYear, a.manufacturer, a.model].filter(Boolean).join(" ") || undefined
+                    }
+                    trailing={<Badge variant="outline">{humanizeToken(a.category)}</Badge>}
+                  />
                 ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Service history</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {customer.workOrders.length === 0 ? (
-            <p className="py-4 text-sm text-muted-foreground">No visits yet.</p>
+              </RecordList>
+            </CardContent>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="py-2 pr-4 font-medium">Date</th>
-                  <th className="py-2 pr-4 font-medium">RO #</th>
-                  <th className="py-2 pr-4 font-medium">Vehicle / asset</th>
-                  <th className="py-2 pr-4 font-medium">Status</th>
-                  <th className="py-2 pr-4 font-medium text-right">Invoiced</th>
-                  <th className="py-2 pr-4 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {customer.workOrders.map((wo) => (
-                  <tr key={wo.id} className="border-b border-border/60">
-                    <td className="py-3 pr-4 whitespace-nowrap font-mono text-xs tabular-nums">
-                      {formatDate(wo.createdAt, "UTC", "en-US")}
-                    </td>
-                    <td className="py-3 pr-4 font-mono">{wo.number}</td>
-                    <td className="py-3 pr-4">
-                      {wo.asset?.displayName ?? <span className="text-muted-foreground">—</span>}
-                    </td>
-                    <td className="py-3 pr-4 capitalize">
-                      {wo.status.replace(/_/g, " ").toLowerCase()}
-                    </td>
-                    <td className="py-3 pr-4 text-right font-mono tabular-nums">
-                      {wo.invoice ? (
-                        <span
-                          className={
-                            wo.invoice.status === "PAID"
-                              ? "text-success"
-                              : wo.invoice.status === "VOID"
-                                ? "text-muted-foreground line-through"
-                                : ""
-                          }
-                        >
-                          {formatMoney(Number(wo.invoice.totalMinor), wo.invoice.currency, "en-US")}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 pr-4">
-                      <Link
-                        href={`/app/${context.organizationId}/work-orders/${wo.id}`}
-                        className="text-link underline-offset-4 hover:underline"
-                      >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <CardContent>
+              <EmptyState
+                title="No vehicles yet"
+                description="Add this customer's first vehicle above, then start a work order from it."
+              />
+            </CardContent>
           )}
-        </CardContent>
-      </Card>
+        </Card>
+      </PageSection>
+
+      <PageSection
+        id="history"
+        title="Service history"
+        description="Last 25 visits. Tap a row to open the work order."
+      >
+        <Card>
+          {customer.workOrders.length === 0 ? (
+            <CardContent>
+              <EmptyState
+                title="No visits yet"
+                description="Start the first work order with the button up top."
+              />
+            </CardContent>
+          ) : (
+            <CardContent className="p-0">
+              <RecordList>
+                {customer.workOrders.map((wo) => (
+                  <RecordListRow
+                    key={wo.id}
+                    href={`/app/${context.organizationId}/work-orders/${wo.id}`}
+                    title={wo.asset?.displayName ?? "No vehicle"}
+                    description={[
+                      `#${wo.number}`,
+                      formatDate(wo.createdAt, "UTC", "en-US"),
+                      wo.customerConcern?.trim() || undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                    trailing={
+                      <>
+                        {wo.invoice ? (
+                          <span
+                            className={
+                              wo.invoice.status === "PAID"
+                                ? "font-mono text-sm tabular-nums text-success"
+                                : wo.invoice.status === "VOID"
+                                  ? "font-mono text-sm tabular-nums text-muted-foreground line-through"
+                                  : "font-mono text-sm tabular-nums"
+                            }
+                          >
+                            {formatMoney(
+                              Number(wo.invoice.totalMinor),
+                              wo.invoice.currency,
+                              "en-US",
+                            )}
+                          </span>
+                        ) : null}
+                        <WorkOrderStatusBadge status={wo.status} />
+                      </>
+                    }
+                  />
+                ))}
+              </RecordList>
+            </CardContent>
+          )}
+        </Card>
+      </PageSection>
     </div>
   );
 }

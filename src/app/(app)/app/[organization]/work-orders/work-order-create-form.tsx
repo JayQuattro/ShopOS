@@ -18,15 +18,24 @@ export function WorkOrderCreateForm({
   assets,
   locations,
   startOpen = false,
+  preselectedCustomerId,
+  preselectedAssetId,
 }: {
   customers: ReadonlyArray<Option>;
   assets: ReadonlyArray<Option & { customerId: string }>;
   locations: ReadonlyArray<{ id: string; displayName: string }>;
   startOpen?: boolean;
+  /** Deep-link prefill (e.g. "new work order for this customer"); ignored when unknown. */
+  preselectedCustomerId?: string | undefined;
+  preselectedAssetId?: string | undefined;
 }) {
   const [open, setOpen] = useState(startOpen);
-  const [customerId, setCustomerId] = useState("");
-  const [assetId, setAssetId] = useState("");
+  const [customerId, setCustomerId] = useState(
+    customers.some((customer) => customer.id === preselectedCustomerId)
+      ? (preselectedCustomerId ?? "")
+      : "",
+  );
+  const [assetId, setAssetId] = useState(preselectedAssetId ?? "");
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
   const [workType, setWorkType] = useState("REPAIR");
   const [concern, setConcern] = useState("");

@@ -1,7 +1,9 @@
 import { CircleCheck, CircleDot, Clock3, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { humanizeToken } from "@/lib/labels";
 import { cn } from "@/lib/utils";
+import type { WorkOrderStatus } from "@/modules/work-orders/work-order-state-machine";
 
 const statusStyles = {
   ready:
@@ -44,4 +46,16 @@ export function StatusBadge({
       {children}
     </span>
   );
+}
+
+export function workOrderStatusTone(status: WorkOrderStatus): keyof typeof statusStyles {
+  if (status === "COMPLETED" || status === "CLOSED") return "ready";
+  if (status === "IN_PROGRESS") return "waiting";
+  if (status === "BLOCKED" || status === "CANCELLED") return "attention";
+  return "neutral";
+}
+
+/** Work order status with the shared tone mapping and a humanized label. */
+export function WorkOrderStatusBadge({ status }: { status: WorkOrderStatus }) {
+  return <StatusBadge tone={workOrderStatusTone(status)}>{humanizeToken(status)}</StatusBadge>;
 }
