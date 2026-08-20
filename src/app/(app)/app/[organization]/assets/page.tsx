@@ -1,26 +1,51 @@
-import Link from "next/link";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { ListSearch } from "@/components/shopos/list-search";
 import { PageHeader } from "@/components/shopos/page-header";
+import { RecordList, RecordListRow } from "@/components/shopos/record-list";
+import { EmptyState } from "@/components/shopos/states";
+import { humanizeToken } from "@/lib/labels";
 import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 
 export default async function AssetsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organization: string }>;
+  searchParams: Promise<{ q?: string }>;
 }) {
   const { organization } = await params;
+  const { q: search } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
   }
 
+  const query = search?.trim() ?? "";
   const assets = await db.asset.findMany({
     where: {
       organizationId: context.organizationId,
       status: { not: "SOLD" },
+      ...(query
+        ? {
+            OR: [
+              { displayName: { contains: query, mode: "insensitive" } },
+              { manufacturer: { contains: query, mode: "insensitive" } },
+              { model: { contains: query, mode: "insensitive" } },
+              { serialNumber: { contains: query, mode: "insensitive" } },
+              {
+                automotiveProfile: {
+                  OR: [
+                    { licensePlate: { contains: query, mode: "insensitive" } },
+                    { vin: { contains: query, mode: "insensitive" } },
+                  ],
+                },
+              },
+              { customer: { displayName: { contains: query, mode: "insensitive" } } },
+            ],
+          }
+        : {}),
     },
     orderBy: { displayName: "asc" },
     select: {
@@ -32,6 +57,7 @@ export default async function AssetsPage({
       modelYear: true,
       status: true,
       customer: { select: { id: true, displayName: true } },
+      automotiveProfile: { select: { licensePlate: true } },
     },
     take: 100,
   });
@@ -44,51 +70,51 @@ export default async function AssetsPage({
         breadcrumbs={[{ label: "Assets" }]}
       />
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <ListSearch
+          action={`/app/${context.organizationId}/assets`}
+          query={query}
+          placeholder="Search vehicle, plate, VIN, owner…"
+        />
+        <p className="text-sm text-muted-foreground">
+          {assets.length} vehicle{assets.length === 1 ? "" : "s"}
+        </p>
+      </div>
+
       <Card>
         <CardContent className="p-0">
           {assets.length === 0 ? (
-            <p className="px-6 py-8 text-center text-sm text-muted-foreground">No assets yet.</p>
+            query ? (
+              <EmptyState
+                title="No vehicles match your search"
+                description={`Nothing found for “${query}”. Try a name, plate, or owner.`}
+              />
+            ) : (
+              <EmptyState
+                title="No vehicles yet"
+                description="Add a vehicle from a customer profile to see it here."
+              />
+            )
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Asset</th>
-                  <th className="px-4 py-3 font-medium">Category</th>
-                  <th className="px-4 py-3 font-medium">Make / Model</th>
-                  <th className="px-4 py-3 font-medium">Owner</th>
-                  <th className="px-4 py-3 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {assets.map((a) => (
-                  <tr key={a.id} className="border-b border-border/60 hover:bg-muted/30">
-                    <td className="px-4 py-3 font-medium">{a.displayName}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline">{a.category}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {[a.modelYear, a.manufacturer, a.model].filter(Boolean).join(" ") || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/app/${context.organizationId}/customers/${a.customer.id}`}
-                        className="text-link underline-offset-4 hover:underline"
-                      >
-                        {a.customer.displayName}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/app/${context.organizationId}/assets/${a.id}`}
-                        className="text-link underline-offset-4 hover:underline"
-                      >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <RecordList>
+              {assets.map((a) => (
+                <RecordListRow
+                  key={a.id}
+                  href={`/app/${context.organizationId}/assets/${a.id}`}
+                  title={a.displayName}
+                  description={[
+                    [a.modelYear, a.manufacturer, a.model].filter(Boolean).join(" ") || undefined,
+                    a.automotiveProfile?.licensePlate
+                      ? `Plate ${a.automotiveProfile.licensePlate}`
+                      : undefined,
+                    a.customer.displayName,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  trailing={<Badge variant="outline">{humanizeToken(a.category)}</Badge>}
+                />
+              ))}
+            </RecordList>
           )}
         </CardContent>
       </Card>

@@ -1,9 +1,11 @@
-import Link from "next/link";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { ListSearch } from "@/components/shopos/list-search";
 import { PageHeader } from "@/components/shopos/page-header";
+import { RecordList, RecordListRow } from "@/components/shopos/record-list";
+import { EmptyState } from "@/components/shopos/states";
 import { StatusBadge } from "@/components/shopos/status-badge";
+import { humanizeToken } from "@/lib/labels";
 import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { WorkOrderCreateForm } from "./work-order-create-form";
@@ -13,21 +15,32 @@ export default async function WorkOrdersPage({
   searchParams,
 }: {
   params: Promise<{ organization: string }>;
-  searchParams: Promise<{ new?: string }>;
+  searchParams: Promise<{ new?: string; q?: string }>;
 }) {
   const { organization } = await params;
-  const { new: wantsNew } = await searchParams;
+  const { new: wantsNew, q: search } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
   }
 
+  const query = search?.trim() ?? "";
   const workOrders = await db.workOrder.findMany({
     where: {
       organizationId: context.organizationId,
       ...(context.organizationWideLocationAccess
         ? {}
         : { locationId: { in: [...context.allowedLocationIds] } }),
+      ...(query
+        ? {
+            OR: [
+              { number: { contains: query, mode: "insensitive" } },
+              { customer: { displayName: { contains: query, mode: "insensitive" } } },
+              { asset: { displayName: { contains: query, mode: "insensitive" } } },
+              { customerConcern: { contains: query, mode: "insensitive" } },
+            ],
+          }
+        : {}),
     },
     orderBy: { createdAt: "desc" },
     select: {
@@ -38,9 +51,6 @@ export default async function WorkOrdersPage({
       customerConcern: true,
       customer: { select: { displayName: true } },
       asset: { select: { displayName: true } },
-      assignedTechnician: { select: { displayName: true } },
-      vehicleStage: true,
-      bayLabel: true,
       createdAt: true,
     },
     take: 100,
@@ -97,48 +107,48 @@ export default async function WorkOrdersPage({
         }
       />
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <ListSearch
+          action={`/app/${context.organizationId}/work-orders`}
+          query={query}
+          placeholder="Search RO #, customer, vehicle…"
+        />
+        <p className="text-sm text-muted-foreground">
+          {workOrders.length} work order{workOrders.length === 1 ? "" : "s"}
+        </p>
+      </div>
+
       <Card>
         <CardContent className="p-0">
           {workOrders.length === 0 ? (
-            <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-              No work orders yet.
-            </p>
+            query ? (
+              <EmptyState
+                title="No work orders match your search"
+                description={`Nothing found for “${query}”. Try a shorter search.`}
+              />
+            ) : (
+              <EmptyState
+                title="No work orders yet"
+                description="Create the first repair order to get the board moving."
+              />
+            )
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">RO #</th>
-                  <th className="px-4 py-3 font-medium">Customer</th>
-                  <th className="px-4 py-3 font-medium">Asset</th>
-                  <th className="px-4 py-3 font-medium">Technician</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
-                  <th className="px-4 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {workOrders.map((wo) => (
-                  <tr key={wo.id} className="border-b border-border/60 hover:bg-muted/30">
-                    <td className="px-4 py-3 font-mono font-medium">{wo.number}</td>
-                    <td className="px-4 py-3">{wo.customer.displayName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {wo.asset?.displayName ?? "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {wo.assignedTechnician?.displayName ?? (
-                        <span className="text-muted-foreground">Unassigned</span>
-                      )}
-                      {wo.vehicleStage === "READY_FOR_PICKUP" ? (
-                        <span className="ml-2 rounded bg-success/20 px-1.5 py-0.5 text-xs text-success">
-                          ready
-                        </span>
-                      ) : wo.bayLabel ? (
-                        <span className="ml-2 font-mono text-xs text-muted-foreground">
-                          {wo.bayLabel}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
+            <RecordList>
+              {workOrders.map((wo) => (
+                <RecordListRow
+                  key={wo.id}
+                  href={`/app/${context.organizationId}/work-orders/${wo.id}`}
+                  title={wo.customer.displayName}
+                  description={[
+                    `#${wo.number}`,
+                    wo.asset?.displayName,
+                    wo.customerConcern?.trim() || undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  trailing={
+                    <>
+                      <Badge variant="outline">{humanizeToken(wo.workType)}</Badge>
                       <StatusBadge
                         tone={
                           wo.status === "COMPLETED" || wo.status === "CLOSED"
@@ -150,24 +160,13 @@ export default async function WorkOrdersPage({
                                 : "neutral"
                         }
                       >
-                        {wo.status.replace(/_/g, " ").toLowerCase()}
+                        {humanizeToken(wo.status)}
                       </StatusBadge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline">{wo.workType.toLowerCase()}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/app/${context.organizationId}/work-orders/${wo.id}`}
-                        className="text-link underline-offset-4 hover:underline"
-                      >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </>
+                  }
+                />
+              ))}
+            </RecordList>
           )}
         </CardContent>
       </Card>

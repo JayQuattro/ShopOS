@@ -1,8 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ListSearch } from "@/components/shopos/list-search";
 import { PageHeader } from "@/components/shopos/page-header";
-import { db } from "@/db/client";
+import { RecordList, RecordListRow } from "@/components/shopos/record-list";
+import { EmptyState } from "@/components/shopos/states";
 import { formatMoney } from "@/i18n/formatters";
+import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listItems } from "@/modules/inventory/inventory-service";
 import { InventoryForm } from "./inventory-form";
@@ -22,10 +25,10 @@ export default async function InventoryPage({
   searchParams,
 }: {
   params: Promise<{ organization: string }>;
-  searchParams: Promise<{ location?: string }>;
+  searchParams: Promise<{ location?: string; q?: string }>;
 }) {
   const { organization } = await params;
-  const { location: locationParam } = await searchParams;
+  const { location: locationParam, q: search } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
@@ -47,6 +50,15 @@ export default async function InventoryPage({
     { db, context },
     ...(locationParam ? [{ locationId: locationParam }] : []),
   );
+
+  const query = search?.trim().toLowerCase() ?? "";
+  const shown = query
+    ? items.filter((item) =>
+        [item.name, item.partNumber, item.brand, item.oeNumber, item.binLocation]
+          .filter((value): value is string => typeof value === "string" && value.length > 0)
+          .some((value) => value.toLowerCase().includes(query)),
+      )
+    : items;
   const lowItems = items.filter((item) => item.low);
   const totalValueMinor = items.reduce(
     (sum, item) => sum + Number(item.unitCostMinor) * item.quantityOnHand,
@@ -70,16 +82,32 @@ export default async function InventoryPage({
         }
       />
 
-      <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-        <span>
-          {items.length} item{items.length === 1 ? "" : "s"} · stock value{" "}
-          <strong className="text-foreground">
-            {formatMoney(totalValueMinor, currency, "en-US")}
-          </strong>
-        </span>
-        {lowItems.length > 0 ? (
-          <Badge variant="destructive">{lowItems.length} at or below reorder point</Badge>
-        ) : null}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <ListSearch
+          action={`/app/${context.organizationId}/inventory`}
+          query={search?.trim() ?? ""}
+          placeholder="Search part name, number, brand, bin…"
+          hiddenParams={{ location: locationParam }}
+        />
+        <p className="text-sm text-muted-foreground">
+          {query ? (
+            <>
+              {shown.length} matching part{shown.length === 1 ? "" : "s"}
+            </>
+          ) : (
+            <>
+              {items.length} item{items.length === 1 ? "" : "s"} · stock value{" "}
+              <strong className="text-foreground">
+                {formatMoney(totalValueMinor, currency, "en-US")}
+              </strong>
+            </>
+          )}
+          {lowItems.length > 0 ? (
+            <Badge variant="destructive" className="ml-2">
+              {lowItems.length} at or below reorder point
+            </Badge>
+          ) : null}
+        </p>
       </div>
 
       <ReorderPanel canWrite={context.permissions.has("work_orders.write")} />
@@ -99,89 +127,56 @@ export default async function InventoryPage({
 
       <Card>
         <CardContent className="p-0">
-          {items.length === 0 ? (
-            <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-              No stock yet. Add parts, or receive a part order into stock from a work order.
-            </p>
+          {shown.length === 0 ? (
+            query ? (
+              <EmptyState
+                title="No parts match your search"
+                description={`Nothing found for “${search?.trim()}”. Try a part number or brand.`}
+              />
+            ) : (
+              <EmptyState
+                title="No stock yet"
+                description="Add parts, or receive a part order into stock from a work order."
+              />
+            )
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Part</th>
-                  <th className="px-4 py-3 font-medium">Part #</th>
-                  <th className="px-4 py-3 font-medium">Brand / OE</th>
-                  <th className="px-4 py-3 font-medium text-right">On hand</th>
-                  <th className="px-4 py-3 font-medium text-right">Reorder at</th>
-                  <th className="px-4 py-3 font-medium text-right">Unit cost</th>
-                  <th className="px-4 py-3 font-medium">Flags</th>
-                  <th className="px-4 py-3 font-medium">Bin</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...items]
-                  .sort((a, b) => Number(b.low) - Number(a.low) || a.name.localeCompare(b.name))
-                  .map((item) => (
-                    <tr key={item.id} className="border-b border-border/60 hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">
-                        {item.name}
+            <RecordList>
+              {[...shown]
+                .sort((a, b) => Number(b.low) - Number(a.low) || a.name.localeCompare(b.name))
+                .map((item) => (
+                  <RecordListRow
+                    key={item.id}
+                    title={item.name}
+                    description={
+                      [
+                        item.partNumber,
+                        item.brand,
+                        item.oeNumber ? `OE ${item.oeNumber}` : undefined,
+                        item.binLocation,
+                        item.condition !== "new" ? item.condition : undefined,
+                        item.hasCore ? "core" : undefined,
+                        item.consumable ? "supply" : undefined,
+                        item.nonSaleable ? "internal" : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || undefined
+                    }
+                    trailing={
+                      <>
+                        <span className="font-mono text-sm tabular-nums">
+                          {item.quantityOnHand}
+                          {item.unitOfMeasure ? ` ${item.unitOfMeasure}` : ""}
+                        </span>
                         {item.low ? (
-                          <Badge variant="destructive" className="ml-2 text-[10px]">
+                          <Badge variant="destructive" className="text-[10px]">
                             low
                           </Badge>
                         ) : null}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs">{item.partNumber}</td>
-                      <td className="px-4 py-3 text-xs">
-                        {item.brand ? <span className="block">{item.brand}</span> : null}
-                        {item.oeNumber ? (
-                          <span className="block font-mono text-[10px] text-muted-foreground">
-                            OE {item.oeNumber}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">
-                        {item.quantityOnHand}
-                        {item.unitOfMeasure ? (
-                          <span className="ml-1 text-[10px] text-muted-foreground">
-                            {item.unitOfMeasure}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
-                        {item.reorderPoint}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">
-                        {formatMoney(Number(item.unitCostMinor), item.currency, "en-US")}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="flex flex-wrap gap-1">
-                          {item.condition !== "new" ? (
-                            <Badge variant="outline" className="text-[10px]">
-                              {item.condition}
-                            </Badge>
-                          ) : null}
-                          {item.hasCore ? (
-                            <Badge variant="outline" className="text-[10px]">
-                              core
-                            </Badge>
-                          ) : null}
-                          {item.consumable ? (
-                            <Badge variant="secondary" className="text-[10px]">
-                              supply
-                            </Badge>
-                          ) : null}
-                          {item.nonSaleable ? (
-                            <Badge variant="outline" className="text-[10px]">
-                              internal
-                            </Badge>
-                          ) : null}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{item.binLocation ?? "—"}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+                      </>
+                    }
+                  />
+                ))}
+            </RecordList>
           )}
         </CardContent>
       </Card>
