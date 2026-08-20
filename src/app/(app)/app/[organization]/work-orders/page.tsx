@@ -1,4 +1,7 @@
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ListSearch } from "@/components/shopos/list-search";
 import { PageHeader } from "@/components/shopos/page-header";
@@ -93,18 +96,23 @@ export default async function WorkOrdersPage({
         description="Manage repair, maintenance, and project work."
         breadcrumbs={[{ label: "Work orders" }]}
         actions={
-          canCreate ? (
-            <WorkOrderCreateForm
-              startOpen={wantsNew === "1"}
-              preselectedCustomerId={preselectedCustomer}
-              customers={customers as { id: string; displayName: string }[]}
-              assets={assets as { id: string; displayName: string; customerId: string }[]}
-              locations={(locations as { id: string; name: string }[]).map((l) => ({
-                id: l.id,
-                displayName: l.name,
-              }))}
-            />
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href={`/app/${context.organizationId}/work-orders/workspace`}>Workspace</Link>
+            </Button>
+            {canCreate ? (
+              <WorkOrderCreateForm
+                startOpen={wantsNew === "1"}
+                preselectedCustomerId={preselectedCustomer}
+                customers={customers as { id: string; displayName: string }[]}
+                assets={assets as { id: string; displayName: string; customerId: string }[]}
+                locations={(locations as { id: string; name: string }[]).map((l) => ({
+                  id: l.id,
+                  displayName: l.name,
+                }))}
+              />
+            ) : null}
+          </div>
         }
       />
 
