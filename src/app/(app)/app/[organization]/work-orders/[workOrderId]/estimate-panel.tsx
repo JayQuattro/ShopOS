@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { formatMoney } from "@/i18n/formatters";
 import { humanizeToken } from "@/lib/labels";
 import { AttachmentPanel } from "./attachment-panel";
 import { AuthorizationRecorder } from "./authorization-recorder";
+import { EstimateLinesEditor } from "./estimate-lines-editor";
 
 type TaxRateOption = { id: string; name: string; rateBasisPoints: number };
 
@@ -270,7 +271,9 @@ export function EstimatePanel({
   const [lineTaxRate, setLineTaxRate] = useState("0"); // rate id, "0" (none), or "custom"
   const [lineCredit, setLineCredit] = useState(false);
   const [lineOptionGroup, setLineOptionGroup] = useState("");
-  const [lineJob, setLineJob] = useState("");
+  // Job targeting for new lines: an existing group label, "none", or "new".
+  const [lineJobSelect, setLineJobSelect] = useState("__none__");
+  const [lineJobText, setLineJobText] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -322,6 +325,21 @@ export function EstimatePanel({
     }
   }
 
+  const jobOptions = useMemo(() => {
+    const labels = new Set<string>();
+    for (const line of lines) {
+      if (line.serviceGroupKey === "general") continue;
+      labels.add(line.serviceGroupLabel ?? humanizeToken(line.serviceGroupKey));
+    }
+    return [...labels];
+  }, [lines]);
+  const jobLabelForNewLine =
+    lineJobSelect === "__new__"
+      ? lineJobText.trim()
+      : lineJobSelect === "__none__"
+        ? ""
+        : lineJobSelect;
+
   async function addLine() {
     if (!selectedRevId || !lineDesc.trim()) return;
     setPending(true);
@@ -335,14 +353,13 @@ export function EstimatePanel({
           kind: lineKind,
           // Job grouping: slugified label becomes the key; ungrouped lines stay "general".
           serviceGroupKey:
-            lineJob.trim().length > 0
-              ? lineJob
-                  .trim()
+            jobLabelForNewLine.length > 0
+              ? jobLabelForNewLine
                   .toLowerCase()
                   .replace(/[^a-z0-9]+/g, "-")
                   .replace(/^-+|-+$/g, "")
               : "general",
-          ...(lineJob.trim() ? { serviceGroupLabel: lineJob.trim() } : {}),
+          ...(jobLabelForNewLine ? { serviceGroupLabel: jobLabelForNewLine } : {}),
           description: lineDesc,
           quantityMilli: parseInt(lineQty, 10) || 1000,
           unitPriceMinor: unitPrice,
@@ -379,7 +396,6 @@ export function EstimatePanel({
       await loadLines(selectedRevId);
       setLineDesc("");
       setLineOptionGroup("");
-      setLineJob("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add the line.");
     } finally {
@@ -449,6 +465,17 @@ export function EstimatePanel({
               No lines yet.
               {isDraft ? " Add the first line below." : ""}
             </p>
+          ) : isDraft ? (
+            <EstimateLinesEditor
+              revisionId={selectedRev.id}
+              currency={selectedRev.currency}
+              lines={lines}
+              onChanged={() => (selectedRevId ? loadLines(selectedRevId) : undefined)}
+              onRequestAddToGroup={(label: string) => {
+                setLineJobSelect(label);
+                document.getElementById("estimate-line-description")?.focus();
+              }}
+            />
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -591,18 +618,35 @@ export function EstimatePanel({
                 <option value="FEE">Fee</option>
               </select>
               <Input
+                id="estimate-line-description"
                 placeholder="Description"
                 value={lineDesc}
                 onChange={(e) => setLineDesc(e.target.value)}
                 className="max-w-xs"
               />
-              <Input
-                placeholder="Job (optional) — Front brakes…"
-                value={lineJob}
-                onChange={(e) => setLineJob(e.target.value)}
-                className="max-w-[200px]"
+              <select
+                value={lineJobSelect}
+                onChange={(e) => setLineJobSelect(e.target.value)}
+                className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
                 title="Lines that share a job are grouped together on the estimate and authorization (e.g. rotors + labor under Front brakes)"
-              />
+                aria-label="Job for the new line"
+              >
+                <option value="__none__">No job (other items)</option>
+                {jobOptions.map((label: string) => (
+                  <option key={label} value={label}>
+                    {label}
+                  </option>
+                ))}
+                <option value="__new__">New job…</option>
+              </select>
+              {lineJobSelect === "__new__" ? (
+                <Input
+                  placeholder="Job name — Front brakes…"
+                  value={lineJobText}
+                  onChange={(e) => setLineJobText(e.target.value)}
+                  className="max-w-[180px]"
+                />
+              ) : null}
               <Input
                 placeholder="Option group (optional)"
                 value={lineOptionGroup}
