@@ -1,9 +1,13 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shopos/status-badge";
 import { PageHeader } from "@/components/shopos/page-header";
+import { RecordList, RecordListRow } from "@/components/shopos/record-list";
+import { PageSection, SectionNav } from "@/components/shopos/section";
+import { humanizeToken } from "@/lib/labels";
 import { db } from "@/db/client";
 import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
@@ -146,23 +150,25 @@ export default async function WorkOrderDetailPage({
           { label: wo.number },
         ]}
         actions={
-          <div className="flex items-center gap-2">
-            <a
-              href={`/print/${context.organizationId}/repair-order/${wo.id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-            >
-              Print RO
-            </a>
-            <a
-              href={`/print/${context.organizationId}/authorization/${wo.id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-            >
-              Print authorization
-            </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" asChild>
+              <a
+                href={`/print/${context.organizationId}/repair-order/${wo.id}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Print RO
+              </a>
+            </Button>
+            <Button variant="outline" asChild>
+              <a
+                href={`/print/${context.organizationId}/authorization/${wo.id}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Print authorization
+              </a>
+            </Button>
             <StatusBadge
               tone={
                 wo.status === "COMPLETED" || wo.status === "CLOSED"
@@ -174,285 +180,313 @@ export default async function WorkOrderDetailPage({
                       : "neutral"
               }
             >
-              {wo.status.replace(/_/g, " ").toLowerCase()}
+              {humanizeToken(wo.status)}
             </StatusBadge>
           </div>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardContent className="py-4">
-            <p className="text-xs text-muted-foreground">Customer</p>
-            <Link
-              href={`/app/${context.organizationId}/customers/${wo.customer.id}`}
-              className="font-medium text-link underline-offset-4 hover:underline"
-            >
-              {wo.customer.displayName}
-            </Link>
-            <p className="mt-1 text-xs text-muted-foreground">{wo.location?.name ?? "—"}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-4">
-            <p className="text-xs text-muted-foreground">Technician</p>
-            <AssignmentSelect
-              workOrderId={wo.id}
-              technicians={technicians}
-              assignedUserId={wo.assignedTechnicianUserId}
-              assisting={wo.assistingTechnicians.map((entry) => ({
-                userId: entry.userId,
-                displayName: entry.user.displayName,
-              }))}
-              canWrite={context.permissions.has("work_orders.write")}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex flex-col gap-3 py-4">
-            <VehicleCard
-              workOrderId={wo.id}
-              locationId={wo.locationId}
-              stage={wo.vehicleStage}
-              bayLabel={wo.bayLabel}
-              currentAssetId={wo.assetId}
-              customerAssets={customerAssets.map((asset) => ({
-                id: asset.id,
-                displayName: asset.displayName,
-                customerId: asset.customerId,
-              }))}
-              canWrite={context.permissions.has("work_orders.write")}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-4">
-            <BoardStageSelect
-              workOrderId={wo.id}
-              stages={boardStages.map((stage) => ({ id: stage.id, label: stage.label }))}
-              currentStageId={wo.boardStageId}
-              canWrite={context.permissions.has("work_orders.write")}
-            />
-            <p className="mt-3 text-xs text-muted-foreground">
-              Key: {wo.keyTag ? <span className="font-mono">{wo.keyTag}</span> : "no tag"}
-              {wo.keyLocation ? ` · ${wo.keyLocation}` : ""} ·{" "}
+      <SectionNav
+        items={[
+          { href: "#overview", label: "Overview" },
+          { href: "#jobs", label: "Jobs & time" },
+          { href: "#parts", label: "Parts" },
+          { href: "#money", label: "Money" },
+          { href: "#inspections", label: "Inspections & media" },
+          { href: "#activity", label: "Activity" },
+        ]}
+      />
+
+      <PageSection
+        id="overview"
+        title="Overview"
+        description="Who, what vehicle, and where it stands."
+      >
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Customer</p>
               <Link
-                href={`/app/${context.organizationId}/keys`}
-                className="text-link underline-offset-4 hover:underline"
+                href={`/app/${context.organizationId}/customers/${wo.customer.id}`}
+                className="font-medium text-link underline-offset-4 hover:underline"
               >
-                key board
+                {wo.customer.displayName}
               </Link>
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+              <p className="mt-1 text-xs text-muted-foreground">{wo.location?.name ?? "—"}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground">Technician</p>
+              <AssignmentSelect
+                workOrderId={wo.id}
+                technicians={technicians}
+                assignedUserId={wo.assignedTechnicianUserId}
+                assisting={wo.assistingTechnicians.map((entry) => ({
+                  userId: entry.userId,
+                  displayName: entry.user.displayName,
+                }))}
+                canWrite={context.permissions.has("work_orders.write")}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex flex-col gap-3 py-4">
+              <VehicleCard
+                workOrderId={wo.id}
+                locationId={wo.locationId}
+                stage={wo.vehicleStage}
+                bayLabel={wo.bayLabel}
+                currentAssetId={wo.assetId}
+                customerAssets={customerAssets.map((asset) => ({
+                  id: asset.id,
+                  displayName: asset.displayName,
+                  customerId: asset.customerId,
+                }))}
+                canWrite={context.permissions.has("work_orders.write")}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <BoardStageSelect
+                workOrderId={wo.id}
+                stages={boardStages.map((stage) => ({ id: stage.id, label: stage.label }))}
+                currentStageId={wo.boardStageId}
+                canWrite={context.permissions.has("work_orders.write")}
+              />
+              <p className="mt-3 text-xs text-muted-foreground">
+                Key: {wo.keyTag ? <span className="font-mono">{wo.keyTag}</span> : "no tag"}
+                {wo.keyLocation ? ` · ${wo.keyLocation}` : ""} ·{" "}
+                <Link
+                  href={`/app/${context.organizationId}/keys`}
+                  className="text-link underline-offset-4 hover:underline"
+                >
+                  key board
+                </Link>
+              </p>
+            </CardContent>
+          </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Status actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <StatusTransitionPanel
-            workOrderId={wo.id}
-            currentStatus={wo.status}
-            canWrite={context.permissions.has("work_orders.write")}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Customer concern</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <WorkOrderEditForm
-            workOrderId={wo.id}
-            initialConcern={wo.customerConcern}
-            canWrite={context.permissions.has("work_orders.write")}
-          />
-        </CardContent>
-      </Card>
-
-      {wo.estimateRevisions.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Estimate revisions</CardTitle>
+            <CardTitle className="text-base">Status actions</CardTitle>
           </CardHeader>
           <CardContent>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="py-2 pr-4 font-medium">Rev</th>
-                  <th className="py-2 pr-4 font-medium">Status</th>
-                  <th className="py-2 pr-4 font-medium">Total</th>
-                  <th className="py-2 pr-4 font-medium">Presented</th>
-                </tr>
-              </thead>
-              <tbody>
-                {wo.estimateRevisions.map((rev) => (
-                  <tr key={rev.id} className="border-b border-border/60">
-                    <td className="py-3 pr-4 font-mono">#{rev.revisionNumber}</td>
-                    <td className="py-3 pr-4">
-                      <Badge variant={rev.status === "PRESENTED" ? "default" : "secondary"}>
-                        {rev.status.toLowerCase()}
-                      </Badge>
-                    </td>
-                    <td className="py-3 pr-4 font-mono tabular-nums">
-                      {formatMoney(Number(rev.totalMinor), rev.currency, "en-US")}
-                    </td>
-                    <td className="py-3 pr-4 text-muted-foreground">
-                      {rev.presentedAt ? formatDateTime(rev.presentedAt, "UTC", "en-US") : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <StatusTransitionPanel
+              workOrderId={wo.id}
+              currentStatus={wo.status}
+              canWrite={context.permissions.has("work_orders.write")}
+            />
           </CardContent>
         </Card>
-      ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Estimate</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <EstimatePanel
-            workOrderId={wo.id}
-            workOrderStatus={wo.status}
-            canWrite={context.permissions.has("work_orders.write")}
-            canRecordDecisions={context.permissions.has("authorizations.record")}
-            revisions={wo.estimateRevisions.map((rev) => ({
-              id: rev.id,
-              revisionNumber: rev.revisionNumber,
-              status: rev.status,
-              documentKind: rev.documentKind,
-              changeOrderNumber: rev.changeOrderNumber,
-              summaryNote: rev.summaryNote,
-              currency: rev.currency,
-              totalMinor: rev.totalMinor.toString(),
-            }))}
-          />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Customer concern</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <WorkOrderEditForm
+              workOrderId={wo.id}
+              initialConcern={wo.customerConcern}
+              canWrite={context.permissions.has("work_orders.write")}
+            />
+          </CardContent>
+        </Card>
+      </PageSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Invoice</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <InvoicePanel
-            workOrderId={wo.id}
-            invoice={
-              wo.invoice
-                ? {
-                    id: wo.invoice.id,
-                    number: wo.invoice.number,
-                    status: wo.invoice.status,
-                    totalMinor: wo.invoice.totalMinor.toString(),
-                    paidMinor: wo.invoice.paidMinor.toString(),
-                    paymentUrl: wo.invoice.paymentUrl,
-                    currency: wo.invoice.currency,
-                  }
-                : {
-                    id: null,
-                    number: null,
-                    status: null,
-                    totalMinor: null,
-                    paidMinor: null,
-                    paymentUrl: null,
-                    currency: "USD",
-                  }
-            }
-          />
-        </CardContent>
-      </Card>
+      <PageSection
+        id="jobs"
+        title="Jobs & time"
+        description="Tasks, labor time, and quality checks."
+      >
+        <ApplyTemplateCard
+          workOrderId={wo.id}
+          canWrite={context.permissions.has("work_orders.write")}
+        />
+        <TaskPanel
+          workOrderId={wo.id}
+          workOrderStatus={wo.status}
+          canWrite={context.permissions.has("work_orders.write")}
+        />
+        <TimePanel
+          workOrderId={wo.id}
+          timeZone={wo.location?.timeZone ?? "UTC"}
+          technicians={technicians}
+          canWrite={context.permissions.has("work_orders.write")}
+        />
+        <QualityCheckCard
+          workOrderId={wo.id}
+          timeZone={wo.location?.timeZone ?? "UTC"}
+          canWrite={context.permissions.has("work_orders.write")}
+        />
+      </PageSection>
 
-      <AttachmentPanel
-        workOrderId={wo.id}
-        canWrite={context.permissions.has("work_orders.write")}
-      />
+      <PageSection id="parts" title="Parts" description="Ordering, receiving, and sublet work.">
+        <PartsPanel workOrderId={wo.id} canWrite={context.permissions.has("work_orders.write")} />
+        <SubletPanel workOrderId={wo.id} canWrite={context.permissions.has("work_orders.write")} />
+      </PageSection>
 
-      <TimePanel
-        workOrderId={wo.id}
-        timeZone={wo.location?.timeZone ?? "UTC"}
-        technicians={technicians}
-        canWrite={context.permissions.has("work_orders.write")}
-      />
+      <PageSection
+        id="money"
+        title="Money"
+        description="Estimates, authorization, invoice, and deposits."
+      >
+        {wo.estimateRevisions.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Estimate revisions</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <RecordList>
+                {wo.estimateRevisions.map((rev) => (
+                  <RecordListRow
+                    key={rev.id}
+                    title={`Revision #${rev.revisionNumber}${rev.changeOrderNumber ? ` · change order ${rev.changeOrderNumber}` : ""}`}
+                    description={
+                      rev.presentedAt
+                        ? `Presented ${formatDateTime(rev.presentedAt, "UTC", "en-US")}`
+                        : "Not presented yet"
+                    }
+                    trailing={
+                      <>
+                        <Badge variant={rev.status === "PRESENTED" ? "default" : "secondary"}>
+                          {humanizeToken(rev.status)}
+                        </Badge>
+                        <span className="font-mono text-sm tabular-nums">
+                          {formatMoney(Number(rev.totalMinor), rev.currency, "en-US")}
+                        </span>
+                      </>
+                    }
+                  />
+                ))}
+              </RecordList>
+            </CardContent>
+          </Card>
+        ) : null}
 
-      <ApplyTemplateCard
-        workOrderId={wo.id}
-        canWrite={context.permissions.has("work_orders.write")}
-      />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Estimate</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EstimatePanel
+              workOrderId={wo.id}
+              workOrderStatus={wo.status}
+              canWrite={context.permissions.has("work_orders.write")}
+              canRecordDecisions={context.permissions.has("authorizations.record")}
+              revisions={wo.estimateRevisions.map((rev) => ({
+                id: rev.id,
+                revisionNumber: rev.revisionNumber,
+                status: rev.status,
+                documentKind: rev.documentKind,
+                changeOrderNumber: rev.changeOrderNumber,
+                summaryNote: rev.summaryNote,
+                currency: rev.currency,
+                totalMinor: rev.totalMinor.toString(),
+              }))}
+            />
+          </CardContent>
+        </Card>
 
-      <QualityCheckCard
-        workOrderId={wo.id}
-        timeZone={wo.location?.timeZone ?? "UTC"}
-        canWrite={context.permissions.has("work_orders.write")}
-      />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Invoice</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <InvoicePanel
+              workOrderId={wo.id}
+              invoice={
+                wo.invoice
+                  ? {
+                      id: wo.invoice.id,
+                      number: wo.invoice.number,
+                      status: wo.invoice.status,
+                      totalMinor: wo.invoice.totalMinor.toString(),
+                      paidMinor: wo.invoice.paidMinor.toString(),
+                      paymentUrl: wo.invoice.paymentUrl,
+                      currency: wo.invoice.currency,
+                    }
+                  : {
+                      id: null,
+                      number: null,
+                      status: null,
+                      totalMinor: null,
+                      paidMinor: null,
+                      paymentUrl: null,
+                      currency: "USD",
+                    }
+              }
+            />
+          </CardContent>
+        </Card>
 
-      <TaskPanel
-        workOrderId={wo.id}
-        workOrderStatus={wo.status}
-        canWrite={context.permissions.has("work_orders.write")}
-      />
+        <DepositPanel
+          orgId={context.organizationId}
+          workOrderId={wo.id}
+          hasInvoice={wo.invoice !== null}
+          canRecordMoney={context.permissions.has("payments.record")}
+        />
+      </PageSection>
 
-      <PartsPanel workOrderId={wo.id} canWrite={context.permissions.has("work_orders.write")} />
+      <PageSection
+        id="inspections"
+        title="Inspections & media"
+        description="Digital vehicle inspections, photos and video, loaners, and the customer tracker."
+      >
+        <InspectionPanel
+          workOrderId={wo.id}
+          templates={inspectionTemplates.map((template) => ({
+            id: template.id,
+            name: template.name,
+          }))}
+          canWrite={context.permissions.has("work_orders.write")}
+        />
+        <AttachmentPanel
+          workOrderId={wo.id}
+          canWrite={context.permissions.has("work_orders.write")}
+        />
+        <LoanerPanel
+          workOrderId={wo.id}
+          loanerAssets={loanerAssets.map((asset) => ({
+            id: asset.id,
+            displayName: asset.displayName,
+          }))}
+          canWrite={context.permissions.has("work_orders.write")}
+          orgId={context.organizationId}
+          locationId={wo.locationId}
+          customerId={wo.customer.id}
+        />
+        <TrackerLinkCard
+          workOrderId={wo.id}
+          canWrite={context.permissions.has("work_orders.write")}
+        />
+      </PageSection>
 
-      <LoanerPanel
-        workOrderId={wo.id}
-        loanerAssets={loanerAssets.map((asset) => ({
-          id: asset.id,
-          displayName: asset.displayName,
-        }))}
-        canWrite={context.permissions.has("work_orders.write")}
-        orgId={context.organizationId}
-        locationId={wo.locationId}
-        customerId={wo.customer.id}
-      />
-
-      <SubletPanel workOrderId={wo.id} canWrite={context.permissions.has("work_orders.write")} />
-
-      <DepositPanel
-        orgId={context.organizationId}
-        workOrderId={wo.id}
-        hasInvoice={wo.invoice !== null}
-        canRecordMoney={context.permissions.has("payments.record")}
-      />
-
-      <InspectionPanel
-        workOrderId={wo.id}
-        templates={inspectionTemplates.map((template) => ({
-          id: template.id,
-          name: template.name,
-        }))}
-        canWrite={context.permissions.has("work_orders.write")}
-      />
-
-      <TrackerLinkCard
-        workOrderId={wo.id}
-        canWrite={context.permissions.has("work_orders.write")}
-      />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ol className="flex flex-col gap-3">
-            {wo.activityEvents.map((event) => (
-              <li key={event.id} className="flex gap-3">
-                <span className="mt-1.5 size-2 shrink-0 rounded-full bg-muted-foreground/40" />
-                <div className="flex flex-col">
-                  <span className="text-sm">{event.summary}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDateTime(event.occurredAt, "UTC", "en-US")}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </CardContent>
-      </Card>
+      <PageSection
+        id="activity"
+        title="Activity"
+        description="Everything that happened on this job."
+      >
+        <Card>
+          <CardContent>
+            <ol className="flex flex-col gap-3">
+              {wo.activityEvents.map((event) => (
+                <li key={event.id} className="flex gap-3">
+                  <span className="mt-1.5 size-2 shrink-0 rounded-full bg-muted-foreground/40" />
+                  <div className="flex flex-col">
+                    <span className="text-sm">{event.summary}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDateTime(event.occurredAt, "UTC", "en-US")}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      </PageSection>
     </div>
   );
 }
