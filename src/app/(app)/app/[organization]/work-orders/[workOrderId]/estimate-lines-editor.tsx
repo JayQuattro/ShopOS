@@ -22,6 +22,7 @@ import { GripVertical, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/i18n/formatters";
 import { humanizeToken } from "@/lib/labels";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,14 @@ type Group = {
 
 const GROUP_PREFIX = "group:";
 const DROP_PREFIX = "drop:";
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 function groupDragId(key: string) {
   return `${GROUP_PREFIX}${key}`;
@@ -83,12 +92,19 @@ export function EstimateLinesEditor({
   revisionId,
   currency,
   lines,
+  pendingGroups,
+  onPendingLabelChange,
+  onRemovePending,
   onChanged,
   onRequestAddToGroup,
 }: {
   revisionId: string;
   currency: string;
   lines: readonly EditorLine[];
+  /** Job groups created ahead of their first line; local until a line lands. */
+  pendingGroups: ReadonlyArray<Readonly<{ key: string; label: string }>>;
+  onPendingLabelChange: (key: string, label: string) => void;
+  onRemovePending: (key: string) => void;
   onChanged: () => Promise<void> | void;
   onRequestAddToGroup: (label: string) => void;
 }) {
@@ -106,13 +122,25 @@ export function EstimateLinesEditor({
 
   const groups = useMemo(() => buildGroups(lines), [lines]);
   const groupOrder = useMemo(() => groups.map((group) => group.key), [groups]);
+  // A pending group disappears from the pending list the moment a real group
+  // with the same name exists (a line landed in it).
+  const shownPending = useMemo(() => {
+    const realized = new Set(groups.map((group) => groupLabel(group)));
+    return pendingGroups.filter(
+      (entry) => entry.label.trim().length === 0 || !realized.has(entry.label.trim()),
+    );
+  }, [pendingGroups, groups]);
 
   async function persistOrder(nextGroups: Group[]) {
     setBusy(true);
     setError(null);
     try {
       const items = nextGroups.flatMap((group) =>
-        group.lines.map((line) => ({ lineId: line.id, serviceGroupKey: group.key })),
+        group.lines.map((line) => ({
+          lineId: line.id,
+          serviceGroupKey: group.key,
+          ...(group.label ? { serviceGroupLabel: group.label } : {}),
+        })),
       );
       const res = await fetch(`/api/estimate-revisions/${revisionId}/lines/order`, {
         method: "PUT",
@@ -155,9 +183,19 @@ export function EstimateLinesEditor({
 
     // Line move/reorder: resolve the destination group and insertion point.
     let targetKey: string | null = null;
+    let targetLabel: string | null = null;
     let overLineId: string | null = null;
     if (overId.startsWith(DROP_PREFIX)) {
-      targetKey = overId.slice(DROP_PREFIX.length);
+      const raw = overId.slice(DROP_PREFIX.length);
+      if (raw.startsWith("pending:")) {
+        // A fresh, still-empty job group: dropping names it.
+        const pending = pendingGroups.find((entry) => entry.key === raw.slice("pending:".length));
+        if (!pending || !pending.label.trim()) return;
+        targetKey = slugify(pending.label);
+        targetLabel = pending.label.trim();
+      } else {
+        targetKey = raw;
+      }
     } else {
       const overLine = lines.find((line) => line.id === overId);
       if (overLine) {
@@ -175,8 +213,12 @@ export function EstimateLinesEditor({
       ...group,
       lines: group.lines.filter((line) => line.id !== activeLine.id),
     }));
-    const targetGroup = nextGroups.find((group) => group.key === targetKey);
-    if (!targetGroup) return;
+    let targetGroup = nextGroups.find((group) => group.key === targetKey);
+    if (!targetGroup) {
+      if (!targetLabel) return;
+      targetGroup = { key: targetKey, label: targetLabel, lines: [] };
+      nextGroups.push(targetGroup);
+    }
     const insertAt = overLineId
       ? targetGroup.lines.findIndex((line) => line.id === overLineId)
       : targetGroup.lines.length;
@@ -280,6 +322,15 @@ export function EstimateLinesEditor({
                 onUngroup={() => void ungroup(group)}
                 onAddToGroup={() => onRequestAddToGroup(groupLabel(group))}
                 onDeleteLine={(lineId) => void deleteLine(lineId)}
+              />
+            ))}
+            {shownPending.map((entry) => (
+              <PendingGroupCard
+                key={entry.key}
+                entry={entry}
+                onLabelChange={onPendingLabelChange}
+                onRemove={() => onRemovePending(entry.key)}
+                onAddToGroup={() => onRequestAddToGroup(entry.label.trim())}
               />
             ))}
           </div>
@@ -503,6 +554,81 @@ function LineRow({
       >
         <Trash2 className="size-4" aria-hidden />
       </button>
+    </div>
+  );
+}
+
+function PendingGroupCard({
+  entry,
+  onLabelChange,
+  onRemove,
+  onAddToGroup,
+}: {
+  entry: Readonly<{ key: string; label: string }>;
+  onLabelChange: (key: string, label: string) => void;
+  onRemove: () => void;
+  onAddToGroup: () => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: groupDropId(`pending:${entry.key}`) });
+  const named = entry.label.trim().length > 0;
+
+  if (!named) {
+    return (
+      <div className="rounded-lg border border-dashed border-border p-3">
+        <div className="flex items-center gap-2">
+          <input
+            autoFocus
+            value={entry.label}
+            onChange={(e) => onLabelChange(entry.key, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            placeholder="Job name — Front brakes…"
+            aria-label="New job name"
+            className="h-[var(--control-height)] min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm font-medium"
+          />
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label="Discard this job"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          The job is saved as soon as it has a line — add one below or drag one in.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-card">
+      <div className="flex items-center gap-2 border-b border-border px-2 py-2">
+        <p className="min-h-9 flex-1 px-2 text-sm font-semibold leading-9">{entry.label.trim()}</p>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Discard ${entry.label.trim()}`}
+          className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
+      </div>
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "flex flex-col items-center gap-2 p-3",
+          isOver && "rounded-b-lg bg-primary/5 ring-1 ring-primary/30 ring-inset",
+        )}
+      >
+        <p className="text-xs text-muted-foreground">New job — drag lines here, or:</p>
+        <Button variant="outline" size="sm" onClick={onAddToGroup}>
+          <Plus className="size-4" aria-hidden />
+          Add line to this job
+        </Button>
+      </div>
     </div>
   );
 }

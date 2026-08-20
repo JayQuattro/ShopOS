@@ -217,7 +217,13 @@ export async function addLine(
 export async function reorderLines(
   input: EstimateServiceInput & {
     revisionId: string;
-    items: ReadonlyArray<Readonly<{ lineId: string; serviceGroupKey: string }>>;
+    items: ReadonlyArray<
+      Readonly<{
+        lineId: string;
+        serviceGroupKey: string;
+        serviceGroupLabel?: string | undefined;
+      }>
+    >;
   },
 ): Promise<void> {
   assertTenantAccess(
@@ -270,13 +276,15 @@ export async function reorderLines(
     let position = 0;
     for (const item of input.items) {
       position += 1;
-      const label = labelByKey.get(item.serviceGroupKey);
+      // Explicit labels win (a drop into a fresh group names it); otherwise
+      // the destination's existing label is inherited.
+      const label = item.serviceGroupLabel ?? labelByKey.get(item.serviceGroupKey) ?? null;
       await transaction.estimateLine.update({
         where: { id: item.lineId },
         data: {
           position,
           serviceGroupKey: item.serviceGroupKey,
-          ...(label ? { serviceGroupLabel: label } : { serviceGroupLabel: null }),
+          serviceGroupLabel: label,
         },
       });
     }

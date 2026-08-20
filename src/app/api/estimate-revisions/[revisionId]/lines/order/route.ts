@@ -13,6 +13,7 @@ const orderSchema = z.object({
       z.object({
         lineId: z.string().uuid(),
         serviceGroupKey: z.string().trim().min(1).max(80),
+        serviceGroupLabel: z.union([z.string().trim().min(1).max(160), z.undefined()]),
       }),
     )
     .min(1),

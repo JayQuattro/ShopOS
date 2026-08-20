@@ -2,11 +2,16 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
+import { Plus } from "lucide-react";
+
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/shopos/states";
 import { formatMoney } from "@/i18n/formatters";
+import { parseMoneyInput } from "@/i18n/money-input";
 import { humanizeToken } from "@/lib/labels";
 import { AttachmentPanel } from "./attachment-panel";
 import { AuthorizationRecorder } from "./authorization-recorder";
@@ -123,6 +128,21 @@ export function EstimatePanel({
       clearTimeout(timer);
     };
   }, [selectedRevId, loadLines]);
+
+  function openFormForJob(label: string | null) {
+    if (label !== null) setLineJobSelect(label);
+    setFormOpen(true);
+    setTimeout(() => {
+      document.getElementById("estimate-line-description")?.focus();
+    }, 0);
+  }
+
+  function addPendingJobGroup() {
+    setPendingJobGroups((current) => [
+      ...current,
+      { key: `pending-${current.length}-${Math.random().toString(36).slice(2, 8)}`, label: "" },
+    ]);
+  }
 
   async function createDraft() {
     setPending(true);
@@ -266,14 +286,19 @@ export function EstimatePanel({
   // Line form state
   const [lineKind, setLineKind] = useState("LABOR");
   const [lineDesc, setLineDesc] = useState("");
-  const [lineQty, setLineQty] = useState("1000");
-  const [linePrice, setLinePrice] = useState("0");
+  const [lineQty, setLineQty] = useState("1");
+  const [linePrice, setLinePrice] = useState("");
   const [lineTaxRate, setLineTaxRate] = useState("0"); // rate id, "0" (none), or "custom"
   const [lineCredit, setLineCredit] = useState(false);
   const [lineOptionGroup, setLineOptionGroup] = useState("");
   // Job targeting for new lines: an existing group label, "none", or "new".
   const [lineJobSelect, setLineJobSelect] = useState("__none__");
   const [lineJobText, setLineJobText] = useState("");
+  // Job groups created ahead of their first line (local until a line lands).
+  const [pendingJobGroups, setPendingJobGroups] = useState<Array<{ key: string; label: string }>>(
+    [],
+  );
+  const [formOpen, setFormOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -331,8 +356,11 @@ export function EstimatePanel({
       if (line.serviceGroupKey === "general") continue;
       labels.add(line.serviceGroupLabel ?? humanizeToken(line.serviceGroupKey));
     }
+    for (const entry of pendingJobGroups) {
+      if (entry.label.trim().length > 0) labels.add(entry.label.trim());
+    }
     return [...labels];
-  }, [lines]);
+  }, [lines, pendingJobGroups]);
   const jobLabelForNewLine =
     lineJobSelect === "__new__"
       ? lineJobText.trim()
@@ -342,10 +370,20 @@ export function EstimatePanel({
 
   async function addLine() {
     if (!selectedRevId || !lineDesc.trim()) return;
+    const qtyUnits = Number.parseFloat(lineQty.replace(",", "."));
+    const unitPrice = parseMoneyInput(linePrice);
+    if (!Number.isFinite(qtyUnits) || qtyUnits < 0) {
+      setError("Quantity: enter a number like 1 or 2.5.");
+      return;
+    }
+    if (linePrice.trim().length > 0 && unitPrice === null) {
+      setError("Unit price: enter it like 59.99 (no thousands separators).");
+      return;
+    }
     setPending(true);
     setError(null);
     try {
-      const unitPrice = Math.abs(parseInt(linePrice, 10) || 0) * (lineCredit ? -1 : 1);
+      const unitPriceSigned = Math.abs(unitPrice ?? 0) * (lineCredit ? -1 : 1);
       const res = await fetch(`/api/estimate-revisions/${selectedRevId}/lines`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -361,8 +399,8 @@ export function EstimatePanel({
               : "general",
           ...(jobLabelForNewLine ? { serviceGroupLabel: jobLabelForNewLine } : {}),
           description: lineDesc,
-          quantityMilli: parseInt(lineQty, 10) || 1000,
-          unitPriceMinor: unitPrice,
+          quantityMilli: Math.round(qtyUnits * 1000),
+          unitPriceMinor: unitPriceSigned,
           discountMinor: 0,
           taxable: !lineCredit && lineTaxRate !== "0" && lineTaxRate !== "custom",
           // Named rates are sent by id so stacks (GST + PST) resolve server-side.
@@ -460,21 +498,38 @@ export function EstimatePanel({
 
           {loadingLines ? (
             <p className="text-sm text-muted-foreground">Loading lines…</p>
+          ) : lines.length === 0 && isDraft && canWrite ? (
+            <EmptyState
+              title="Start the estimate"
+              description="Group the work into jobs like Front brakes or Tune up — or just add a single line."
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button variant="outline" onClick={addPendingJobGroup}>
+                    <Plus className="size-4" aria-hidden />
+                    Add job group
+                  </Button>
+                  <Button onClick={() => openFormForJob(null)}>Add line</Button>
+                </div>
+              }
+            />
           ) : lines.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No lines yet.
-              {isDraft ? " Add the first line below." : ""}
-            </p>
+            <p className="text-sm text-muted-foreground">No lines on this document.</p>
           ) : isDraft ? (
             <EstimateLinesEditor
               revisionId={selectedRev.id}
               currency={selectedRev.currency}
               lines={lines}
+              pendingGroups={pendingJobGroups}
+              onPendingLabelChange={(key, label) =>
+                setPendingJobGroups((current) =>
+                  current.map((entry) => (entry.key === key ? { ...entry, label } : entry)),
+                )
+              }
+              onRemovePending={(key) =>
+                setPendingJobGroups((current) => current.filter((entry) => entry.key !== key))
+              }
               onChanged={() => (selectedRevId ? loadLines(selectedRevId) : undefined)}
-              onRequestAddToGroup={(label: string) => {
-                setLineJobSelect(label);
-                document.getElementById("estimate-line-description")?.focus();
-              }}
+              onRequestAddToGroup={(label: string) => openFormForJob(label)}
             />
           ) : (
             <table className="w-full text-sm">
@@ -607,111 +662,202 @@ export function EstimatePanel({
           ) : null}
 
           {canWrite && isDraft ? (
-            <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
-              <select
-                value={lineKind}
-                onChange={(e) => setLineKind(e.target.value)}
-                className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
-              >
-                <option value="LABOR">Labor</option>
-                <option value="PART">Part</option>
-                <option value="FEE">Fee</option>
-              </select>
-              <Input
-                id="estimate-line-description"
-                placeholder="Description"
-                value={lineDesc}
-                onChange={(e) => setLineDesc(e.target.value)}
-                className="max-w-xs"
-              />
-              <select
-                value={lineJobSelect}
-                onChange={(e) => setLineJobSelect(e.target.value)}
-                className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
-                title="Lines that share a job are grouped together on the estimate and authorization (e.g. rotors + labor under Front brakes)"
-                aria-label="Job for the new line"
-              >
-                <option value="__none__">No job (other items)</option>
-                {jobOptions.map((label: string) => (
-                  <option key={label} value={label}>
-                    {label}
-                  </option>
-                ))}
-                <option value="__new__">New job…</option>
-              </select>
-              {lineJobSelect === "__new__" ? (
-                <Input
-                  placeholder="Job name — Front brakes…"
-                  value={lineJobText}
-                  onChange={(e) => setLineJobText(e.target.value)}
-                  className="max-w-[180px]"
-                />
+            <div className="flex flex-col gap-3 border-t border-border pt-3">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={addPendingJobGroup} disabled={pending}>
+                  <Plus className="size-4" aria-hidden />
+                  Add job group
+                </Button>
+                <Button size="sm" onClick={() => openFormForJob(null)} disabled={pending}>
+                  <Plus className="size-4" aria-hidden />
+                  Add line
+                </Button>
+                <Button size="sm" variant="default" onClick={presentSelected} disabled={pending}>
+                  {isChangeOrder ? "Present change order" : "Present"}
+                </Button>
+              </div>
+
+              {formOpen ? (
+                <Card>
+                  <CardContent className="pt-4">
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void addLine();
+                      }}
+                      className="grid gap-3 md:grid-cols-3"
+                    >
+                      <label className="grid gap-1 text-sm font-medium">
+                        Description *
+                        <Input
+                          id="estimate-line-description"
+                          value={lineDesc}
+                          onChange={(e) => setLineDesc(e.target.value)}
+                          placeholder="Front brake pads replacement"
+                          disabled={pending}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium">
+                        Job
+                        <select
+                          value={lineJobSelect}
+                          onChange={(e) => setLineJobSelect(e.target.value)}
+                          disabled={pending}
+                          className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm font-normal"
+                        >
+                          <option value="__none__">No job (other items)</option>
+                          {jobOptions.map((label: string) => (
+                            <option key={label} value={label}>
+                              {label}
+                            </option>
+                          ))}
+                          <option value="__new__">New job…</option>
+                        </select>
+                        <span className="text-xs font-normal text-muted-foreground">
+                          Lines in the same job group together on the estimate.
+                        </span>
+                      </label>
+                      {lineJobSelect === "__new__" ? (
+                        <label className="grid gap-1 text-sm font-medium">
+                          New job name
+                          <Input
+                            placeholder="Front brakes…"
+                            value={lineJobText}
+                            onChange={(e) => setLineJobText(e.target.value)}
+                            disabled={pending}
+                          />
+                        </label>
+                      ) : (
+                        <label className="grid gap-1 text-sm font-medium">
+                          Type
+                          <select
+                            value={lineKind}
+                            onChange={(e) => setLineKind(e.target.value)}
+                            disabled={pending}
+                            className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm font-normal"
+                          >
+                            <option value="LABOR">Labor</option>
+                            <option value="PART">Part</option>
+                            <option value="FEE">Fee</option>
+                          </select>
+                        </label>
+                      )}
+                      {lineJobSelect === "__new__" ? (
+                        <label className="grid gap-1 text-sm font-medium">
+                          Type
+                          <select
+                            value={lineKind}
+                            onChange={(e) => setLineKind(e.target.value)}
+                            disabled={pending}
+                            className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm font-normal"
+                          >
+                            <option value="LABOR">Labor</option>
+                            <option value="PART">Part</option>
+                            <option value="FEE">Fee</option>
+                          </select>
+                        </label>
+                      ) : null}
+                      <label className="grid gap-1 text-sm font-medium">
+                        Quantity
+                        <Input
+                          inputMode="decimal"
+                          value={lineQty}
+                          onChange={(e) => setLineQty(e.target.value)}
+                          placeholder="1"
+                          disabled={pending}
+                        />
+                        <span className="text-xs font-normal text-muted-foreground">
+                          Hours or pieces — 1, 1.5, 2…
+                        </span>
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium">
+                        Unit price
+                        <Input
+                          inputMode="decimal"
+                          value={linePrice}
+                          onChange={(e) => setLinePrice(e.target.value)}
+                          placeholder="59.99"
+                          disabled={pending}
+                        />
+                        <span className="text-xs font-normal text-muted-foreground">
+                          Price for one, tax added per the rate below.
+                        </span>
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium">
+                        Tax
+                        <select
+                          value={lineTaxRate}
+                          onChange={(e) => setLineTaxRate(e.target.value)}
+                          disabled={lineCredit || pending}
+                          className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm font-normal"
+                        >
+                          <option value="0">No tax</option>
+                          {taxRates.map((rate) => (
+                            <option key={rate.id} value={rate.id}>
+                              {rate.name} ({(rate.rateBasisPoints / 100).toFixed(3)}%)
+                            </option>
+                          ))}
+                          <option value="custom">Custom rate…</option>
+                        </select>
+                        {taxRates.length === 0 ? (
+                          <span className="text-xs font-normal text-muted-foreground">
+                            No named rates — enter basis points below.
+                          </span>
+                        ) : null}
+                      </label>
+                      {(taxRates.length === 0 || lineTaxRate === "custom") && (
+                        <label className="grid gap-1 text-sm font-medium">
+                          Tax rate (basis points)
+                          <Input
+                            type="number"
+                            value={lineTaxRate === "custom" ? "" : lineTaxRate}
+                            onChange={(e) => setLineTaxRate(e.target.value)}
+                            placeholder="720 = 7.20%"
+                            disabled={lineCredit || pending}
+                          />
+                        </label>
+                      )}
+                      <label className="grid gap-1 text-sm font-medium">
+                        Option group (optional)
+                        <Input
+                          value={lineOptionGroup}
+                          onChange={(e) => setLineOptionGroup(e.target.value)}
+                          placeholder="Oil change package"
+                          disabled={pending}
+                        />
+                        <span className="text-xs font-normal text-muted-foreground">
+                          Alternatives with the same group — the customer picks one.
+                        </span>
+                      </label>
+                      {isChangeOrder ? (
+                        <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium">
+                          <input
+                            type="checkbox"
+                            checked={lineCredit}
+                            onChange={(e) => setLineCredit(e.target.checked)}
+                            className="size-4 rounded border-input"
+                          />
+                          Credit line (negative amount)
+                        </label>
+                      ) : null}
+                      <div className="flex gap-2 md:col-span-3">
+                        <Button type="submit" size="sm" disabled={pending || !lineDesc.trim()}>
+                          {pending ? "Adding…" : "Add line"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setFormOpen(false)}
+                          disabled={pending}
+                        >
+                          Close
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
               ) : null}
-              <Input
-                placeholder="Option group (optional)"
-                value={lineOptionGroup}
-                onChange={(e) => setLineOptionGroup(e.target.value)}
-                className="max-w-[200px]"
-                title="Lines that share an option group are alternatives — the customer picks one (e.g. regular vs premium oil change)"
-              />
-              <Input
-                type="number"
-                placeholder="Qty (milli)"
-                value={lineQty}
-                onChange={(e) => setLineQty(e.target.value)}
-                className="w-24"
-              />
-              <Input
-                type="number"
-                placeholder="Unit ¢"
-                value={linePrice}
-                onChange={(e) => setLinePrice(e.target.value)}
-                className="w-28"
-              />
-              {taxRates.length > 0 ? (
-                <select
-                  value={lineTaxRate}
-                  onChange={(e) => setLineTaxRate(e.target.value)}
-                  disabled={lineCredit || pending}
-                  className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
-                  title="Tax rate (named rates from Settings → Taxes; Custom for a basis-points value)"
-                >
-                  <option value="0">No tax</option>
-                  {taxRates.map((rate) => (
-                    <option key={rate.id} value={rate.id}>
-                      {rate.name} ({(rate.rateBasisPoints / 100).toFixed(3)}%)
-                    </option>
-                  ))}
-                  <option value="custom">Custom…</option>
-                </select>
-              ) : null}
-              {taxRates.length === 0 || lineTaxRate === "custom" ? (
-                <Input
-                  type="number"
-                  placeholder="Tax bps"
-                  value={lineTaxRate === "custom" ? "" : lineTaxRate}
-                  onChange={(e) => setLineTaxRate(e.target.value)}
-                  className="w-20"
-                  disabled={lineCredit}
-                />
-              ) : null}
-              {isChangeOrder ? (
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={lineCredit}
-                    onChange={(e) => setLineCredit(e.target.checked)}
-                    className="size-4 rounded border-input"
-                  />
-                  Credit
-                </label>
-              ) : null}
-              <Button size="sm" onClick={addLine} disabled={pending || !lineDesc.trim()}>
-                Add line
-              </Button>
-              <Button size="sm" variant="default" onClick={presentSelected} disabled={pending}>
-                {isChangeOrder ? "Present change order" : "Present"}
-              </Button>
             </div>
           ) : null}
 
