@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/i18n/formatters";
+import { humanizeToken } from "@/lib/labels";
 import { AttachmentPanel } from "./attachment-panel";
 import { AuthorizationRecorder } from "./authorization-recorder";
 
@@ -31,6 +32,8 @@ type Line = {
   unitPriceMinor: string;
   totalMinor: string;
   position: number;
+  serviceGroupKey: string;
+  serviceGroupLabel: string | null;
   optionGroupLabel: string | null;
 };
 
@@ -267,6 +270,7 @@ export function EstimatePanel({
   const [lineTaxRate, setLineTaxRate] = useState("0"); // rate id, "0" (none), or "custom"
   const [lineCredit, setLineCredit] = useState(false);
   const [lineOptionGroup, setLineOptionGroup] = useState("");
+  const [lineJob, setLineJob] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -329,7 +333,16 @@ export function EstimatePanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind: lineKind,
-          serviceGroupKey: "general",
+          // Job grouping: slugified label becomes the key; ungrouped lines stay "general".
+          serviceGroupKey:
+            lineJob.trim().length > 0
+              ? lineJob
+                  .trim()
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "-")
+                  .replace(/^-+|-+$/g, "")
+              : "general",
+          ...(lineJob.trim() ? { serviceGroupLabel: lineJob.trim() } : {}),
           description: lineDesc,
           quantityMilli: parseInt(lineQty, 10) || 1000,
           unitPriceMinor: unitPrice,
@@ -366,6 +379,7 @@ export function EstimatePanel({
       await loadLines(selectedRevId);
       setLineDesc("");
       setLineOptionGroup("");
+      setLineJob("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add the line.");
     } finally {
@@ -447,33 +461,87 @@ export function EstimatePanel({
                 </tr>
               </thead>
               <tbody>
-                {lines.map((line) => (
-                  <tr key={line.id} className="border-b border-border/60">
-                    <td className="py-2 pr-4">
-                      <Badge variant="outline" className="text-xs">
-                        {Number(line.unitPriceMinor) < 0 ? "CREDIT" : line.kind}
-                      </Badge>
-                    </td>
-                    <td className="py-2 pr-4">
-                      {line.description}
-                      {line.optionGroupLabel ? (
-                        <Badge variant="secondary" className="ml-2 text-[10px]">
-                          option · {line.optionGroupLabel}
-                        </Badge>
-                      ) : null}
-                    </td>
-                    <td className="py-2 pr-4 text-right font-mono tabular-nums">
-                      {(line.quantityMilli / 1000).toFixed(1)}
-                    </td>
-                    <td className="py-2 pr-4 text-right font-mono tabular-nums">
-                      {formatMoney(Number(line.unitPriceMinor), selectedRev.currency, "en-US")}
-                    </td>
-                    <td className="py-2 pr-4 text-right font-mono tabular-nums">
-                      {formatMoney(Number(line.totalMinor), selectedRev.currency, "en-US")}
-                    </td>
-                  </tr>
-                ))}
+                {(() => {
+                  const groups = new Map<string, Line[]>();
+                  for (const line of lines) {
+                    const list = groups.get(line.serviceGroupKey) ?? [];
+                    list.push(line);
+                    groups.set(line.serviceGroupKey, list);
+                  }
+                  return [...groups.entries()].map(([key, groupLines]) => {
+                    const label =
+                      groupLines[0]?.serviceGroupLabel ??
+                      (key === "general" ? "Other items" : humanizeToken(key));
+                    const subtotal = groupLines.reduce(
+                      (sum, line) => sum + Number(line.totalMinor),
+                      0,
+                    );
+                    return (
+                      <Fragment key={key}>
+                        <tr className="border-b border-border bg-muted/40">
+                          <th
+                            colSpan={5}
+                            className="px-3 py-1.5 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                          >
+                            {label}
+                          </th>
+                        </tr>
+                        {groupLines.map((line) => (
+                          <tr key={line.id} className="border-b border-border/60">
+                            <td className="py-2 pr-4">
+                              <Badge variant="outline" className="text-xs">
+                                {Number(line.unitPriceMinor) < 0 ? "CREDIT" : line.kind}
+                              </Badge>
+                            </td>
+                            <td className="py-2 pr-4">
+                              {line.description}
+                              {line.optionGroupLabel ? (
+                                <Badge variant="secondary" className="ml-2 text-[10px]">
+                                  option · {line.optionGroupLabel}
+                                </Badge>
+                              ) : null}
+                            </td>
+                            <td className="py-2 pr-4 text-right font-mono tabular-nums">
+                              {(line.quantityMilli / 1000).toFixed(1)}
+                            </td>
+                            <td className="py-2 pr-4 text-right font-mono tabular-nums">
+                              {formatMoney(
+                                Number(line.unitPriceMinor),
+                                selectedRev.currency,
+                                "en-US",
+                              )}
+                            </td>
+                            <td className="py-2 pr-4 text-right font-mono tabular-nums">
+                              {formatMoney(Number(line.totalMinor), selectedRev.currency, "en-US")}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-b border-border">
+                          <td
+                            colSpan={4}
+                            className="py-1 pr-4 text-right text-xs text-muted-foreground"
+                          >
+                            {label} subtotal
+                          </td>
+                          <td className="py-1 pr-4 text-right font-mono text-xs tabular-nums">
+                            {formatMoney(subtotal, selectedRev.currency, "en-US")}
+                          </td>
+                        </tr>
+                      </Fragment>
+                    );
+                  });
+                })()}
               </tbody>
+              <tfoot>
+                <tr className="border-t border-border">
+                  <td colSpan={4} className="pt-2 pr-4 text-right text-sm font-semibold">
+                    Total
+                  </td>
+                  <td className="pt-2 pr-4 text-right font-mono text-sm font-semibold tabular-nums">
+                    {formatMoney(Number(selectedRev.totalMinor), selectedRev.currency, "en-US")}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           )}
 
@@ -527,6 +595,13 @@ export function EstimatePanel({
                 value={lineDesc}
                 onChange={(e) => setLineDesc(e.target.value)}
                 className="max-w-xs"
+              />
+              <Input
+                placeholder="Job (optional) — Front brakes…"
+                value={lineJob}
+                onChange={(e) => setLineJob(e.target.value)}
+                className="max-w-[200px]"
+                title="Lines that share a job are grouped together on the estimate and authorization (e.g. rotors + labor under Front brakes)"
               />
               <Input
                 placeholder="Option group (optional)"

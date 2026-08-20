@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 
 import { db } from "@/db/client";
@@ -63,7 +64,14 @@ export default async function EstimatePrintPage({
       },
       lines: {
         orderBy: { position: "asc" },
-        select: { description: true, quantityMilli: true, unitPriceMinor: true, totalMinor: true },
+        select: {
+          description: true,
+          quantityMilli: true,
+          unitPriceMinor: true,
+          totalMinor: true,
+          serviceGroupKey: true,
+          serviceGroupLabel: true,
+        },
       },
     },
   });
@@ -131,18 +139,58 @@ export default async function EstimatePrintPage({
               </tr>
             </thead>
             <tbody>
-              {revision.lines.map((line, index) => (
-                <tr key={index} className="border-b border-neutral-200 align-top">
-                  <td className="py-1.5 pr-3">{line.description}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">
-                    {(line.quantityMilli / 1000).toFixed(1)}
-                  </td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">
-                    {money(line.unitPriceMinor)}
-                  </td>
-                  <td className="py-1.5 text-right tabular-nums">{money(line.totalMinor)}</td>
-                </tr>
-              ))}
+              {(() => {
+                const groups = new Map<string, typeof revision.lines>();
+                for (const line of revision.lines) {
+                  const list = groups.get(line.serviceGroupKey) ?? [];
+                  list.push(line);
+                  groups.set(line.serviceGroupKey, list);
+                }
+                return [...groups.entries()].map(([key, groupLines]) => {
+                  const label =
+                    groupLines[0]?.serviceGroupLabel ??
+                    (key === "general" ? null : key.replace(/[_-]+/g, " "));
+                  const subtotal = groupLines.reduce(
+                    (sum, line) => sum + Number(line.totalMinor),
+                    0,
+                  );
+                  return (
+                    <Fragment key={key}>
+                      {label ? (
+                        <tr className="border-b border-neutral-300 bg-neutral-100">
+                          <th colSpan={4} className="py-1 pr-3 text-left font-semibold">
+                            {label}
+                          </th>
+                        </tr>
+                      ) : null}
+                      {groupLines.map((line, index) => (
+                        <tr key={index} className="border-b border-neutral-200 align-top">
+                          <td className="py-1.5 pr-3">{line.description}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">
+                            {(line.quantityMilli / 1000).toFixed(1)}
+                          </td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">
+                            {money(line.unitPriceMinor)}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">
+                            {money(line.totalMinor)}
+                          </td>
+                        </tr>
+                      ))}
+                      {label ? (
+                        <tr className="border-b border-neutral-300">
+                          <td colSpan={3} className="py-1 pr-3 text-right text-xs text-neutral-600">
+                            {label} subtotal
+                          </td>
+                          <td className="py-1 text-right text-xs tabular-nums">
+                            {money(subtotal)}
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                });
+              })()}
             </tbody>
           </table>
           <div className="mt-3 ml-auto w-56">

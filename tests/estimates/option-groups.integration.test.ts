@@ -334,6 +334,54 @@ describe("estimate option groups", { skip: shouldSkip }, () => {
     ).rejects.toMatchObject({ reason: "invalid_option_group" });
   });
 
+  it("stores service group labels and exposes them for grouped rendering", async () => {
+    const { createDraftRevision, addLine, presentRevision } =
+      await import("@/modules/estimates/estimate-service");
+    const { getAuthorizationState } = await import("@/modules/estimates/authorization-service");
+    const seed = await seedWorkOrder();
+    const context = seed.context();
+
+    const rev = await createDraftRevision({
+      db: dbModule.db,
+      context,
+      workOrderId: seed.workOrderId,
+      currency: "USD",
+    });
+    for (const [position, description] of [
+      [1, "Front rotors"],
+      [2, "Front pads"],
+      [3, "Brake labor"],
+    ] as const) {
+      await addLine({
+        db: dbModule.db,
+        context,
+        revisionId: rev.revisionId,
+        kind: position === 3 ? "LABOR" : "PART",
+        serviceGroupKey: "front-brakes",
+        description,
+        quantityMilli: 1000,
+        unitPriceMinor: 1000,
+        discountMinor: 0,
+        taxable: false,
+        taxRateBasisPoints: 0,
+        position,
+        serviceGroupLabel: "Front brakes",
+      });
+    }
+    await presentRevision({ db: dbModule.db, context, revisionId: rev.revisionId });
+
+    const state = await getAuthorizationState({
+      db: dbModule.db,
+      context,
+      revisionId: rev.revisionId,
+    });
+    expect(state.lines.length).toBe(3);
+    for (const line of state.lines) {
+      expect(line.serviceGroupKey).toBe("front-brakes");
+      expect(line.serviceGroupLabel).toBe("Front brakes");
+    }
+  });
+
   it("invoices only the chosen option, never the declined sibling", async () => {
     const { createDraftRevision, addLine, presentRevision } =
       await import("@/modules/estimates/estimate-service");

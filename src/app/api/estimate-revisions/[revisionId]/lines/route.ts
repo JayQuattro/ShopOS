@@ -24,6 +24,8 @@ const addLineSchema = z
     // Option groups: lines sharing a key are alternatives (customer picks one).
     optionGroupKey: z.string().trim().min(1).max(80).optional(),
     optionGroupLabel: z.string().trim().min(1).max(160).optional(),
+    // Job grouping display label for the (required) serviceGroupKey.
+    serviceGroupLabel: z.string().trim().min(1).max(160).optional(),
   })
   .refine((data) => Boolean(data.optionGroupKey) === Boolean(data.optionGroupLabel), {
     message: "optionGroupKey and optionGroupLabel must be provided together",
@@ -51,6 +53,8 @@ export async function GET(
         taxMinor: true,
         totalMinor: true,
         position: true,
+        serviceGroupKey: true,
+        serviceGroupLabel: true,
         optionGroupKey: true,
         optionGroupLabel: true,
       },
@@ -105,6 +109,9 @@ export async function POST(
       taxRateBasisPoints: parsed.data.taxRateBasisPoints,
       ...(parsed.data.taxRateId ? { taxRateId: parsed.data.taxRateId } : {}),
       position: parsed.data.position,
+      ...(parsed.data.serviceGroupLabel
+        ? { serviceGroupLabel: parsed.data.serviceGroupLabel }
+        : {}),
       ...(parsed.data.optionGroupKey ? { optionGroupKey: parsed.data.optionGroupKey } : {}),
       ...(parsed.data.optionGroupLabel ? { optionGroupLabel: parsed.data.optionGroupLabel } : {}),
     });
