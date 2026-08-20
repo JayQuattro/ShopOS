@@ -30,10 +30,16 @@ export function LoanerPanel({
   workOrderId,
   loanerAssets,
   canWrite,
+  orgId,
+  locationId,
+  customerId,
 }: {
   workOrderId: string;
   loanerAssets: ReadonlyArray<LoanerAsset>;
   canWrite: boolean;
+  orgId: string;
+  locationId: string;
+  customerId: string;
 }) {
   const [checkouts, setCheckouts] = useState<Checkout[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +47,12 @@ export function LoanerPanel({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [assetId, setAssetId] = useState(loanerAssets[0]?.id ?? "");
+  // Reservation state
+  const [reserveAssetId, setReserveAssetId] = useState("");
+  const [reserveFrom, setReserveFrom] = useState("");
+  const [reserveTo, setReserveTo] = useState("");
+  const [reservePending, setReservePending] = useState(false);
+  const [reserveError, setReserveError] = useState<string | null>(null);
   const [outMileage, setOutMileage] = useState("");
 
   async function load() {
@@ -101,6 +113,45 @@ export function LoanerPanel({
     }
   }
 
+  async function reserveLoaner() {
+    if (!reserveAssetId || !reserveFrom || !reserveTo) return;
+    setReservePending(true);
+    setReserveError(null);
+    try {
+      const res = await fetch(`/api/organizations/${orgId}/loaner-reservations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reserve",
+          assetId: reserveAssetId,
+          customerId,
+          locationId,
+          workOrderId,
+          reservedFrom: new Date(reserveFrom).toISOString(),
+          reservedTo: new Date(reserveTo).toISOString(),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const messages: Record<string, string> = {
+          asset_already_reserved: "That vehicle is already promised for part of this window.",
+          asset_already_out: "That vehicle is currently checked out.",
+          asset_not_fleet: "Only shop fleet vehicles can be reserved.",
+          invalid_window: "The end must come after the start.",
+        };
+        throw new Error(messages[body.error ?? ""] ?? "Could not reserve.");
+      }
+      setReserveAssetId("");
+      setReserveFrom("");
+      setReserveTo("");
+      window.location.reload();
+    } catch (e) {
+      setReserveError(e instanceof Error ? e.message : "Could not reserve.");
+    } finally {
+      setReservePending(false);
+    }
+  }
+
   const open = checkouts.find((checkout) => checkout.checkedInAt === null);
 
   return (
@@ -117,6 +168,54 @@ export function LoanerPanel({
         <CardDescription>Shop vehicles lent to the customer during the repair.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {canWrite && !open ? (
+          <div className="flex flex-wrap items-end gap-2">
+            <span className="w-full text-xs font-semibold text-muted-foreground">
+              Reserve a loaner for later
+            </span>
+            <select
+              value={reserveAssetId}
+              onChange={(e) => setReserveAssetId(e.target.value)}
+              disabled={reservePending}
+              aria-label="Reserve vehicle"
+              className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="">Vehicle…</option>
+              {loanerAssets.map((asset) => (
+                <option key={asset.id} value={asset.id}>
+                  {asset.displayName}
+                </option>
+              ))}
+            </select>
+            <Input
+              type="datetime-local"
+              value={reserveFrom}
+              onChange={(e) => setReserveFrom(e.target.value)}
+              disabled={reservePending}
+              aria-label="Reserve from"
+              className="h-[var(--control-height)] w-44 text-sm"
+            />
+            <Input
+              type="datetime-local"
+              value={reserveTo}
+              onChange={(e) => setReserveTo(e.target.value)}
+              disabled={reservePending}
+              aria-label="Reserve to"
+              className="h-[var(--control-height)] w-44 text-sm"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={reservePending || !reserveAssetId || !reserveFrom || !reserveTo}
+              onClick={() => void reserveLoaner()}
+            >
+              {reservePending ? "Reserving…" : "Reserve"}
+            </Button>
+            {reserveError ? (
+              <p className="w-full text-xs text-destructive">{reserveError}</p>
+            ) : null}
+          </div>
+        ) : null}
         {notice ? (
           <Alert variant="info">
             <AlertDescription>{notice}</AlertDescription>

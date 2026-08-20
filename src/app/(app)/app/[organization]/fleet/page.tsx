@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/shopos/page-header";
 import { db } from "@/db/client";
-import { formatDateTime } from "@/i18n/formatters";
+import { formatDate, formatDateTime } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { listFleetCandidates, listFleetVehicles } from "@/modules/assets/fleet-service";
 import { SERVICE_CALL_KIND_LABELS } from "@/modules/service-calls/service-call-service";
@@ -23,10 +23,36 @@ export default async function FleetPage({ params }: { params: Promise<{ organiza
     return <p className="text-destructive">Organization context mismatch.</p>;
   }
 
-  const [vehicles, candidates] = await Promise.all([
+  const [vehicles, candidates, reservations] = await Promise.all([
     listFleetVehicles({ db, context }),
     listFleetCandidates({ db, context }),
+    db.loanerReservation.findMany({
+      where: {
+        organizationId: context.organizationId,
+        status: "reserved",
+        reservedTo: { gte: new Date() },
+      },
+      orderBy: { reservedFrom: "asc" },
+      select: {
+        assetId: true,
+        reservedFrom: true,
+        reservedTo: true,
+        customer: { select: { displayName: true } },
+      },
+    }),
   ]);
+  const reservationsByAsset = new Map<string, Array<{ window: string }>>();
+  for (const reservation of reservations) {
+    const entry = reservationsByAsset.get(reservation.assetId) ?? [];
+    entry.push({
+      window: `${formatDate(reservation.reservedFrom, "UTC", "en-US")} → ${formatDate(
+        reservation.reservedTo,
+        "UTC",
+        "en-US",
+      )} (${reservation.customer.displayName})`,
+    });
+    reservationsByAsset.set(reservation.assetId, entry);
+  }
   const canWrite = context.permissions.has("assets.write");
   const orgId = context.organizationId;
   const outCount = vehicles.filter((vehicle) => vehicle.loanerStatus.out).length;
@@ -61,6 +87,7 @@ export default async function FleetPage({ params }: { params: Promise<{ organiza
                     <th className="px-4 py-3 font-medium">Vehicle</th>
                     <th className="px-4 py-3 font-medium">Plate</th>
                     <th className="px-4 py-3 font-medium">Mileage</th>
+                    <th className="px-4 py-3 font-medium">Reserved</th>
                     <th className="px-4 py-3 font-medium">Loaner</th>
                     <th className="px-4 py-3 font-medium">Roadside</th>
                     {canWrite ? <th className="px-4 py-3 font-medium"></th> : null}
@@ -112,6 +139,19 @@ export default async function FleetPage({ params }: { params: Promise<{ organiza
                           <Badge variant="outline" className="text-[10px]">
                             available
                           </Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {(reservationsByAsset.get(vehicle.id) ?? []).length === 0 ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <ul className="flex flex-col gap-0.5">
+                            {(reservationsByAsset.get(vehicle.id) ?? []).map((entry, index) => (
+                              <li key={index} className="text-xs">
+                                📅 {entry.window}
+                              </li>
+                            ))}
+                          </ul>
                         )}
                       </td>
                       <td className="px-4 py-3">

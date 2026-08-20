@@ -222,6 +222,7 @@ model User {
   ownedCashDrawers      CashDrawerSession[]               @relation("OwnedCashDrawers")
   closedCashDrawers     CashDrawerSession[]               @relation("CashDrawerClosedBy")
   recordedDeposits      Deposit[]                         @relation("DepositRecordedBy")
+  createdLoanerReservations LoanerReservation[]           @relation("LoanerReservationCreatedBy")
   recordedRefunds       Refund[]                          @relation("RefundRecordedBy")
   generatedEInvoices    EInvoiceDocument[]                @relation("EInvoiceGeneratedBy")
   performedInspections  Inspection[]                     @relation("InspectionPerformedBy")
@@ -320,6 +321,7 @@ model Organization {
   loanerCheckouts     LoanerCheckout[]
   subletWorks         SubletWork[]
   serviceCalls        ServiceCall[]
+  loanerReservations LoanerReservation[]
   transportJobs       TransportJob[]
   cashDrawerSessions CashDrawerSession[]
   deposits            Deposit[]
@@ -409,6 +411,7 @@ model Location {
   auditEvents    AuditEvent[]
   serviceCalls   ServiceCall[]
   transportJobs  TransportJob[]
+  loanerReservations LoanerReservation[]
   holidays      LocationHoliday[]
   inspections  Inspection[]
   cashDrawerSessions CashDrawerSession[]
@@ -750,6 +753,7 @@ model Customer {
   smsConversations      SmsConversation[]
   serviceCalls          ServiceCall[]
   transportJobs         TransportJob[]
+  loanerReservations     LoanerReservation[]
 
   @@unique([organizationId, id], map: "customers_org_id_unique")
   @@index([organizationId, displayName], map: "customers_org_name_idx")
@@ -831,6 +835,7 @@ model Asset {
   loanerCheckouts   LoanerCheckout[]
   appointments     Appointment[]
   workOrderAssets   WorkOrderAsset[]
+  loanerReservations LoanerReservation[]
   serviceCalls      ServiceCall[]
   transportCustomerJobs TransportJob[] @relation("TransportCustomerAsset")
   transportFleetJobs    TransportJob[] @relation("TransportFleetAsset")
@@ -943,6 +948,7 @@ model WorkOrder {
   activityEvents    ActivityEvent[]
   serviceCalls      ServiceCall[]
   transportJobs     TransportJob[]
+  loanerReservations LoanerReservation[]
   deposits           Deposit[]
   boardStage        BoardStage? @relation(fields: [organizationId, boardStageId], references: [organizationId, id], onDelete: SetNull)
   inspections       Inspection[]
@@ -1558,6 +1564,32 @@ model BoardStage {
   @@unique([organizationId, key], map: "board_stages_org_key_unique")
   @@index([organizationId, active, sortOrder], map: "board_stages_org_order_idx")
   @@map("board_stages")
+}
+
+model LoanerReservation {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  locationId       String    @map("location_id") @db.Uuid
+  assetId          String    @map("asset_id") @db.Uuid
+  customerId       String    @map("customer_id") @db.Uuid
+  workOrderId      String?   @map("work_order_id") @db.Uuid
+  reservedFrom     DateTime  @map("reserved_from") @db.Timestamptz(6)
+  reservedTo       DateTime  @map("reserved_to") @db.Timestamptz(6)
+  status           String    @default("reserved") @db.VarChar(16)
+  note             String?
+  createdByUserId  String    @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location         Location  @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  asset            Asset     @relation(fields: [organizationId, assetId], references: [organizationId, id], onDelete: Restrict)
+  customer         Customer  @relation(fields: [organizationId, customerId], references: [organizationId, id], onDelete: Restrict)
+  workOrder        WorkOrder? @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: SetNull)
+  createdBy        User      @relation("LoanerReservationCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "loaner_reservations_org_id_unique")
+  @@index([organizationId, assetId, reservedFrom], map: "loaner_reservations_org_asset_window_idx")
+  @@map("loaner_reservations")
 }
 
 model Deposit {

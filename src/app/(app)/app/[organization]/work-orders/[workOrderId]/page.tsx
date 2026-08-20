@@ -396,6 +396,9 @@ export default async function WorkOrderDetailPage({
           displayName: asset.displayName,
         }))}
         canWrite={context.permissions.has("work_orders.write")}
+        orgId={context.organizationId}
+        locationId={wo.locationId}
+        customerId={wo.customer.id}
       />
 
       <SubletPanel workOrderId={wo.id} canWrite={context.permissions.has("work_orders.write")} />
