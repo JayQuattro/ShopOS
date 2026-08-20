@@ -16,7 +16,7 @@ const createSchema = z.object({
   assetId: z.string().uuid().optional(),
   locationId: z.string().uuid(),
   workType: z.enum(["REPAIR", "MAINTENANCE", "PROJECT"]).optional(),
-  customerConcern: z.string().trim().min(1).max(2000),
+  customerConcern: z.string().trim().min(1).max(2000).optional(),
   promisedAt: z.string().datetime().optional(),
 });
 
@@ -60,7 +60,7 @@ export async function POST(request: Request): Promise<Response> {
       customerId: parsed.data.customerId,
       assetId: parsed.data.assetId,
       locationId: parsed.data.locationId,
-      customerConcern: parsed.data.customerConcern,
+      customerConcern: parsed.data.customerConcern ?? "To be documented",
     };
     if (parsed.data.workType) data.workType = parsed.data.workType;
     if (parsed.data.promisedAt) data.promisedAt = new Date(parsed.data.promisedAt);

@@ -89,6 +89,17 @@ export default async function WorkOrderDetailPage({
   });
 
   const technicians = wo ? await listAssignableTechnicians({ db, context }) : [];
+  const customerAssets = wo
+    ? await db.asset.findMany({
+        where: {
+          organizationId: context.organizationId,
+          customerId: wo.customer.id,
+          status: { not: "SOLD" },
+        },
+        select: { id: true, displayName: true, customerId: true },
+        orderBy: { displayName: "asc" },
+      })
+    : [];
   const boardStages = wo
     ? await db.boardStage.findMany({
         where: { organizationId: context.organizationId, active: true },
@@ -169,7 +180,7 @@ export default async function WorkOrderDetailPage({
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardContent className="py-4">
             <p className="text-xs text-muted-foreground">Customer</p>
@@ -179,18 +190,7 @@ export default async function WorkOrderDetailPage({
             >
               {wo.customer.displayName}
             </Link>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-4">
-            <p className="text-xs text-muted-foreground">Asset</p>
-            <p className="font-medium">{wo.asset?.displayName ?? "No asset assigned"}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-4">
-            <p className="text-xs text-muted-foreground">Location</p>
-            <p className="font-medium">{wo.location?.name ?? "—"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{wo.location?.name ?? "—"}</p>
           </CardContent>
         </Card>
         <Card>
@@ -209,15 +209,24 @@ export default async function WorkOrderDetailPage({
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="py-4">
-            <p className="text-xs text-muted-foreground">Vehicle</p>
+          <CardContent className="flex flex-col gap-3 py-4">
             <VehicleCard
               workOrderId={wo.id}
               locationId={wo.locationId}
               stage={wo.vehicleStage}
               bayLabel={wo.bayLabel}
+              currentAssetId={wo.assetId}
+              customerAssets={customerAssets.map((asset) => ({
+                id: asset.id,
+                displayName: asset.displayName,
+                customerId: asset.customerId,
+              }))}
               canWrite={context.permissions.has("work_orders.write")}
             />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4">
             <BoardStageSelect
               workOrderId={wo.id}
               stages={boardStages.map((stage) => ({ id: stage.id, label: stage.label }))}

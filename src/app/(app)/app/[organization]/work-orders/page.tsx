@@ -58,7 +58,7 @@ export default async function WorkOrdersPage({
         }),
         db.asset.findMany({
           where: { organizationId: context.organizationId, status: "ACTIVE" },
-          select: { id: true, displayName: true },
+          select: { id: true, displayName: true, customerId: true },
           take: 100,
           orderBy: { displayName: "asc" },
         }),
@@ -87,7 +87,7 @@ export default async function WorkOrdersPage({
             <WorkOrderCreateForm
               startOpen={wantsNew === "1"}
               customers={customers as { id: string; displayName: string }[]}
-              assets={assets as { id: string; displayName: string }[]}
+              assets={assets as { id: string; displayName: string; customerId: string }[]}
               locations={(locations as { id: string; name: string }[]).map((l) => ({
                 id: l.id,
                 displayName: l.name,
