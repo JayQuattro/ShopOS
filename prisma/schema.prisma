@@ -316,6 +316,7 @@ model Organization {
   serviceTemplateLines ServiceTemplateLine[]
   serviceTemplateTasks ServiceTemplateTask[]
   inventoryItems      InventoryItem[]
+  inventoryCategories InventoryCategory[]
   locationBays        LocationBay[]
   taxRates            TaxRate[]
   loanerCheckouts     LoanerCheckout[]
@@ -413,6 +414,7 @@ model Location {
   transportJobs  TransportJob[]
   loanerReservations LoanerReservation[]
   holidays      LocationHoliday[]
+  inventoryItems InventoryItem[]
   inspections  Inspection[]
   cashDrawerSessions CashDrawerSession[]
   deposits         Deposit[]
@@ -1148,21 +1150,57 @@ model ShopFee {
 model InventoryItem {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId  String   @map("organization_id") @db.Uuid
+  locationId      String?  @map("location_id") @db.Uuid
   partNumber      String   @map("part_number") @db.VarChar(120)
+  /// OE number this part interchanges on (the interchange key).
+  oeNumber        String?  @map("oe_number") @db.VarChar(120)
+  brand           String?  @db.VarChar(120)
+  categoryId      String?  @map("category_id") @db.Uuid
   name            String   @db.VarChar(220)
+  /// Unit-of-measure group for like-for-like grouping (e.g. "volume").
+  uomGroup        String?  @map("uom_group") @db.VarChar(60)
+  /// Sales/purchase unit: each, quart, gallon, 5L, pail, drum…
+  unitOfMeasure   String?  @map("unit_of_measure") @db.VarChar(40)
+  /// Conversion into the group's base unit (quart=1, gallon=4, drum=208…).
+  uomFactorMilli Int?     @map("uom_factor_milli")
+  condition       String   @default("new") @db.VarChar(16)
+  hasCore         Boolean  @default(false) @map("has_core")
+  coreValueMinor  BigInt?  @map("core_value_minor")
+  consumable      Boolean  @default(false)
+  nonSaleable     Boolean  @default(false) @map("non_saleable")
   quantityOnHand  Int      @default(0) @map("quantity_on_hand")
   reorderPoint    Int      @default(0) @map("reorder_point")
   unitCostMinor   BigInt   @default(0) @map("unit_cost_minor")
   currency        String   @default("USD") @db.VarChar(3)
   binLocation     String?  @map("bin_location") @db.VarChar(80)
+  notes           String?
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location        Location? @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: SetNull)
+  category        InventoryCategory? @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: SetNull)
 
   @@unique([organizationId, id], map: "inventory_items_org_id_unique")
-  @@unique([organizationId, partNumber], map: "inventory_items_org_part_number_unique")
+  @@unique([organizationId, locationId, partNumber], map: "inventory_items_org_loc_part_unique")
   @@index([organizationId], map: "inventory_items_org_low_stock_idx")
+  @@index([organizationId, oeNumber], map: "inventory_items_org_oe_idx")
+  @@index([organizationId, categoryId], map: "inventory_items_org_category_idx")
   @@map("inventory_items")
+}
+
+model InventoryCategory {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  name            String   @db.VarChar(120)
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  items           InventoryItem[]
+
+  @@unique([organizationId, id], map: "inventory_categories_org_id_unique")
+  @@unique([organizationId, name], map: "inventory_categories_org_name_unique")
+  @@map("inventory_categories")
 }
 
 model LocationBusinessHour {
