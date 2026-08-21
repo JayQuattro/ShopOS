@@ -6,7 +6,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-type Row = { id: string; name: string; body: string; triggerKey?: string | null };
+type Row = {
+  id: string;
+  name: string;
+  body: string;
+  triggerKey?: string | null;
+  scope?: string | null;
+};
 type Template = {
   id: string;
   name: string;
@@ -34,6 +40,10 @@ export function InvoiceDisclaimers({
   const [manualOpen, setManualOpen] = useState(false);
   const [manualName, setManualName] = useState("");
   const [manualBody, setManualBody] = useState("");
+  const [scopeTarget, setScopeTarget] = useState("");
+  const [scopeLines, setScopeLines] = useState<
+    Array<{ id: string; description: string; groupKey: string | null; groupLabel: string | null }>
+  >([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +61,11 @@ export function InvoiceDisclaimers({
       const data = await libraryRes.json();
       setLibrary((data.templates ?? []).filter((t: Template) => t.active));
     }
+    const linesRes = await fetch(`/api/invoices/${invoiceId}/lines`);
+    if (linesRes.ok) {
+      const data = await linesRes.json();
+      setScopeLines(data.lines ?? []);
+    }
   }, [invoiceId]);
 
   useEffect(() => {
@@ -66,14 +81,20 @@ export function InvoiceDisclaimers({
     };
   }, [load]);
 
-  async function post(payload: Record<string, unknown>) {
+  async function post(payload: Record<string, unknown>, scope?: string) {
     setPending(true);
     setError(null);
     try {
+      const line = scope?.startsWith("line:") ? scope.slice(5) : null;
+      const group = scope?.startsWith("job:") ? scope.slice(4) : null;
       const res = await fetch(`/api/invoices/${invoiceId}/disclaimers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          ...(line ? { invoiceLineId: line } : {}),
+          ...(group ? { serviceGroupKey: group } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -87,6 +108,7 @@ export function InvoiceDisclaimers({
       setManualOpen(false);
       setManualName("");
       setManualBody("");
+      setScopeTarget("");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add the disclaimer.");
@@ -142,7 +164,7 @@ export function InvoiceDisclaimers({
                   size="sm"
                   variant="outline"
                   disabled={pending}
-                  onClick={() => void post({ templateId: suggestion.id })}
+                  onClick={() => void post({ templateId: suggestion.id }, scopeTarget || undefined)}
                 >
                   Add
                 </Button>
@@ -159,7 +181,14 @@ export function InvoiceDisclaimers({
           {applied.map((row) => (
             <li key={row.id} className="rounded-md border border-border p-3">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-medium">{row.name}</p>
+                <p className="text-sm font-medium">
+                  {row.name}
+                  {row.scope && row.scope !== "Whole invoice" ? (
+                    <Badge variant="outline" className="ml-2 text-[10px]">
+                      {row.scope}
+                    </Badge>
+                  ) : null}
+                </p>
                 {canEdit ? (
                   <Button
                     size="sm"
@@ -198,11 +227,36 @@ export function InvoiceDisclaimers({
                 </option>
               ))}
             </select>
+            <select
+              value={scopeTarget}
+              onChange={(e) => setScopeTarget(e.target.value)}
+              disabled={pending}
+              aria-label="Attach to"
+              className="h-[var(--control-height)] max-w-56 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="">Whole invoice</option>
+              {[
+                ...new Map(
+                  scopeLines
+                    .filter((l) => l.groupKey && l.groupKey !== "general")
+                    .map((l) => [l.groupKey!, l.groupLabel ?? l.groupKey!]),
+                ).entries(),
+              ].map(([key, label]) => (
+                <option key={`job:${key}`} value={`job:${key}`}>
+                  Job: {label}
+                </option>
+              ))}
+              {scopeLines.map((line) => (
+                <option key={`line:${line.id}`} value={`line:${line.id}`}>
+                  Line: {line.description}
+                </option>
+              ))}
+            </select>
             <Button
               size="sm"
               variant="outline"
               disabled={pending || !pickedTemplate}
-              onClick={() => void post({ templateId: pickedTemplate })}
+              onClick={() => void post({ templateId: pickedTemplate }, scopeTarget || undefined)}
             >
               Add
             </Button>
@@ -220,7 +274,7 @@ export function InvoiceDisclaimers({
               className="flex flex-col gap-2 rounded-md border border-border p-3"
               onSubmit={(e) => {
                 e.preventDefault();
-                void post({ name: manualName, body: manualBody });
+                void post({ name: manualName, body: manualBody }, scopeTarget || undefined);
               }}
             >
               <input

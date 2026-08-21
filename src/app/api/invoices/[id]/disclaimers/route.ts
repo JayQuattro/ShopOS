@@ -17,6 +17,8 @@ const applySchema = z.object({
   templateId: z.string().min(1).optional(),
   name: z.string().trim().min(2).max(120).optional(),
   body: z.string().trim().min(2).max(2000).optional(),
+  serviceGroupKey: z.string().trim().min(1).max(80).optional(),
+  invoiceLineId: z.string().min(1).optional(),
 });
 
 const removeSchema = z.object({ disclaimerId: z.string().min(1) });
@@ -62,6 +64,8 @@ export async function POST(
       ...(parsed.data.templateId ? { templateId: parsed.data.templateId } : {}),
       ...(parsed.data.name ? { name: parsed.data.name } : {}),
       ...(parsed.data.body ? { body: parsed.data.body } : {}),
+      ...(parsed.data.serviceGroupKey ? { serviceGroupKey: parsed.data.serviceGroupKey } : {}),
+      ...(parsed.data.invoiceLineId ? { invoiceLineId: parsed.data.invoiceLineId } : {}),
     });
     return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {

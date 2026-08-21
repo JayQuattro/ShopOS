@@ -10,6 +10,15 @@ export const dynamic = "force-dynamic";
 const schema = z.object({
   warrantyMonths: z.number().int().min(1).nullable().optional(),
   warrantyMiles: z.number().int().min(1).nullable().optional(),
+  lines: z
+    .array(
+      z.object({
+        lineId: z.string().min(1),
+        warrantyMonths: z.number().int().min(1).nullable().optional(),
+        warrantyMiles: z.number().int().min(1).nullable().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export async function PUT(
@@ -39,6 +48,7 @@ export async function PUT(
       ...(parsed.data.warrantyMiles !== undefined
         ? { warrantyMiles: parsed.data.warrantyMiles }
         : {}),
+      ...(parsed.data.lines ? { lines: parsed.data.lines } : {}),
     });
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
