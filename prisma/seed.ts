@@ -29,6 +29,9 @@ const ids = {
   estimateActivity: "00000000-0000-4000-8000-000000000421",
   authorization: "00000000-0000-4000-8000-000000000501",
   motorcycleInvoice: "00000000-0000-4000-8000-000000000601",
+  motorcycleInvoiceLabor: "00000000-0000-4000-8000-000000000611",
+  motorcycleInvoicePart: "00000000-0000-4000-8000-000000000612",
+  motorcycleInvoiceFee: "00000000-0000-4000-8000-000000000613",
   motorcyclePayment: "00000000-0000-4000-8000-000000000701",
   oaklineContact: "00000000-0000-4000-8000-000000000801",
   oaklineAddress: "00000000-0000-4000-8000-000000000802",
@@ -507,6 +510,69 @@ async function seed(): Promise<void> {
         totalMinor: 34_304n,
         paidMinor: 34_304n,
         issuedAt: new Date("2026-07-23T10:00:00Z"),
+      },
+    });
+
+    // Line detail for the invoice (7.2% tax on each line) so reports can show
+    // the labor / parts / fees work mix. Amounts sum to the invoice totals.
+    await transaction.invoiceLine.upsert({
+      where: { id: ids.motorcycleInvoiceLabor },
+      update: {},
+      create: {
+        id: ids.motorcycleInvoiceLabor,
+        organizationId: ids.organization,
+        invoiceId: ids.motorcycleInvoice,
+        kind: "LABOR",
+        description: "Annual service labor",
+        quantityMilli: 1_500,
+        unitPriceMinor: 12_000n,
+        grossMinor: 18_000n,
+        discountMinor: 0n,
+        taxable: true,
+        taxRateBasisPoints: 720,
+        taxMinor: 1_296n,
+        totalMinor: 19_296n,
+        position: 1,
+      },
+    });
+    await transaction.invoiceLine.upsert({
+      where: { id: ids.motorcycleInvoicePart },
+      update: {},
+      create: {
+        id: ids.motorcycleInvoicePart,
+        organizationId: ids.organization,
+        invoiceId: ids.motorcycleInvoice,
+        kind: "PART",
+        description: "Oil and filter kit",
+        quantityMilli: 1_000,
+        unitPriceMinor: 9_000n,
+        grossMinor: 9_000n,
+        discountMinor: 0n,
+        taxable: true,
+        taxRateBasisPoints: 720,
+        taxMinor: 648n,
+        totalMinor: 9_648n,
+        position: 2,
+      },
+    });
+    await transaction.invoiceLine.upsert({
+      where: { id: ids.motorcycleInvoiceFee },
+      update: {},
+      create: {
+        id: ids.motorcycleInvoiceFee,
+        organizationId: ids.organization,
+        invoiceId: ids.motorcycleInvoice,
+        kind: "FEE",
+        description: "Shop supplies and fluid disposal",
+        quantityMilli: 1_000,
+        unitPriceMinor: 5_000n,
+        grossMinor: 5_000n,
+        discountMinor: 0n,
+        taxable: true,
+        taxRateBasisPoints: 720,
+        taxMinor: 360n,
+        totalMinor: 5_360n,
+        position: 3,
       },
     });
 
