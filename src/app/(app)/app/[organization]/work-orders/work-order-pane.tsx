@@ -14,6 +14,7 @@ import { WorkOrderStatusBadge } from "@/components/shopos/status-badge";
 import { RecordList, RecordListRow } from "@/components/shopos/record-list";
 import { WorkOrderTabs } from "./work-order-tabs";
 import { humanizeToken } from "@/lib/labels";
+import { activeReservedQuantities } from "@/modules/inventory/inventory-service";
 import { db } from "@/db/client";
 import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
@@ -46,26 +47,40 @@ import { ApplyTemplateCard } from "./[workOrderId]/apply-template-card";
 export async function loadWorkOrderSharedData(
   context: Awaited<ReturnType<typeof getRequestContext>>,
 ): Promise<WorkOrderSharedData> {
-  const [technicians, boardStages, inspectionTemplates] = await Promise.all([
-    listAssignableTechnicians({ db, context }),
-    db.boardStage.findMany({
-      where: { organizationId: context.organizationId, active: true },
-      orderBy: { sortOrder: "asc" },
-      select: { id: true, label: true },
-    }),
-    db.inspectionTemplate.findMany({
-      where: { organizationId: context.organizationId },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
-  ]);
-  return { technicians, boardStages, inspectionTemplates };
+  const [technicians, boardStages, inspectionTemplates, stockRows, reservedTotals] =
+    await Promise.all([
+      listAssignableTechnicians({ db, context }),
+      db.boardStage.findMany({
+        where: { organizationId: context.organizationId, active: true },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, label: true },
+      }),
+      db.inspectionTemplate.findMany({
+        where: { organizationId: context.organizationId },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      db.inventoryItem.findMany({
+        where: { organizationId: context.organizationId },
+        orderBy: { name: "asc" },
+        take: 200,
+        select: { id: true, name: true, partNumber: true, quantityOnHand: true },
+      }),
+      activeReservedQuantities(db, context),
+    ]);
+  const stockItems = stockRows.map((item) => ({
+    id: item.id,
+    label: `${item.partNumber} — ${item.name}`,
+    available: Math.max(0, item.quantityOnHand - (reservedTotals[item.id] ?? 0)),
+  }));
+  return { technicians, boardStages, inspectionTemplates, stockItems };
 }
 
 export type WorkOrderSharedData = Readonly<{
   technicians: Awaited<ReturnType<typeof listAssignableTechnicians>>;
   boardStages: ReadonlyArray<{ id: string; label: string }>;
   inspectionTemplates: ReadonlyArray<{ id: string; name: string }>;
+  stockItems: ReadonlyArray<{ id: string; label: string; available: number }>;
 }>;
 
 /**
@@ -132,7 +147,7 @@ export async function WorkOrderDetailPane({
   });
 
   const sharedData = shared ?? (await loadWorkOrderSharedData(context));
-  const { technicians, boardStages, inspectionTemplates } = sharedData;
+  const { technicians, boardStages, inspectionTemplates, stockItems } = sharedData;
   const customerAssets = wo
     ? await db.asset.findMany({
         where: {
@@ -309,6 +324,7 @@ export async function WorkOrderDetailPane({
                       workOrderStatus={wo.status}
                       canWrite={context.permissions.has("work_orders.write")}
                       canRecordDecisions={context.permissions.has("authorizations.record")}
+                      stockItems={stockItems}
                       revisions={wo.estimateRevisions.map((rev) => ({
                         id: rev.id,
                         revisionNumber: rev.revisionNumber,

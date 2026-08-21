@@ -26,6 +26,9 @@ const addLineSchema = z
     optionGroupLabel: z.string().trim().min(1).max(160).optional(),
     // Job grouping display label for the (required) serviceGroupKey.
     serviceGroupLabel: z.string().trim().min(1).max(160).optional(),
+    // Optional stocked-part link for PART lines (customer-supplied and other
+    // sources stay unlinked and never touch inventory).
+    inventoryItemId: z.string().uuid().optional(),
   })
   .refine((data) => Boolean(data.optionGroupKey) === Boolean(data.optionGroupLabel), {
     message: "optionGroupKey and optionGroupLabel must be provided together",
@@ -114,6 +117,7 @@ export async function POST(
         : {}),
       ...(parsed.data.optionGroupKey ? { optionGroupKey: parsed.data.optionGroupKey } : {}),
       ...(parsed.data.optionGroupLabel ? { optionGroupLabel: parsed.data.optionGroupLabel } : {}),
+      ...(parsed.data.inventoryItemId ? { inventoryItemId: parsed.data.inventoryItemId } : {}),
     });
     return Response.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {

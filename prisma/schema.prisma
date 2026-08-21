@@ -290,6 +290,7 @@ model Organization {
   reviewUrl              String?                      @map("review_url") @db.VarChar(2048)
   defaultLaborRateMinor  BigInt                       @default(0) @map("default_labor_rate_minor")
   defaultTaxRateBasisPoints Int                       @default(0) @map("default_tax_rate_basis_points")
+  autoIssueStockOnInvoice Boolean @default(true) @map("auto_issue_stock_on_invoice")
   invoiceLinePolicy   InvoiceLinePolicy                @default(APPROVED_ONLY) @map("invoice_line_policy")
   subscriptionState   SubscriptionState                @default(UNMANAGED) @map("subscription_state")
   createdAt           DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1216,6 +1217,7 @@ model InventoryMovement {
   reason           InventoryMovementReason
   workOrderId      String?                  @map("work_order_id") @db.Uuid
   partOrderLineId  String?                  @map("part_order_line_id") @db.Uuid
+  invoiceLineId    String?                  @map("invoice_line_id") @db.Uuid
   note             String?                  @db.VarChar(280)
   createdById      String?                  @map("created_by_id") @db.Uuid
   createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1224,6 +1226,7 @@ model InventoryMovement {
   inventoryItem    InventoryItem            @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
   workOrder        WorkOrder?               @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: SetNull)
   partOrderLine    PartOrderLine?           @relation(fields: [organizationId, partOrderLineId], references: [organizationId, id], onDelete: SetNull)
+  invoiceLine      InvoiceLine?             @relation(fields: [organizationId, invoiceLineId], references: [organizationId, id], onDelete: SetNull)
   createdBy        User?                    @relation("InventoryMovementCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, id], map: "inventory_movements_org_id_unique")
@@ -1267,6 +1270,8 @@ model InventoryItem {
   orderLines      PartOrderLine[]
   movements       InventoryMovement[]
   reservations    InventoryReservation[]
+  estimateLines   EstimateLine[]
+  invoiceLines    InvoiceLine[]
 
   @@unique([organizationId, id], map: "inventory_items_org_id_unique")
   @@unique([organizationId, locationId, partNumber], map: "inventory_items_org_loc_part_unique")
@@ -2019,7 +2024,10 @@ model EstimateLine {
   invoiceLines           InvoiceLine[]
 
   stockReservations InventoryReservation[]
+  inventoryItemId   String?        @map("inventory_item_id") @db.Uuid
+  inventoryItem     InventoryItem? @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: SetNull)
 
+  @@index([organizationId, inventoryItemId], map: "estimate_lines_org_item_idx")
   @@unique([estimateRevisionId, position], map: "estimate_lines_revision_position_unique")
   @@unique([organizationId, id], map: "estimate_lines_org_id_unique")
   @@index([organizationId, estimateRevisionId], map: "estimate_lines_org_revision_idx")
@@ -2133,7 +2141,12 @@ model InvoiceLine {
   organization         Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   invoice              Invoice        @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
   sourceEstimateLine   EstimateLine?  @relation(fields: [organizationId, sourceEstimateLineId], references: [organizationId, id], onDelete: Restrict)
+  inventoryItemId      String?        @map("inventory_item_id") @db.Uuid
+  inventoryItem        InventoryItem? @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: SetNull)
+  stockMovements       InventoryMovement[]
 
+  @@index([organizationId, inventoryItemId], map: "invoice_lines_org_item_idx")
+  @@unique([organizationId, id], map: "invoice_lines_org_id_unique")
   @@unique([invoiceId, position], map: "invoice_lines_invoice_position_unique")
   @@index([organizationId, invoiceId], map: "invoice_lines_org_invoice_idx")
   @@map("invoice_lines")

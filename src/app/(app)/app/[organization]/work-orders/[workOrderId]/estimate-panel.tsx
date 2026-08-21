@@ -55,12 +55,14 @@ export function EstimatePanel({
   workOrderStatus,
   canWrite,
   canRecordDecisions,
+  stockItems,
 }: {
   workOrderId: string;
   revisions: Revision[];
   workOrderStatus: string;
   canWrite: boolean;
   canRecordDecisions: boolean;
+  stockItems: ReadonlyArray<{ id: string; label: string; available: number }>;
 }) {
   const [revisions, setRevisions] = useState(initialRevisions);
   const [selectedRevId, setSelectedRevId] = useState<string | null>(
@@ -285,6 +287,7 @@ export function EstimatePanel({
 
   // Line form state
   const [lineKind, setLineKind] = useState("LABOR");
+  const [lineStockItem, setLineStockItem] = useState("");
   const [lineDesc, setLineDesc] = useState("");
   const [lineQty, setLineQty] = useState("1");
   const [linePrice, setLinePrice] = useState("");
@@ -415,6 +418,7 @@ export function EstimatePanel({
                   lineCredit || lineTaxRate === "custom" ? parseInt(lineTaxRate, 10) || 0 : 0,
               }),
           position: lines.length + 1,
+          ...(lineStockItem ? { inventoryItemId: lineStockItem } : {}),
           ...(lineOptionGroup.trim()
             ? {
                 optionGroupKey: lineOptionGroup
@@ -434,6 +438,7 @@ export function EstimatePanel({
       await loadLines(selectedRevId);
       setLineDesc("");
       setLineOptionGroup("");
+      setLineStockItem("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add the line.");
     } finally {
@@ -757,6 +762,36 @@ export function EstimatePanel({
                             <option value="PART">Part</option>
                             <option value="FEE">Fee</option>
                           </select>
+                        </label>
+                      ) : null}
+                      {lineKind === "PART" ? (
+                        <label className="grid gap-1 text-sm font-medium">
+                          Stocked part
+                          <select
+                            value={lineStockItem}
+                            onChange={(e) => {
+                              setLineStockItem(e.target.value);
+                              if (e.target.value && !lineDesc.trim()) {
+                                const item = stockItems.find(
+                                  (entry) => entry.id === e.target.value,
+                                );
+                                if (item) setLineDesc(item.label.split(" — ")[1] ?? item.label);
+                              }
+                            }}
+                            disabled={pending}
+                            title="Linking a stocked part lets invoicing issue it from inventory automatically. Leave unlinked for customer-supplied parts or other sources."
+                            className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm font-normal"
+                          >
+                            <option value="">Not from stock</option>
+                            {stockItems.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.label} ({item.available} avail.)
+                              </option>
+                            ))}
+                          </select>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            Optional — unlinked parts never touch inventory.
+                          </span>
                         </label>
                       ) : null}
                       <label className="grid gap-1 text-sm font-medium">

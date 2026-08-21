@@ -23,6 +23,7 @@ export async function recordStockMovement(
     locationId?: string | undefined;
     workOrderId?: string | undefined;
     partOrderLineId?: string | undefined;
+    invoiceLineId?: string | undefined;
     note?: string | undefined;
   }>,
 ): Promise<void> {
@@ -36,6 +37,7 @@ export async function recordStockMovement(
       ...(movement.locationId ? { locationId: movement.locationId } : {}),
       ...(movement.workOrderId ? { workOrderId: movement.workOrderId } : {}),
       ...(movement.partOrderLineId ? { partOrderLineId: movement.partOrderLineId } : {}),
+      ...(movement.invoiceLineId ? { invoiceLineId: movement.invoiceLineId } : {}),
       ...(movement.note ? { note: movement.note.slice(0, 280) } : {}),
       ...(context.actorId ? { createdById: context.actorId } : {}),
     },
@@ -1216,4 +1218,167 @@ export async function activeReservedQuantities(
     totals[row.inventoryItemId] = row._sum.quantity ?? 0;
   }
   return totals;
+}
+
+/**
+ * Best-effort stock consumption for a freshly created invoice. Never
+ * blocks or rolls back invoicing:
+ *
+ * - Skipped entirely when the org turns off auto-issue (their call).
+ * - Linked lines consume ACTIVE reservations for the same item and work
+ *   order first, so held stock is never double-counted.
+ * - On-hand covers the remainder → issue it (movement keyed to the invoice
+ *   line, idempotent via partial unique index).
+ * - On-hand short (part in hand but never logged) → issue nothing for that
+ *   line and record a discrepancy activity event; the shop decides whether
+ *   to count stock and issue by hand.
+ * - Unlinked lines (customer-supplied parts, other sources) are untouched.
+ */
+export async function autoConsumeStockForInvoice(
+  input: InventoryServiceInput & { invoiceId: string },
+): Promise<Readonly<{ consumedLines: number; skippedLines: number }>> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "invoices.issue",
+  );
+
+  const org = await input.db.organization.findUnique({
+    where: { id: input.context.organizationId },
+    select: { autoIssueStockOnInvoice: true },
+  });
+  if (!org?.autoIssueStockOnInvoice) return { consumedLines: 0, skippedLines: 0 };
+
+  const invoice = await input.db.invoice.findFirst({
+    where: { id: input.invoiceId, organizationId: input.context.organizationId },
+    select: { id: true, number: true, workOrderId: true, locationId: true },
+  });
+  if (!invoice?.workOrderId) return { consumedLines: 0, skippedLines: 0 };
+
+  const lines = await input.db.invoiceLine.findMany({
+    where: {
+      organizationId: input.context.organizationId,
+      invoiceId: invoice.id,
+      inventoryItemId: { not: null },
+    },
+    select: { id: true, inventoryItemId: true, quantityMilli: true, description: true },
+  });
+
+  let consumedLines = 0;
+  let skippedLines = 0;
+
+  for (const line of lines) {
+    const itemId = line.inventoryItemId!;
+    const invoiceQty = Math.max(1, Math.round(line.quantityMilli / 1000));
+
+    try {
+      await input.db.$transaction(async (transaction) => {
+        // Idempotency: one consumption movement per invoice line, ever.
+        const existing = await transaction.inventoryMovement.findFirst({
+          where: {
+            organizationId: input.context.organizationId,
+            invoiceLineId: line.id,
+          },
+          select: { id: true },
+        });
+        if (existing) return;
+
+        const item = await transaction.inventoryItem.findFirst({
+          where: { id: itemId, organizationId: input.context.organizationId },
+          select: { id: true, name: true, partNumber: true, quantityOnHand: true },
+        });
+        if (!item) return;
+
+        // Reservations for this item and job count toward the line: the
+        // hold is consumed first, the remainder comes off the shelf.
+        const holds = await transaction.inventoryReservation.findMany({
+          where: {
+            organizationId: input.context.organizationId,
+            inventoryItemId: item.id,
+            workOrderId: invoice.workOrderId!,
+            status: "ACTIVE",
+          },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, quantity: true },
+        });
+        const holdsTotal = holds.reduce((sum, hold) => sum + hold.quantity, 0);
+        if (holdsTotal + item.quantityOnHand < invoiceQty) {
+          // Never block, never go negative, no partial issues: flag the
+          // discrepancy and leave the shop in charge.
+          skippedLines += 1;
+          await transaction.activityEvent.create({
+            data: {
+              id: randomUUID(),
+              organizationId: input.context.organizationId,
+              locationId: invoice.locationId,
+              workOrderId: invoice.workOrderId!,
+              actorUserId: input.context.actorId,
+              eventType: "inventory.discrepancy",
+              summary: `${item.partNumber} invoiced ×${invoiceQty} on ${invoice.number} but only ${holdsTotal + item.quantityOnHand} available (${item.quantityOnHand} on hand, ${holdsTotal} held) — count stock and issue by hand if needed.`,
+            },
+          });
+          return;
+        }
+
+        // Consume holds first (fully, or shrink the last partial hold).
+        let toTake = invoiceQty;
+        for (const hold of holds) {
+          if (toTake <= 0) break;
+          const take = Math.min(hold.quantity, toTake);
+          toTake -= take;
+          if (take < hold.quantity) {
+            await transaction.inventoryReservation.update({
+              where: { id: hold.id },
+              data: { quantity: hold.quantity - take },
+            });
+          } else {
+            await transaction.inventoryReservation.update({
+              where: { id: hold.id },
+              data: { status: "CONSUMED", consumedAt: new Date() },
+            });
+          }
+        }
+        // Holds are an allocation over on-hand, not a removal: the full
+        // invoiced quantity leaves the shelf now. If the count drifted
+        // below the invoice (holds covered it), clamp at zero and flag.
+        const shelfTake = Math.min(invoiceQty, item.quantityOnHand);
+        if (shelfTake > 0) {
+          await transaction.inventoryItem.update({
+            where: { id: item.id },
+            data: { quantityOnHand: item.quantityOnHand - shelfTake },
+          });
+        }
+        if (item.quantityOnHand < invoiceQty) {
+          await transaction.activityEvent.create({
+            data: {
+              id: randomUUID(),
+              organizationId: input.context.organizationId,
+              locationId: invoice.locationId,
+              workOrderId: invoice.workOrderId!,
+              actorUserId: input.context.actorId,
+              eventType: "inventory.discrepancy",
+              summary: `${item.partNumber} invoiced ×${invoiceQty} on ${invoice.number} but on-hand showed ${item.quantityOnHand} — count was short; corrected to zero.`,
+            },
+          });
+        }
+
+        // One consumption movement per invoice line.
+        await recordStockMovement(transaction, input.context, {
+          inventoryItemId: item.id,
+          delta: -invoiceQty,
+          reason: "ISSUED_TO_JOB",
+          locationId: invoice.locationId,
+          workOrderId: invoice.workOrderId!,
+          invoiceLineId: line.id,
+          note: `Issued on invoice ${invoice.number}`,
+        });
+        consumedLines += 1;
+      });
+    } catch {
+      // Best effort: a failed line never fails the invoice.
+      skippedLines += 1;
+    }
+  }
+
+  return { consumedLines, skippedLines };
 }
