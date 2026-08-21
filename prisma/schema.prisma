@@ -229,6 +229,7 @@ model User {
   drivenTransportJobs   TransportJob[]                    @relation("TransportDriver")
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
+  createdStockMovements InventoryMovement[]               @relation("InventoryMovementCreatedBy")
   timeEntries            TimeEntry[]                       @relation("TimeEntryWorker")
   createdTasks           WorkOrderTask[]                @relation("TaskCreatedBy")
   createdPartOrders       PartOrder[]                    @relation("PartOrderCreatedBy")
@@ -358,6 +359,7 @@ model Organization {
   workOrderAttachments WorkOrderAttachment[]
   authorizationLinks  AuthorizationLink[]
   connectorInstances  ConnectorInstance[]
+  inventoryMovements  InventoryMovement[]
 
   @@map("organizations")
 }
@@ -415,6 +417,7 @@ model Location {
   loanerReservations LoanerReservation[]
   holidays      LocationHoliday[]
   inventoryItems InventoryItem[]
+  inventoryMovements InventoryMovement[]
   inspections  Inspection[]
   cashDrawerSessions CashDrawerSession[]
   deposits         Deposit[]
@@ -944,6 +947,7 @@ model WorkOrder {
   timeEntries        TimeEntry[]
   tasks              WorkOrderTask[]
   partOrders         PartOrder[]
+  stockMovements     InventoryMovement[]
   trackerLink        RepairTrackerLink?
   loanerCheckouts    LoanerCheckout[]
   subletWorks        SubletWork[]
@@ -1158,6 +1162,40 @@ model ShopFee {
   @@map("shop_fees")
 }
 
+enum InventoryMovementReason {
+  RECEIVED          @map("received")
+  ISSUED_TO_JOB     @map("issued_to_job")
+  MANUAL_ADJUSTMENT @map("manual_adjustment")
+  RETURNED_TO_STOCK @map("returned_to_stock")
+
+  @@map("inventory_movement_reason")
+}
+
+model InventoryMovement {
+  id               String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String                   @map("organization_id") @db.Uuid
+  locationId       String?                  @map("location_id") @db.Uuid
+  inventoryItemId  String                   @map("inventory_item_id") @db.Uuid
+  delta            Int
+  reason           InventoryMovementReason
+  workOrderId      String?                  @map("work_order_id") @db.Uuid
+  partOrderLineId  String?                  @map("part_order_line_id") @db.Uuid
+  note             String?                  @db.VarChar(280)
+  createdById      String?                  @map("created_by_id") @db.Uuid
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  location         Location?                @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: SetNull)
+  inventoryItem    InventoryItem            @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
+  workOrder        WorkOrder?               @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: SetNull)
+  partOrderLine    PartOrderLine?           @relation(fields: [organizationId, partOrderLineId], references: [organizationId, id], onDelete: SetNull)
+  createdBy        User?                    @relation("InventoryMovementCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, id], map: "inventory_movements_org_id_unique")
+  @@index([organizationId, inventoryItemId, createdAt(sort: Desc)], map: "inventory_movements_org_item_created_idx")
+  @@index([organizationId, workOrderId], map: "inventory_movements_org_work_order_idx")
+  @@map("inventory_movements")
+}
+
 model InventoryItem {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId  String   @map("organization_id") @db.Uuid
@@ -1173,7 +1211,7 @@ model InventoryItem {
   /// Sales/purchase unit: each, quart, gallon, 5L, pail, drum…
   unitOfMeasure   String?  @map("unit_of_measure") @db.VarChar(40)
   /// Conversion into the group's base unit (quart=1, gallon=4, drum=208…).
-  uomFactorMilli Int?     @map("uom_factor_milli")
+  uomFactorMilli  Int?     @map("uom_factor_milli")
   condition       String   @default("new") @db.VarChar(16)
   hasCore         Boolean  @default(false) @map("has_core")
   coreValueMinor  BigInt?  @map("core_value_minor")
@@ -1191,6 +1229,7 @@ model InventoryItem {
   location        Location? @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: SetNull)
   category        InventoryCategory? @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: SetNull)
   orderLines      PartOrderLine[]
+  movements       InventoryMovement[]
 
   @@unique([organizationId, id], map: "inventory_items_org_id_unique")
   @@unique([organizationId, locationId, partNumber], map: "inventory_items_org_loc_part_unique")
@@ -1779,6 +1818,7 @@ model PartOrderLine {
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   partOrder       PartOrder @relation(fields: [organizationId, partOrderId], references: [organizationId, id], onDelete: Cascade)
   inventoryItem   InventoryItem? @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: SetNull)
+  stockMovements  InventoryMovement[]
 
   @@unique([organizationId, id], map: "part_order_lines_org_id_unique")
   @@index([organizationId, inventoryItemId], map: "part_order_lines_org_item_idx")

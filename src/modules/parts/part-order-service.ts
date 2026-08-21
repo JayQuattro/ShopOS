@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { TransactionalClient } from "@/modules/estimates/estimate-service";
+import { recordStockMovement } from "@/modules/inventory/inventory-service";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 
 export type PartServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
@@ -327,11 +328,21 @@ export async function receiveItems(
         data: { receivedQuantity: line.receivedQuantity + receipt.quantity },
       });
       // Systematic receiving: a linked line bumps its item's stock on
-      // receipt — no separate "→ stock" step to remember.
+      // receipt — no separate "→ stock" step to remember. The movement row
+      // keeps the audit trail of where the stock came from.
       if (line.inventoryItemId) {
         await transaction.inventoryItem.update({
           where: { id: line.inventoryItemId },
           data: { quantityOnHand: { increment: receipt.quantity } },
+        });
+        await recordStockMovement(transaction, input.context, {
+          inventoryItemId: line.inventoryItemId,
+          delta: receipt.quantity,
+          reason: "RECEIVED",
+          locationId: order.locationId,
+          ...(order.workOrderId ? { workOrderId: order.workOrderId } : {}),
+          partOrderLineId: line.id,
+          note: `Received from ${order.supplier.name}`,
         });
       }
       newlyReceivedDescriptions.push(`${line.description} ×${receipt.quantity}`);

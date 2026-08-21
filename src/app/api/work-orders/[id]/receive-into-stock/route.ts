@@ -18,7 +18,7 @@ const schema = z.object({
 
 export async function POST(
   request: Request,
-  _context: { params: Promise<{ id: string }> },
+  context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   let body: unknown;
   try {
@@ -34,6 +34,7 @@ export async function POST(
 
   try {
     const tenantContext = await getRequestContext();
+    const { id } = await context.params;
     const result = await receiveIntoStock({
       db,
       context: tenantContext,
@@ -41,6 +42,7 @@ export async function POST(
       name: parsed.data.name,
       quantity: parsed.data.quantity,
       unitCostMinor: parsed.data.unitCostMinor,
+      workOrderId: id,
       ...(parsed.data.currency ? { currency: parsed.data.currency } : {}),
       ...(parsed.data.binLocation ? { binLocation: parsed.data.binLocation } : {}),
     });
