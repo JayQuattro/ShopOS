@@ -48,6 +48,8 @@ export async function resetTestDatabase(
       "work_order_attachments",
       "inventory_movements",
       "inventory_reservations",
+      "disclaimer_templates",
+      "invoice_disclaimers",
       "part_order_lines",
       "part_orders",
       "part_suppliers",
