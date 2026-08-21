@@ -10,6 +10,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { NextStepButton } from "./next-step-button";
 import { WorkOrderStatusBadge } from "@/components/shopos/status-badge";
 import { RecordList, RecordListRow } from "@/components/shopos/record-list";
 import { WorkOrderTabs } from "./work-order-tabs";
@@ -207,6 +208,13 @@ export async function WorkOrderDetailPane({
         number={wo.number}
         organizationId={context.organizationId}
         statusBadge={<WorkOrderStatusBadge status={wo.status} />}
+        nextStep={
+          <NextStepButton
+            workOrderId={wo.id}
+            status={wo.status}
+            canWrite={context.permissions.has("work_orders.write")}
+          />
+        }
         customerId={wo.customer.id}
         customerName={wo.customer.displayName}
         vehicleName={wo.asset?.displayName ?? null}
@@ -303,6 +311,7 @@ export async function WorkOrderDetailPane({
       </WorkOrderHeader>
 
       <WorkOrderTabs
+        initialTabId={context.permissions.has("work_orders.write") ? "jobs" : "work"}
         tabs={[
           {
             id: "jobs",

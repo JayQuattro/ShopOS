@@ -17,8 +17,19 @@ export type WorkOrderTab = Readonly<{
  * The persistent context bar above carries identity, money, and status so
  * nothing critical is ever a tab away.
  */
-export function WorkOrderTabs({ tabs }: { tabs: readonly WorkOrderTab[] }) {
-  const [activeId, setActiveId] = useState(tabs[0]?.id ?? "");
+export function WorkOrderTabs({
+  tabs,
+  initialTabId,
+}: {
+  tabs: readonly WorkOrderTab[];
+  /** Opening tab — role-aware: writers land on Jobs & estimate, technicians on Work & time. */
+  initialTabId?: string;
+}) {
+  const [activeId, setActiveId] = useState(
+    initialTabId && tabs.some((tab) => tab.id === initialTabId)
+      ? initialTabId
+      : (tabs[0]?.id ?? ""),
+  );
 
   return (
     <div className="flex flex-col gap-4">
