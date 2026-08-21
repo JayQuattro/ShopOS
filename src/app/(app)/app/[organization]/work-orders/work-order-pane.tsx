@@ -15,6 +15,7 @@ import { RecordList, RecordListRow } from "@/components/shopos/record-list";
 import { WorkOrderTabs } from "./work-order-tabs";
 import { humanizeToken } from "@/lib/labels";
 import { activeReservedQuantities } from "@/modules/inventory/inventory-service";
+import { invoicePartsMargin } from "@/modules/reports/report-service";
 import { db } from "@/db/client";
 import { formatDateTime, formatMoney } from "@/i18n/formatters";
 import { getRequestContext } from "@/modules/tenancy/request-context";
@@ -162,6 +163,10 @@ export async function WorkOrderDetailPane({
         orderBy: { displayName: "asc" },
       })
     : [];
+
+  const partsMargin = wo?.invoice
+    ? await invoicePartsMargin({ db, context, invoiceId: wo.invoice.id })
+    : null;
 
   // Loaner candidates: fleet vehicles when the shop has marked any; otherwise
   // the heuristic fallback (active assets not tied to this WO's customer).
@@ -459,6 +464,62 @@ export async function WorkOrderDetailPane({
                           />
                         ))}
                       </RecordList>
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                {partsMargin ? (
+                  <Card>
+                    <CardHeader className="flex items-center justify-between">
+                      <CardTitle className="text-base">Job margin</CardTitle>
+                      <span className="text-xs text-muted-foreground">
+                        parts revenue − stock cost
+                      </span>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Parts sold</p>
+                          <p className="font-mono font-medium tabular-nums">
+                            {formatMoney(
+                              partsMargin.partsRevenueMinor,
+                              wo.invoice!.currency,
+                              "en-US",
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Stock cost</p>
+                          <p className="font-mono font-medium tabular-nums text-muted-foreground">
+                            {formatMoney(partsMargin.partsCostMinor, wo.invoice!.currency, "en-US")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Parts margin</p>
+                          <p className="font-mono font-medium tabular-nums">
+                            {formatMoney(partsMargin.marginMinor, wo.invoice!.currency, "en-US")}
+                            {partsMargin.marginPct !== null ? (
+                              <span className="ml-1 text-xs text-muted-foreground">
+                                ({partsMargin.marginPct}%)
+                              </span>
+                            ) : null}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Labor sold</p>
+                          <p className="font-mono font-medium tabular-nums text-muted-foreground">
+                            {formatMoney(
+                              partsMargin.laborRevenueMinor,
+                              wo.invoice!.currency,
+                              "en-US",
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Stock cost uses current unit cost; customer-supplied parts count zero shop
+                        cost.
+                      </p>
                     </CardContent>
                   </Card>
                 ) : null}

@@ -10,6 +10,7 @@ import { getRequestContext } from "@/modules/tenancy/request-context";
 import {
   businessSummary,
   estimateFunnel,
+  jobMargins,
   revenueTrend,
   statusBreakdown,
   technicianProductivity,
@@ -60,7 +61,7 @@ export default async function ReportsPage({
   const to = new Date();
   const from = new Date(to.getTime() - period.days * 24 * 60 * 60 * 1000);
 
-  const [summary, technicians, pipeline, trend, mix, funnel, jobs] = await Promise.all([
+  const [summary, technicians, pipeline, trend, mix, funnel, jobs, margins] = await Promise.all([
     businessSummary({ db, context, from, to }),
     technicianProductivity({ db, context, from, to }),
     statusBreakdown({ db, context }),
@@ -68,6 +69,7 @@ export default async function ReportsPage({
     workMix({ db, context, from, to }),
     estimateFunnel({ db, context, from, to }),
     topJobs({ db, context, from, to, limit: 5 }),
+    jobMargins({ db, context, from, to, limit: 5 }),
   ]);
 
   const currency = summary.invoicedCurrency;
@@ -350,6 +352,58 @@ export default async function ReportsPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle className="text-base">Parts margin by job</CardTitle>
+          <span className="text-xs text-muted-foreground">
+            parts revenue − stock cost · customer-supplied parts cost nothing
+          </span>
+        </CardHeader>
+        <CardContent>
+          {margins.length === 0 ? (
+            <EmptyState
+              title="No invoiced parts yet"
+              description="Once invoices carry stocked parts, margin per job appears here."
+            />
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="py-2 pr-4 font-medium">Job</th>
+                  <th className="py-2 pr-4 font-medium text-right">Parts sold</th>
+                  <th className="py-2 pr-4 font-medium text-right">Stock cost</th>
+                  <th className="py-2 pr-4 font-medium text-right">Margin</th>
+                  <th className="py-2 pr-4 font-medium text-right">Margin %</th>
+                  <th className="py-2 font-medium text-right">Labor sold</th>
+                </tr>
+              </thead>
+              <tbody>
+                {margins.map((row) => (
+                  <tr key={row.label} className="border-b border-border/60">
+                    <td className="py-2 pr-4">{row.label}</td>
+                    <td className="py-2 pr-4 text-right font-mono tabular-nums">
+                      {money(row.partsRevenueMinor)}
+                    </td>
+                    <td className="py-2 pr-4 text-right font-mono tabular-nums text-muted-foreground">
+                      {money(row.partsCostMinor)}
+                    </td>
+                    <td className="py-2 pr-4 text-right font-mono tabular-nums font-medium">
+                      {money(row.marginMinor)}
+                    </td>
+                    <td className="py-2 pr-4 text-right font-mono tabular-nums">
+                      {row.marginPct === null ? "—" : `${row.marginPct}%`}
+                    </td>
+                    <td className="py-2 text-right font-mono tabular-nums text-muted-foreground">
+                      {money(row.laborRevenueMinor)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>

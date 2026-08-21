@@ -523,3 +523,158 @@ export async function topJobs(
     .sort((a, b) => b.minor - a.minor)
     .slice(0, input.limit ?? 5);
 }
+
+export type JobMargin = Readonly<{
+  label: string;
+  partsRevenueMinor: number;
+  partsCostMinor: number;
+  laborRevenueMinor: number;
+  feesRevenueMinor: number;
+  marginMinor: number;
+  marginPct: number | null;
+}>;
+
+/**
+ * Parts margin per job over issued invoices in the window. Parts cost uses
+ * the linked stock item's current unit cost (refreshed on receiving) × the
+ * invoiced quantity; unlinked part lines (customer-supplied, other sources)
+ * carry no shop cost by design. Labor is revenue-only — there is no tech
+ * cost rate yet — so margin is a parts story, labeled as such.
+ */
+export async function jobMargins(
+  input: ReportServiceInput & ReportRange & { limit?: number },
+): Promise<readonly JobMargin[]> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+  const orgId = input.context.organizationId;
+
+  const lines = await input.db.invoiceLine.findMany({
+    where: {
+      organizationId: orgId,
+      invoice: {
+        issuedAt: { gte: input.from, lt: input.to },
+        status: { not: "VOID" },
+      },
+    },
+    select: {
+      kind: true,
+      totalMinor: true,
+      quantityMilli: true,
+      inventoryItemId: true,
+      inventoryItem: { select: { unitCostMinor: true } },
+      sourceEstimateLine: {
+        select: { serviceGroupKey: true, serviceGroupLabel: true },
+      },
+    },
+  });
+
+  const byJob = new Map<
+    string,
+    {
+      label: string;
+      partsRevenue: number;
+      partsCost: number;
+      labor: number;
+      fees: number;
+    }
+  >();
+  for (const line of lines) {
+    const group = line.sourceEstimateLine;
+    const label =
+      group?.serviceGroupLabel ??
+      (group && group.serviceGroupKey !== "general" ? group.serviceGroupKey : null) ??
+      "Other items";
+    if (!byJob.has(label)) {
+      byJob.set(label, { label, partsRevenue: 0, partsCost: 0, labor: 0, fees: 0 });
+    }
+    const job = byJob.get(label)!;
+    const total = Number(line.totalMinor);
+    if (line.kind === "PART") {
+      job.partsRevenue += total;
+      if (line.inventoryItemId && line.inventoryItem) {
+        const quantity = Math.max(1, Math.round(line.quantityMilli / 1000));
+        job.partsCost += quantity * Number(line.inventoryItem.unitCostMinor);
+      }
+    } else if (line.kind === "LABOR") {
+      job.labor += total;
+    } else {
+      job.fees += total;
+    }
+  }
+
+  return [...byJob.values()]
+    .map((job) => {
+      const marginMinor = job.partsRevenue - job.partsCost;
+      return {
+        label: job.label,
+        partsRevenueMinor: job.partsRevenue,
+        partsCostMinor: job.partsCost,
+        laborRevenueMinor: job.labor,
+        feesRevenueMinor: job.fees,
+        marginMinor,
+        marginPct: job.partsRevenue > 0 ? Math.round((marginMinor / job.partsRevenue) * 100) : null,
+      };
+    })
+    .sort((a, b) => b.marginMinor - a.marginMinor)
+    .slice(0, input.limit ?? 10);
+}
+
+/** Parts margin for one invoice — powers the work order Money tab card. */
+export async function invoicePartsMargin(
+  input: ReportServiceInput & { invoiceId: string },
+): Promise<JobMargin | null> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+  const invoice = await input.db.invoice.findFirst({
+    where: { id: input.invoiceId, organizationId: input.context.organizationId },
+    select: { id: true },
+  });
+  if (!invoice) return null;
+
+  const rows = await input.db.invoiceLine.findMany({
+    where: {
+      organizationId: input.context.organizationId,
+      invoiceId: invoice.id,
+    },
+    select: {
+      kind: true,
+      totalMinor: true,
+      quantityMilli: true,
+      inventoryItem: { select: { unitCostMinor: true } },
+    },
+  });
+  let partsRevenue = 0;
+  let partsCost = 0;
+  let labor = 0;
+  let fees = 0;
+  for (const line of rows) {
+    const total = Number(line.totalMinor);
+    if (line.kind === "PART") {
+      partsRevenue += total;
+      if (line.inventoryItem) {
+        const quantity = Math.max(1, Math.round(line.quantityMilli / 1000));
+        partsCost += quantity * Number(line.inventoryItem.unitCostMinor);
+      }
+    } else if (line.kind === "LABOR") {
+      labor += total;
+    } else {
+      fees += total;
+    }
+  }
+  const marginMinor = partsRevenue - partsCost;
+  return {
+    label: "Whole invoice",
+    partsRevenueMinor: partsRevenue,
+    partsCostMinor: partsCost,
+    laborRevenueMinor: labor,
+    feesRevenueMinor: fees,
+    marginMinor,
+    marginPct: partsRevenue > 0 ? Math.round((marginMinor / partsRevenue) * 100) : null,
+  };
+}
