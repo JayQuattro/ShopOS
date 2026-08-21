@@ -291,6 +291,9 @@ model Organization {
   defaultLaborRateMinor  BigInt                       @default(0) @map("default_labor_rate_minor")
   defaultTaxRateBasisPoints Int                       @default(0) @map("default_tax_rate_basis_points")
   autoIssueStockOnInvoice Boolean @default(true) @map("auto_issue_stock_on_invoice")
+  /// Default warranty terms copied onto new invoices (null = none).
+  defaultWarrantyMonths Int? @map("default_warranty_months")
+  defaultWarrantyMiles  Int? @map("default_warranty_miles")
   invoiceLinePolicy   InvoiceLinePolicy                @default(APPROVED_ONLY) @map("invoice_line_policy")
   subscriptionState   SubscriptionState                @default(UNMANAGED) @map("subscription_state")
   createdAt           DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -2147,6 +2150,8 @@ model Invoice {
   paymentUrl     String?       @map("payment_url") @db.VarChar(2048)
   paymentLinkRef String?       @map("payment_link_ref") @db.VarChar(160)
   issuedAt       DateTime?     @map("issued_at") @db.Timestamptz(6)
+  warrantyMonths Int?          @map("warranty_months")
+  warrantyMiles  Int?          @map("warranty_miles")
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)

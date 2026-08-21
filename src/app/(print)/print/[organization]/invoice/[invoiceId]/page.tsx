@@ -35,6 +35,8 @@ export default async function InvoicePrintPage({
       totalMinor: true,
       paidMinor: true,
       issuedAt: true,
+      warrantyMonths: true,
+      warrantyMiles: true,
       disclaimers: {
         orderBy: { position: "asc" as const },
         select: { id: true, name: true, body: true },
@@ -192,6 +194,21 @@ export default async function InvoicePrintPage({
             </div>
           </div>
         </PrintSection>
+
+        {invoice.warrantyMonths || invoice.warrantyMiles ? (
+          <p className="text-sm text-neutral-700">
+            <span className="font-semibold">Warranty: </span>
+            {[
+              invoice.warrantyMonths ? `${invoice.warrantyMonths} months` : null,
+              invoice.warrantyMiles
+                ? `${Intl.NumberFormat(locale).format(invoice.warrantyMiles)} miles`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" or ")}{" "}
+            from invoice date, covering defects in workmanship.
+          </p>
+        ) : null}
 
         {invoice.disclaimers.length > 0 ? (
           <PrintSection heading="Disclaimers">

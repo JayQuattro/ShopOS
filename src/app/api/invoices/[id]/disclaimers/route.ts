@@ -23,9 +23,9 @@ const removeSchema = z.object({ disclaimerId: z.string().min(1) });
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ invoiceId: string }> },
+  context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const { invoiceId } = await context.params;
+  const { id: invoiceId } = await context.params;
   try {
     const tenantContext = await getRequestContext();
     const [applied, suggestions] = await Promise.all([
@@ -40,7 +40,7 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ invoiceId: string }> },
+  context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   let body: unknown;
   try {
@@ -52,7 +52,7 @@ export async function POST(
   if (!parsed.success || (!parsed.data.templateId && !parsed.data.name)) {
     return Response.json({ error: "invalid_body" }, { status: 400 });
   }
-  const { invoiceId } = await context.params;
+  const { id: invoiceId } = await context.params;
   try {
     const tenantContext = await getRequestContext();
     const result = await applyDisclaimer({
@@ -71,7 +71,7 @@ export async function POST(
 
 export async function DELETE(
   request: Request,
-  context: { params: Promise<{ invoiceId: string }> },
+  context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const url = new URL(request.url);
   const disclaimerId = url.searchParams.get("disclaimerId");
@@ -80,7 +80,7 @@ export async function DELETE(
   if (!parsed.success) {
     return Response.json({ error: "invalid_body" }, { status: 400 });
   }
-  const { invoiceId } = await context.params;
+  const { id: invoiceId } = await context.params;
   try {
     const tenantContext = await getRequestContext();
     await removeDisclaimer({

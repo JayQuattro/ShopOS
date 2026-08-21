@@ -86,7 +86,11 @@ export async function createInvoiceFromWorkOrder(
 
       const org = await transaction.organization.findUnique({
         where: { id: input.context.organizationId },
-        select: { invoiceLinePolicy: true },
+        select: {
+          invoiceLinePolicy: true,
+          defaultWarrantyMonths: true,
+          defaultWarrantyMiles: true,
+        },
       });
       const approvedOnly = org?.invoiceLinePolicy !== "ALL_LINES";
 
@@ -211,6 +215,8 @@ export async function createInvoiceFromWorkOrder(
           taxInclusive: baseline?.taxInclusive ?? false,
           totalMinor,
           paidMinor: 0n,
+          ...(org?.defaultWarrantyMonths ? { warrantyMonths: org.defaultWarrantyMonths } : {}),
+          ...(org?.defaultWarrantyMiles ? { warrantyMiles: org.defaultWarrantyMiles } : {}),
         },
       });
 
@@ -255,7 +261,16 @@ export async function createInvoiceFromWorkOrder(
         },
       });
 
-      return { invoiceId: invoice.id, number };
+      const warranty = await input.db.invoice.findUnique({
+        where: { id: invoice.id },
+        select: { warrantyMonths: true, warrantyMiles: true },
+      });
+      return {
+        invoiceId: invoice.id,
+        number,
+        warrantyMonths: warranty?.warrantyMonths ?? null,
+        warrantyMiles: warranty?.warrantyMiles ?? null,
+      };
     })
     .then(async (result) => {
       // Best-effort stock consumption after the invoice exists — inventory
