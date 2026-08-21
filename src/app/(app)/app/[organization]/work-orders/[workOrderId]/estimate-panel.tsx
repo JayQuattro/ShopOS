@@ -1,5 +1,6 @@
 "use client";
 
+import { PromptDialog } from "@/components/shopos/prompt-dialog";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Plus } from "lucide-react";
@@ -176,20 +177,17 @@ export function EstimatePanel({
     }
   }
 
-  async function createChangeOrder() {
+  const [coAsk, setCoAsk] = useState(false);
+
+  async function createChangeOrder(note: string) {
+    setCoAsk(false);
     setPending(true);
     setError(null);
     try {
-      const note = window.prompt(
-        "What additional work was found? This note is shown to the customer verbatim.",
-      );
-      if (!note || note.trim().length < 3) {
-        throw new Error("A note of at least 3 characters is required.");
-      }
       const res = await fetch(`/api/work-orders/${workOrderId}/change-orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: note.trim() }),
+        body: JSON.stringify({ note }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create change order");
@@ -483,7 +481,7 @@ export function EstimatePanel({
         </div>
         <div className="flex gap-2">
           {coAllowed ? (
-            <Button variant="default" size="sm" onClick={createChangeOrder} disabled={pending}>
+            <Button variant="default" size="sm" onClick={() => setCoAsk(true)} disabled={pending}>
               New change order
             </Button>
           ) : null}
@@ -948,6 +946,29 @@ export function EstimatePanel({
           {coAllowed ? ", or \u201cNew change order\u201d once work is authorized" : ""}.
         </p>
       )}
+      <PromptDialog
+        open={coAsk}
+        title="New change order"
+        description="What additional work was found? This note is shown to the customer verbatim."
+        fields={[
+          {
+            name: "note",
+            label: "Additional work found",
+            placeholder: "Rear pads also at 2mm — replacing all four corners",
+            type: "textarea",
+            required: true,
+            autoFocus: true,
+          },
+        ]}
+        submitLabel="Create change order"
+        pending={pending}
+        onCancel={() => setCoAsk(false)}
+        onSubmit={(values) => {
+          const note = values.note?.trim();
+          if (!note || note.length < 3) return;
+          void createChangeOrder(note);
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { PromptDialog } from "@/components/shopos/prompt-dialog";
 import { useEffect, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -71,16 +72,14 @@ export function InvoicePanel({
     };
   }, [invoice.id, invoice.paidMinor]);
 
-  async function refund(paymentId: string, refundableMinor: string) {
-    const refundable = Number(refundableMinor) / 100;
-    const entered = window.prompt(
-      `Refund amount (up to ${refundable.toFixed(2)})?`,
-      refundable.toFixed(2),
-    );
-    if (entered === null) return;
-    const amountMinor = Math.round(Number(entered.replace(/[$,]/g, "")) * 100);
+  const [refundAsk, setRefundAsk] = useState<{
+    paymentId: string;
+    refundableMinor: string;
+  } | null>(null);
+
+  async function refund(paymentId: string, amount: string, reason?: string) {
+    const amountMinor = Math.round(Number(amount.replace(/[$,]/g, "")) * 100);
     if (!Number.isFinite(amountMinor) || amountMinor <= 0) return;
-    const reason = window.prompt("Reason (shown on the statement)?") ?? undefined;
     setRefundPending(paymentId);
     setError(null);
     try {
@@ -401,7 +400,12 @@ export function InvoicePanel({
                   variant="outline"
                   size="sm"
                   disabled={refundPending === payment.id}
-                  onClick={() => void refund(payment.id, payment.refundableMinor)}
+                  onClick={() =>
+                    setRefundAsk({
+                      paymentId: payment.id,
+                      refundableMinor: payment.refundableMinor,
+                    })
+                  }
                 >
                   {refundPending === payment.id ? "Refunding…" : "Refund"}
                 </Button>
@@ -474,6 +478,36 @@ export function InvoicePanel({
             </Button>
           </div>
         </div>
+      ) : null}
+      {refundAsk ? (
+        <PromptDialog
+          open
+          title="Record refund"
+          description={`Up to $${(Number(refundAsk.refundableMinor) / 100).toFixed(2)} refundable on this payment.`}
+          fields={[
+            {
+              name: "amount",
+              label: "Amount",
+              type: "number",
+              initialValue: (Number(refundAsk.refundableMinor) / 100).toFixed(2),
+              required: true,
+              autoFocus: true,
+            },
+            {
+              name: "reason",
+              label: "Reason (shown on the statement)",
+              placeholder: "Overcharge on parts",
+            },
+          ]}
+          submitLabel="Refund"
+          pending={refundPending === refundAsk.paymentId}
+          onCancel={() => setRefundAsk(null)}
+          onSubmit={(values) => {
+            const ask = refundAsk;
+            setRefundAsk(null);
+            void refund(ask.paymentId, values.amount ?? "", values.reason?.trim() || undefined);
+          }}
+        />
       ) : null}
     </div>
   );

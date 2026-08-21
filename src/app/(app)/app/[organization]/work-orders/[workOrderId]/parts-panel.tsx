@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+
+import { PromptDialog } from "@/components/shopos/prompt-dialog";
 import { formatMoney } from "@/i18n/formatters";
 
 import { StockHolds } from "./stock-holds";
@@ -59,6 +61,8 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
   const [notice, setNotice] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
+  const [trackingOrder, setTrackingOrder] = useState<PartOrder | null>(null);
+  const [receiveOrder, setReceiveOrder] = useState<PartOrder | null>(null);
   const [supplierId, setSupplierId] = useState("");
   const [newSupplierName, setNewSupplierName] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([{ ...emptyLine }]);
@@ -191,12 +195,12 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
     }
   }
 
-  async function markOrderedFlow(partOrderId: string) {
-    const tracking = window.prompt("Tracking number (optional)") ?? undefined;
+  async function markOrderedFlow(partOrderId: string, tracking?: string) {
     await orderAction(partOrderId, {
       action: "mark-ordered",
-      ...(tracking ? { trackingNumber: tracking } : {}),
+      ...(tracking?.trim() ? { trackingNumber: tracking.trim() } : {}),
     });
+    setTrackingOrder(null);
   }
 
   async function receiveIntoStock(line: InventoryCandidate) {
@@ -230,23 +234,26 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
     }
   }
 
-  async function receiveFlow(order: PartOrder) {
-    const bodyLines = order.lines
+  function receiveFields(order: PartOrder) {
+    return order.lines
       .filter((line) => line.receivedQuantity < line.quantity)
-      .map((line) => {
-        const remaining = line.quantity - line.receivedQuantity;
-        const input = window.prompt(
-          `Received quantity for "${line.description}" (ordered ${line.quantity}, outstanding ${remaining})`,
-          String(remaining),
-        );
-        if (input === null) return null;
-        const quantity = Number(input);
-        if (!Number.isInteger(quantity) || quantity < 1) return null;
-        return { lineId: line.id, quantity };
-      })
-      .filter((line): line is { lineId: string; quantity: number } => line !== null);
-    if (bodyLines.length === 0) return;
-    await orderAction(order.id, { action: "receive", lines: bodyLines });
+      .map((line) => ({
+        name: line.id,
+        label: `${line.description} (outstanding ${line.quantity - line.receivedQuantity})`,
+        type: "number" as const,
+        initialValue: String(line.quantity - line.receivedQuantity),
+        required: true,
+      }));
+  }
+
+  async function receiveSubmit(order: PartOrder, values: Readonly<Record<string, string>>) {
+    const lines = order.lines
+      .filter((line) => line.receivedQuantity < line.quantity)
+      .map((line) => ({ lineId: line.id, quantity: Number(values[line.id] ?? 0) }))
+      .filter((line) => Number.isInteger(line.quantity) && line.quantity >= 1);
+    if (lines.length === 0) return;
+    await orderAction(order.id, { action: "receive", lines });
+    setReceiveOrder(null);
   }
 
   const currency = orders[0]?.currency ?? "USD";
@@ -453,7 +460,7 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
                           size="sm"
                           variant="outline"
                           disabled={pending}
-                          onClick={() => void markOrderedFlow(order.id)}
+                          onClick={() => setTrackingOrder(order)}
                         >
                           Mark ordered
                         </Button>
@@ -463,7 +470,7 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
                           size="sm"
                           variant="outline"
                           disabled={pending}
-                          onClick={() => void receiveFlow(order)}
+                          onClick={() => setReceiveOrder(order)}
                         >
                           Receive
                         </Button>
@@ -535,6 +542,35 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
               "en-US",
             )}
           </p>
+        ) : null}
+        <PromptDialog
+          open={trackingOrder !== null}
+          title={`Mark ordered — ${trackingOrder?.supplierName ?? ""}`}
+          description="Optional tracking for this shipment."
+          fields={[
+            {
+              name: "tracking",
+              label: "Tracking number",
+              placeholder: "1Z999AA10123456784",
+              autoFocus: true,
+            },
+          ]}
+          submitLabel="Mark ordered"
+          pending={pending}
+          onCancel={() => setTrackingOrder(null)}
+          onSubmit={(values) => void markOrderedFlow(trackingOrder!.id, values.tracking)}
+        />
+        {receiveOrder ? (
+          <PromptDialog
+            open
+            title={`Receive — ${receiveOrder.supplierName}`}
+            description="Enter what actually arrived. Linked parts go into stock automatically."
+            fields={receiveFields(receiveOrder)}
+            submitLabel="Receive"
+            pending={pending}
+            onCancel={() => setReceiveOrder(null)}
+            onSubmit={(values) => void receiveSubmit(receiveOrder, values)}
+          />
         ) : null}
       </CardContent>
     </Card>

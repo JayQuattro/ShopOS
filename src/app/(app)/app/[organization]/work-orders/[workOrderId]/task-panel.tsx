@@ -1,5 +1,6 @@
 "use client";
 
+import { PromptDialog } from "@/components/shopos/prompt-dialog";
 import { useEffect, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -43,6 +44,7 @@ export function TaskPanel({
   const [templateLines, setTemplateLines] = useState<TemplateLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
+  const [flagAsk, setFlagAsk] = useState<Task | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
@@ -139,19 +141,10 @@ export function TaskPanel({
     }
   }
 
-  async function setStatus(task: Task, status: Task["status"]) {
+  async function setStatus(task: Task, status: Task["status"], outcomeNote?: string) {
     setPending(true);
     setError(null);
     try {
-      let outcomeNote: string | undefined;
-      if (status === "NEEDS_ATTENTION") {
-        const note = window.prompt(
-          `What did you find with "${task.title}"? This is shown to the customer.`,
-          task.outcomeNote ?? "",
-        );
-        if (note === null) return;
-        outcomeNote = note;
-      }
       const res = await fetch(`/api/work-orders/${workOrderId}/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -337,11 +330,7 @@ export function TaskPanel({
                           variant="outline"
                           size="sm"
                           disabled={pending}
-                          onClick={() =>
-                            void setStatus(task, "NEEDS_ATTENTION").then(() =>
-                              setRecFor(recFor === task.id ? null : task.id),
-                            )
-                          }
+                          onClick={() => setFlagAsk(task)}
                         >
                           Flag
                         </Button>
@@ -397,6 +386,36 @@ export function TaskPanel({
               Or use “Create change order from flagged” above to bundle everything.
             </p>
           </div>
+        ) : null}
+        {flagAsk ? (
+          <PromptDialog
+            open
+            title={`Flag "${flagAsk.title}"`}
+            description="What did you find? This is shown to the customer."
+            fields={[
+              {
+                name: "note",
+                label: "Finding",
+                placeholder: "Front pads at 2mm — recommend replacement",
+                type: "textarea",
+                initialValue: flagAsk.outcomeNote ?? "",
+                required: true,
+                autoFocus: true,
+              },
+            ]}
+            submitLabel="Flag task"
+            pending={pending}
+            onCancel={() => setFlagAsk(null)}
+            onSubmit={(values) => {
+              const task = flagAsk;
+              const note = values.note?.trim();
+              if (!note) return;
+              setFlagAsk(null);
+              void setStatus(task, "NEEDS_ATTENTION", note).then(() =>
+                setRecFor(recFor === task.id ? null : task.id),
+              );
+            }}
+          />
         ) : null}
       </CardContent>
     </Card>
