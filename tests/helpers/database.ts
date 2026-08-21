@@ -47,6 +47,7 @@ export async function resetTestDatabase(
       "work_order_assets",
       "work_order_attachments",
       "inventory_movements",
+      "inventory_reservations",
       "part_order_lines",
       "part_orders",
       "part_suppliers",

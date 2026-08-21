@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/i18n/formatters";
 
+import { StockHolds } from "./stock-holds";
+
 type PartOrder = {
   id: string;
   status: "REQUESTED" | "ORDERED" | "RECEIVED" | "CANCELLED";
@@ -398,6 +400,12 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
           </form>
         ) : null}
 
+        <div className="rounded-md border border-border p-3">
+          <p className="mb-2 text-sm font-semibold">Stock holds</p>
+          <StockHolds workOrderId={workOrderId} canWrite={canWrite} />
+        </div>
+
+        <p className="text-sm font-semibold text-muted-foreground">Orders</p>
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading parts orders…</p>
         ) : orders.length === 0 ? (
