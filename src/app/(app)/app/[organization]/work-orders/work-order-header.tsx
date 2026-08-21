@@ -11,6 +11,8 @@ export type WorkOrderHeaderProps = Readonly<{
   number: string;
   organizationId: string;
   statusBadge: ReactNode;
+  /** Recommended next action rendered in the collapsed strip. */
+  nextStep?: ReactNode;
   customerId: string;
   customerName: string;
   vehicleName: string | null;
@@ -36,6 +38,7 @@ export function WorkOrderHeader({
   number,
   organizationId,
   statusBadge,
+  nextStep,
   customerId,
   customerName,
   vehicleName,
@@ -91,7 +94,13 @@ export function WorkOrderHeader({
             </>
           ) : null}
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+        {nextStep ? <span className="ml-auto">{nextStep}</span> : null}
+        <div
+          className={
+            "flex flex-wrap items-center gap-x-5 gap-y-1 text-sm" +
+            (nextStep ? " ml-0" : " ml-auto")
+          }
+        >
           <span>
             <span className="text-xs text-muted-foreground">Estimate </span>
             <span className="font-mono font-semibold tabular-nums">{money(estimateMinor)}</span>

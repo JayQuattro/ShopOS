@@ -13,27 +13,52 @@ import { db } from "@/db/client";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 import { WorkOrderCreateForm } from "./work-order-create-form";
 
+const STATUSES = [
+  "ESTIMATING",
+  "AWAITING_AUTHORIZATION",
+  "AUTHORIZED",
+  "IN_PROGRESS",
+  "BLOCKED",
+  "COMPLETED",
+  "INVOICED",
+  "CLOSED",
+] as const;
+const STATUS_ORDER: Readonly<Record<string, number>> = Object.fromEntries(
+  STATUSES.map((status, index) => [status, index]),
+);
+
 export default async function WorkOrdersPage({
   params,
   searchParams,
 }: {
   params: Promise<{ organization: string }>;
-  searchParams: Promise<{ new?: string; customer?: string; q?: string }>;
+  searchParams: Promise<{ new?: string; customer?: string; q?: string; status?: string }>;
 }) {
   const { organization } = await params;
-  const { new: wantsNew, customer: preselectedCustomer, q: search } = await searchParams;
+  const {
+    new: wantsNew,
+    customer: preselectedCustomer,
+    q: search,
+    status: statusParam,
+  } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
   }
 
   const query = search?.trim() ?? "";
+  const statusFilter =
+    statusParam && (STATUSES as readonly string[]).includes(statusParam)
+      ? (statusParam as (typeof STATUSES)[number])
+      : null;
+
   const workOrders = await db.workOrder.findMany({
     where: {
       organizationId: context.organizationId,
       ...(context.organizationWideLocationAccess
         ? {}
         : { locationId: { in: [...context.allowedLocationIds] } }),
+      ...(statusFilter ? { status: statusFilter } : {}),
       ...(query
         ? {
             OR: [
@@ -58,6 +83,31 @@ export default async function WorkOrdersPage({
     },
     take: 100,
   });
+
+  const statusCounts = await db.workOrder.groupBy({
+    by: ["status"],
+    where: {
+      organizationId: context.organizationId,
+      ...(context.organizationWideLocationAccess
+        ? {}
+        : { locationId: { in: [...context.allowedLocationIds] } }),
+      status: { notIn: ["CANCELLED"] },
+    },
+    _count: { status: true },
+  });
+  const chips = statusCounts
+    .map((row) => ({ status: row.status as string, count: row._count.status }))
+    .filter((row) => row.status in STATUS_ORDER)
+    .sort((a, b) => STATUS_ORDER[a.status]! - STATUS_ORDER[b.status]!);
+  const chipHref = (status: string | null) => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (status) params.set("status", status);
+    const qs = params.toString();
+    return qs
+      ? `/app/${context.organizationId}/work-orders?${qs}`
+      : `/app/${context.organizationId}/work-orders`;
+  };
 
   // Load customers, assets, and locations for the create form (permission-gated).
   const canCreate = context.permissions.has("work_orders.write");
@@ -121,11 +171,40 @@ export default async function WorkOrdersPage({
           action={`/app/${context.organizationId}/work-orders`}
           query={query}
           placeholder="Search RO #, customer, vehicle…"
+          {...(statusFilter ? { hiddenParams: { status: statusFilter } } : {})}
         />
         <p className="text-sm text-muted-foreground">
           {workOrders.length} work order{workOrders.length === 1 ? "" : "s"}
         </p>
       </div>
+
+      {chips.length > 0 ? (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by status">
+          <Link
+            href={chipHref(null)}
+            className={
+              statusFilter === null
+                ? "min-h-11 rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-sm text-primary"
+                : "min-h-11 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+            }
+          >
+            All ({chips.reduce((sum, row) => sum + row.count, 0)})
+          </Link>
+          {chips.map((row) => (
+            <Link
+              key={row.status}
+              href={chipHref(row.status)}
+              className={
+                statusFilter === row.status
+                  ? "min-h-11 rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-sm text-primary"
+                  : "min-h-11 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+              }
+            >
+              {humanizeToken(row.status)} ({row.count})
+            </Link>
+          ))}
+        </div>
+      ) : null}
 
       <Card>
         <CardContent className="p-0">
