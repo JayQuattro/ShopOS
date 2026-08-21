@@ -54,202 +54,225 @@ export async function createInvoiceFromWorkOrder(
     "invoices.issue",
   );
 
-  return input.db.$transaction(async (transaction) => {
-    const wo = await transaction.workOrder.findFirst({
-      where: { id: input.workOrderId, organizationId: input.context.organizationId },
-      select: { id: true, locationId: true, number: true, status: true },
-    });
-    if (!wo) throw new InvoiceFailed("work_order_not_found");
-    if (wo.status !== "COMPLETED" && wo.status !== "AUTHORIZED" && wo.status !== "IN_PROGRESS") {
-      throw new InvoiceFailed("work_order_not_completed");
-    }
-
-    const pendingChangeOrder = await transaction.estimateRevision.findFirst({
-      where: {
-        organizationId: input.context.organizationId,
-        workOrderId: wo.id,
-        documentKind: "CHANGE_ORDER",
-        status: "PRESENTED",
-        lines: { some: { authorizationDecisions: { none: {} } } },
-      },
-      select: { id: true },
-    });
-    if (pendingChangeOrder) throw new InvoiceFailed("change_order_pending");
-
-    // Check for existing invoice (one per work order).
-    const existing = await transaction.invoice.findFirst({
-      where: { workOrderId: wo.id, organizationId: input.context.organizationId },
-      select: { id: true },
-    });
-    if (existing) throw new InvoiceFailed("invoice_already_exists");
-
-    const org = await transaction.organization.findUnique({
-      where: { id: input.context.organizationId },
-      select: { invoiceLinePolicy: true },
-    });
-    const approvedOnly = org?.invoiceLinePolicy !== "ALL_LINES";
-
-    // Baseline: the latest PRESENTED baseline revision.
-    const baseline = await transaction.estimateRevision.findFirst({
-      where: {
-        workOrderId: wo.id,
-        organizationId: input.context.organizationId,
-        documentKind: "BASELINE",
-        status: "PRESENTED",
-      },
-      orderBy: { revisionNumber: "desc" },
-      select: { id: true, currency: true, taxInclusive: true },
-    });
-    // Change orders: every PRESENTED change order, oldest first.
-    const changeOrders = await transaction.estimateRevision.findMany({
-      where: {
-        workOrderId: wo.id,
-        organizationId: input.context.organizationId,
-        documentKind: "CHANGE_ORDER",
-        status: "PRESENTED",
-      },
-      orderBy: { changeOrderNumber: "asc" },
-      select: { id: true },
-    });
-
-    const sourceRevisionIds = [
-      ...(baseline ? [baseline.id] : []),
-      ...changeOrders.map((co) => co.id),
-    ];
-
-    type SourceLine = {
-      id: string;
-      kind: PricedLineKind;
-      description: string;
-      quantityMilli: number;
-      unitPriceMinor: bigint;
-      grossMinor: bigint;
-      discountMinor: bigint;
-      taxable: boolean;
-      taxRateBasisPoints: number;
-      taxMinor: bigint;
-      taxInclusive: boolean;
-      taxComponents: unknown;
-      totalMinor: bigint;
-      position: number;
-      approved: boolean;
-    };
-    const sourceLines: SourceLine[] = [];
-
-    for (const revisionId of sourceRevisionIds) {
-      const lines = await transaction.estimateLine.findMany({
-        where: { estimateRevisionId: revisionId },
-        orderBy: { position: "asc" },
-        include: {
-          authorizationDecisions: { select: { decision: true }, take: 1 },
-        },
+  return input.db
+    .$transaction(async (transaction) => {
+      const wo = await transaction.workOrder.findFirst({
+        where: { id: input.workOrderId, organizationId: input.context.organizationId },
+        select: { id: true, locationId: true, number: true, status: true },
       });
-      for (const line of lines) {
-        sourceLines.push({
-          id: line.id,
-          kind: line.kind,
-          description: line.description,
-          quantityMilli: line.quantityMilli,
-          unitPriceMinor: line.unitPriceMinor,
-          grossMinor: line.grossMinor,
-          discountMinor: line.discountMinor,
-          taxable: line.taxable,
-          taxRateBasisPoints: line.taxRateBasisPoints,
-          taxMinor: line.taxMinor,
-          taxInclusive: line.taxInclusive,
-          taxComponents: line.taxComponents ?? [],
-          totalMinor: line.totalMinor,
-          position: line.position,
-          // Mirrors the money kernel: approved or authorization-not-required.
-          approved:
-            line.authorizationDecisions[0]?.decision === "APPROVED" || !line.authorizationRequired,
-        });
+      if (!wo) throw new InvoiceFailed("work_order_not_found");
+      if (wo.status !== "COMPLETED" && wo.status !== "AUTHORIZED" && wo.status !== "IN_PROGRESS") {
+        throw new InvoiceFailed("work_order_not_completed");
       }
-    }
 
-    const selectedLines = approvedOnly ? sourceLines.filter((line) => line.approved) : sourceLines;
+      const pendingChangeOrder = await transaction.estimateRevision.findFirst({
+        where: {
+          organizationId: input.context.organizationId,
+          workOrderId: wo.id,
+          documentKind: "CHANGE_ORDER",
+          status: "PRESENTED",
+          lines: { some: { authorizationDecisions: { none: {} } } },
+        },
+        select: { id: true },
+      });
+      if (pendingChangeOrder) throw new InvoiceFailed("change_order_pending");
 
-    let subtotalMinor = 0n;
-    let discountMinor = 0n;
-    let taxMinor = 0n;
-    let totalMinor = 0n;
-    for (const line of selectedLines) {
-      subtotalMinor += line.grossMinor;
-      discountMinor += line.discountMinor;
-      taxMinor += line.taxMinor;
-      totalMinor += line.totalMinor;
-    }
+      // Check for existing invoice (one per work order).
+      const existing = await transaction.invoice.findFirst({
+        where: { workOrderId: wo.id, organizationId: input.context.organizationId },
+        select: { id: true },
+      });
+      if (existing) throw new InvoiceFailed("invoice_already_exists");
 
-    const currency = baseline?.currency ?? "USD";
+      const org = await transaction.organization.findUnique({
+        where: { id: input.context.organizationId },
+        select: { invoiceLinePolicy: true },
+      });
+      const approvedOnly = org?.invoiceLinePolicy !== "ALL_LINES";
 
-    // Generate invoice number.
-    const number = await generateInvoiceNumber(
-      transaction,
-      input.context.organizationId,
-      wo.locationId,
-    );
+      // Baseline: the latest PRESENTED baseline revision.
+      const baseline = await transaction.estimateRevision.findFirst({
+        where: {
+          workOrderId: wo.id,
+          organizationId: input.context.organizationId,
+          documentKind: "BASELINE",
+          status: "PRESENTED",
+        },
+        orderBy: { revisionNumber: "desc" },
+        select: { id: true, currency: true, taxInclusive: true },
+      });
+      // Change orders: every PRESENTED change order, oldest first.
+      const changeOrders = await transaction.estimateRevision.findMany({
+        where: {
+          workOrderId: wo.id,
+          organizationId: input.context.organizationId,
+          documentKind: "CHANGE_ORDER",
+          status: "PRESENTED",
+        },
+        orderBy: { changeOrderNumber: "asc" },
+        select: { id: true },
+      });
 
-    const invoice = await transaction.invoice.create({
-      data: {
-        id: randomUUID(),
-        organizationId: input.context.organizationId,
-        locationId: wo.locationId,
-        workOrderId: wo.id,
-        number,
-        status: "DRAFT",
-        currency,
-        subtotalMinor,
-        discountMinor,
-        taxMinor,
-        // The invoice inherits the pricing convention of what was presented.
-        taxInclusive: baseline?.taxInclusive ?? false,
-        totalMinor,
-        paidMinor: 0n,
-      },
-    });
+      const sourceRevisionIds = [
+        ...(baseline ? [baseline.id] : []),
+        ...changeOrders.map((co) => co.id),
+      ];
 
-    // Snapshot the selected lines with renumbered invoice positions.
-    let invoicePosition = 0;
-    for (const line of selectedLines) {
-      invoicePosition += 1;
-      await transaction.invoiceLine.create({
+      type SourceLine = {
+        id: string;
+        kind: PricedLineKind;
+        description: string;
+        quantityMilli: number;
+        unitPriceMinor: bigint;
+        grossMinor: bigint;
+        discountMinor: bigint;
+        taxable: boolean;
+        taxRateBasisPoints: number;
+        taxMinor: bigint;
+        taxInclusive: boolean;
+        taxComponents: unknown;
+        totalMinor: bigint;
+        position: number;
+        approved: boolean;
+        inventoryItemId: string | null;
+      };
+      const sourceLines: SourceLine[] = [];
+
+      for (const revisionId of sourceRevisionIds) {
+        const lines = await transaction.estimateLine.findMany({
+          where: { estimateRevisionId: revisionId },
+          orderBy: { position: "asc" },
+          include: {
+            authorizationDecisions: { select: { decision: true }, take: 1 },
+          },
+        });
+        for (const line of lines) {
+          sourceLines.push({
+            id: line.id,
+            kind: line.kind,
+            description: line.description,
+            quantityMilli: line.quantityMilli,
+            unitPriceMinor: line.unitPriceMinor,
+            grossMinor: line.grossMinor,
+            discountMinor: line.discountMinor,
+            taxable: line.taxable,
+            taxRateBasisPoints: line.taxRateBasisPoints,
+            taxMinor: line.taxMinor,
+            taxInclusive: line.taxInclusive,
+            taxComponents: line.taxComponents ?? [],
+            totalMinor: line.totalMinor,
+            position: line.position,
+            inventoryItemId: line.inventoryItemId,
+            // Mirrors the money kernel: approved or authorization-not-required.
+            approved:
+              line.authorizationDecisions[0]?.decision === "APPROVED" ||
+              !line.authorizationRequired,
+          });
+        }
+      }
+
+      const selectedLines = approvedOnly
+        ? sourceLines.filter((line) => line.approved)
+        : sourceLines;
+
+      let subtotalMinor = 0n;
+      let discountMinor = 0n;
+      let taxMinor = 0n;
+      let totalMinor = 0n;
+      for (const line of selectedLines) {
+        subtotalMinor += line.grossMinor;
+        discountMinor += line.discountMinor;
+        taxMinor += line.taxMinor;
+        totalMinor += line.totalMinor;
+      }
+
+      const currency = baseline?.currency ?? "USD";
+
+      // Generate invoice number.
+      const number = await generateInvoiceNumber(
+        transaction,
+        input.context.organizationId,
+        wo.locationId,
+      );
+
+      const invoice = await transaction.invoice.create({
         data: {
           id: randomUUID(),
           organizationId: input.context.organizationId,
-          invoiceId: invoice.id,
-          sourceEstimateLineId: line.id,
-          kind: line.kind,
-          description: line.description,
-          quantityMilli: line.quantityMilli,
-          unitPriceMinor: line.unitPriceMinor,
-          grossMinor: line.grossMinor,
-          discountMinor: line.discountMinor,
-          taxable: line.taxable,
-          taxRateBasisPoints: line.taxRateBasisPoints,
-          taxMinor: line.taxMinor,
-          taxInclusive: line.taxInclusive,
-          taxComponents: line.taxComponents ?? [],
-          totalMinor: line.totalMinor,
-          position: invoicePosition,
+          locationId: wo.locationId,
+          workOrderId: wo.id,
+          number,
+          status: "DRAFT",
+          currency,
+          subtotalMinor,
+          discountMinor,
+          taxMinor,
+          // The invoice inherits the pricing convention of what was presented.
+          taxInclusive: baseline?.taxInclusive ?? false,
+          totalMinor,
+          paidMinor: 0n,
         },
       });
-    }
 
-    // Activity event.
-    await transaction.activityEvent.create({
-      data: {
-        id: randomUUID(),
-        organizationId: input.context.organizationId,
-        locationId: wo.locationId,
-        workOrderId: wo.id,
-        actorUserId: input.context.actorId,
-        eventType: "invoice.created",
-        summary: `Invoice ${number} created from work order ${wo.number}${approvedOnly ? " (approved lines only)" : ""}.`,
-      },
+      // Snapshot the selected lines with renumbered invoice positions.
+      let invoicePosition = 0;
+      for (const line of selectedLines) {
+        invoicePosition += 1;
+        await transaction.invoiceLine.create({
+          data: {
+            id: randomUUID(),
+            organizationId: input.context.organizationId,
+            invoiceId: invoice.id,
+            sourceEstimateLineId: line.id,
+            kind: line.kind,
+            description: line.description,
+            quantityMilli: line.quantityMilli,
+            unitPriceMinor: line.unitPriceMinor,
+            grossMinor: line.grossMinor,
+            discountMinor: line.discountMinor,
+            taxable: line.taxable,
+            taxRateBasisPoints: line.taxRateBasisPoints,
+            taxMinor: line.taxMinor,
+            taxInclusive: line.taxInclusive,
+            taxComponents: line.taxComponents ?? [],
+            totalMinor: line.totalMinor,
+            position: invoicePosition,
+            ...(line.inventoryItemId ? { inventoryItemId: line.inventoryItemId } : {}),
+          },
+        });
+      }
+
+      // Activity event.
+      await transaction.activityEvent.create({
+        data: {
+          id: randomUUID(),
+          organizationId: input.context.organizationId,
+          locationId: wo.locationId,
+          workOrderId: wo.id,
+          actorUserId: input.context.actorId,
+          eventType: "invoice.created",
+          summary: `Invoice ${number} created from work order ${wo.number}${approvedOnly ? " (approved lines only)" : ""}.`,
+        },
+      });
+
+      return { invoiceId: invoice.id, number };
+    })
+    .then(async (result) => {
+      // Best-effort stock consumption after the invoice exists — inventory
+      // state can never block or roll back invoicing.
+      try {
+        const { autoConsumeStockForInvoice } =
+          await import("@/modules/inventory/inventory-service");
+        await autoConsumeStockForInvoice({
+          db: input.db,
+          context: input.context,
+          invoiceId: result.invoiceId,
+        });
+      } catch {
+        // Invoicing already succeeded; stock can be reconciled by hand.
+      }
+      return result;
     });
-
-    return { invoiceId: invoice.id, number };
-  });
 }
 
 /**

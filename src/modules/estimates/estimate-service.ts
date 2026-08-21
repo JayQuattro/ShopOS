@@ -31,7 +31,8 @@ export class EstimateFailed extends Error {
       | "invalid_option_group"
       | "items_mismatch"
       | "group_name_conflict"
-      | "invalid_group_label",
+      | "invalid_group_label"
+      | "inventory_item_not_found",
   ) {
     super("The estimate operation could not be completed.");
     this.name = "EstimateFailed";
@@ -120,6 +121,8 @@ export async function addLine(
     /** Lines sharing an option group key are alternatives: the customer picks one. */
     optionGroupKey?: string;
     optionGroupLabel?: string;
+    /** Optional stocked-part link; unlinked lines (customer-supplied, other sources) never touch inventory. */
+    inventoryItemId?: string;
   },
 ): Promise<Readonly<{ lineId: string }>> {
   assertTenantAccess(
@@ -177,6 +180,19 @@ export async function addLine(
       throw new EstimateFailed("credit_line_not_allowed");
     }
 
+    const inventoryItem = input.inventoryItemId
+      ? await transaction.inventoryItem.findFirst({
+          where: {
+            id: input.inventoryItemId,
+            organizationId: input.context.organizationId,
+          },
+          select: { id: true },
+        })
+      : null;
+    if (input.inventoryItemId && !inventoryItem) {
+      throw new EstimateFailed("inventory_item_not_found");
+    }
+
     const line = await transaction.estimateLine.create({
       data: {
         id: randomUUID(),
@@ -199,6 +215,7 @@ export async function addLine(
         ...(componentBreakdown ? { taxComponents: componentBreakdown.breakdown } : {}),
         totalMinor: BigInt(calculated.totalMinor),
         position: input.position,
+        ...(inventoryItem ? { inventoryItemId: inventoryItem.id } : {}),
       },
     });
 
