@@ -173,6 +173,7 @@ export function PaymentsSettingsForm({ organizationId }: { organizationId: strin
             <>
               <p className="text-sm text-muted-foreground">{selected.description}</p>
               <Input
+                aria-label="Display name"
                 placeholder="Display name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}

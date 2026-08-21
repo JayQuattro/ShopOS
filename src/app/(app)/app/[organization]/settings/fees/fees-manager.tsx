@@ -148,6 +148,7 @@ export function FeesManager({ canManage }: { canManage: boolean }) {
           </label>
           <select
             value={calculation}
+            aria-label="Calculation"
             onChange={(e) => setCalculation(e.target.value as "FLAT" | "PERCENT_OF_LABOR")}
             className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
             disabled={pending}

@@ -67,6 +67,7 @@ export function ContactForm({ customerId }: { customerId: string }) {
         </Alert>
       ) : null}
       <Input
+        aria-label="Name *"
         placeholder="Name *"
         required
         value={name}
@@ -74,12 +75,14 @@ export function ContactForm({ customerId }: { customerId: string }) {
         disabled={pending}
       />
       <Input
+        aria-label="Role / title"
         placeholder="Role / title"
         value={role}
         onChange={(e) => setRole(e.target.value)}
         disabled={pending}
       />
       <Input
+        aria-label="Email"
         placeholder="Email"
         type="email"
         value={email}
@@ -87,6 +90,7 @@ export function ContactForm({ customerId }: { customerId: string }) {
         disabled={pending}
       />
       <Input
+        aria-label="Phone"
         placeholder="Phone"
         value={phone}
         onChange={(e) => setPhone(e.target.value)}

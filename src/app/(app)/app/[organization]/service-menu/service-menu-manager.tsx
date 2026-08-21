@@ -196,6 +196,8 @@ export function ServiceMenuManager({ canWrite }: { canWrite: boolean }) {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Template name (e.g. Front brake job)"
                 disabled={pending}
+
+                aria-label="Template name"
               />
 
               <p className="text-sm font-medium">Priced lines (added to the estimate)</p>
@@ -203,6 +205,7 @@ export function ServiceMenuManager({ canWrite }: { canWrite: boolean }) {
                 <div key={index} className="flex flex-wrap items-center gap-2">
                   <select
                     value={line.kind}
+                    aria-label="Line type"
                     onChange={(e) =>
                       setLines((prev) =>
                         prev.map((l, i) =>
@@ -227,6 +230,8 @@ export function ServiceMenuManager({ canWrite }: { canWrite: boolean }) {
                     }
                     placeholder="Description"
                     className="max-w-xs"
+
+                    aria-label="Description"
                   />
                   <Input
                     type="number"
@@ -239,12 +244,14 @@ export function ServiceMenuManager({ canWrite }: { canWrite: boolean }) {
                       )
                     }
                     className="w-20"
+                    aria-label="Quantity (1000 = 1.0)"
                     title="Quantity in milli-units (1000 = 1.0)"
                   />
                   <Input
                     type="number"
                     min={0}
                     step="0.01"
+                    aria-label="Unit price"
                     value={line.unitPriceMinor}
                     onChange={(e) =>
                       setLines((prev) =>
@@ -283,6 +290,7 @@ export function ServiceMenuManager({ canWrite }: { canWrite: boolean }) {
                       }
                       className="h-[var(--control-height)] rounded-md border border-input bg-background px-2 text-sm"
                       title="Named tax rates from Settings → Taxes; Custom for basis points"
+                      aria-label="Named tax rates from Settings → Taxes; Custom for basis points"
                     >
                       <option value="0">Default (shop)</option>
                       {taxRates.map((rate) => (
@@ -297,6 +305,7 @@ export function ServiceMenuManager({ canWrite }: { canWrite: boolean }) {
                   (taxRates.length === 0 || line.taxRateBasisPoints === "custom") ? (
                     <Input
                       type="number"
+                      aria-label="Tax rate basis points"
                       value={line.taxRateBasisPoints === "custom" ? "" : line.taxRateBasisPoints}
                       onChange={(e) =>
                         setLines((prev) =>

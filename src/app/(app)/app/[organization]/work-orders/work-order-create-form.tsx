@@ -287,6 +287,7 @@ export function WorkOrderCreateForm({
             </span>
             <select
               value={effectiveAssetId}
+              aria-label="Vehicle"
               onChange={(e) => setAssetId(e.target.value)}
               className={select}
               disabled={!customerId}

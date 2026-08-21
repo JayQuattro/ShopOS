@@ -519,6 +519,7 @@ export default function AuthorizePage() {
 
         <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
           <Input
+            aria-label="Your name *"
             placeholder="Your name *"
             required
             value={name}
@@ -526,6 +527,7 @@ export default function AuthorizePage() {
             disabled={submitting}
           />
           <Input
+            aria-label="Note"
             placeholder="Note (optional)"
             value={note}
             onChange={(e) => setNote(e.target.value)}

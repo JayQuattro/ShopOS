@@ -140,6 +140,8 @@ export function SubletPanel({ workOrderId, canWrite }: { workOrderId: string; ca
                 placeholder="Vendor (e.g. Precision Machine Shop)"
                 required
                 disabled={pending}
+
+                aria-label="Vendor"
               />
               <Input
                 type="number"
@@ -150,6 +152,8 @@ export function SubletPanel({ workOrderId, canWrite }: { workOrderId: string; ca
                 placeholder="Quoted $"
                 className="w-28"
                 disabled={pending}
+
+                aria-label="Quoted $"
               />
             </div>
             <Input
@@ -158,6 +162,8 @@ export function SubletPanel({ workOrderId, canWrite }: { workOrderId: string; ca
               placeholder="What they're doing (e.g. resurface rotors)"
               required
               disabled={pending}
+
+              aria-label="What they're doing"
             />
             <div>
               <Button type="submit" size="sm" disabled={pending}>

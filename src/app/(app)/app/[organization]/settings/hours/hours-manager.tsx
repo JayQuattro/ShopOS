@@ -178,6 +178,7 @@ export function HoursManager({
                 <span className="flex items-center gap-2">
                   <Input
                     type="time"
+                    aria-label="Opening time"
                     value={windows[index]!.open}
                     onChange={(e) =>
                       setWindows((prev) => ({
@@ -191,6 +192,7 @@ export function HoursManager({
                   <span className="text-muted-foreground">to</span>
                   <Input
                     type="time"
+                    aria-label="Closing time"
                     value={windows[index]!.close}
                     onChange={(e) =>
                       setWindows((prev) => ({

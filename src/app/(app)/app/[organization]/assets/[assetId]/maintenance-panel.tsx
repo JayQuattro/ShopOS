@@ -197,6 +197,8 @@ export function MaintenancePanel({
               onChange={(e) => setName(e.target.value)}
               placeholder="Service (e.g. Oil change)"
               required
+
+              aria-label="Service"
             />
             <div className="flex flex-wrap gap-2">
               {isAutomobile ? (
@@ -207,6 +209,8 @@ export function MaintenancePanel({
                   onChange={(e) => setIntervalMiles(e.target.value)}
                   placeholder="Every N miles"
                   className="w-32"
+
+                  aria-label="Every N miles"
                 />
               ) : null}
               <Input
@@ -216,6 +220,8 @@ export function MaintenancePanel({
                 onChange={(e) => setIntervalMonths(e.target.value)}
                 placeholder="Every N months"
                 className="w-32"
+
+                aria-label="Every N months"
               />
               {isAutomobile ? (
                 <Input
@@ -225,6 +231,8 @@ export function MaintenancePanel({
                   onChange={(e) => setLastMileage(e.target.value)}
                   placeholder="Last done at mileage"
                   className="w-40"
+
+                  aria-label="Last done at mileage"
                 />
               ) : null}
             </div>

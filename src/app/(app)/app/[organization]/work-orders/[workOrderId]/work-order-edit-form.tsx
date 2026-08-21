@@ -57,6 +57,7 @@ export function WorkOrderEditForm({
         </Alert>
       ) : null}
       <textarea
+        aria-label="Customer concern"
         value={concern}
         onChange={(e) => setConcern(e.target.value)}
         disabled={pending}

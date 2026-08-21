@@ -168,6 +168,7 @@ export function CustomerCreateForm({ onCreated }: { onCreated?: () => void }) {
         <h3 className="text-sm font-semibold">Customer details</h3>
         <select
           value={kind}
+          aria-label="Customer type"
           onChange={(e) => setKind(e.target.value)}
           className="h-[var(--control-height)] rounded-md border border-input bg-background px-3 text-sm"
         >
@@ -175,6 +176,7 @@ export function CustomerCreateForm({ onCreated }: { onCreated?: () => void }) {
           <option value="BUSINESS">Business</option>
         </select>
         <Input
+          aria-label="Name *"
           placeholder="Name *"
           required
           value={displayName}
@@ -183,6 +185,7 @@ export function CustomerCreateForm({ onCreated }: { onCreated?: () => void }) {
         />
         <div className="grid gap-3 sm:grid-cols-2">
           <Input
+            aria-label="Email"
             placeholder="Email"
             type="email"
             value={email}
@@ -190,6 +193,7 @@ export function CustomerCreateForm({ onCreated }: { onCreated?: () => void }) {
             disabled={pending}
           />
           <Input
+            aria-label="Phone"
             placeholder="Phone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
@@ -197,6 +201,7 @@ export function CustomerCreateForm({ onCreated }: { onCreated?: () => void }) {
           />
         </div>
         <Input
+          aria-label="Reference"
           placeholder="Reference (e.g. C-1001)"
           value={reference}
           onChange={(e) => setReference(e.target.value)}
@@ -224,12 +229,14 @@ export function CustomerCreateForm({ onCreated }: { onCreated?: () => void }) {
           />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input
+              aria-label="Role / title"
               placeholder="Role / title"
               value={contact.role}
               onChange={(e) => setContact({ ...contact, role: e.target.value })}
               disabled={pending}
             />
             <Input
+              aria-label="Phone"
               placeholder="Phone"
               value={contact.phone}
               onChange={(e) => setContact({ ...contact, phone: e.target.value })}
@@ -237,6 +244,7 @@ export function CustomerCreateForm({ onCreated }: { onCreated?: () => void }) {
             />
           </div>
           <Input
+            aria-label="Email"
             placeholder="Email"
             type="email"
             value={contact.email}
@@ -273,12 +281,14 @@ export function CustomerCreateForm({ onCreated }: { onCreated?: () => void }) {
             disabled={pending}
           />
           <Input
+            aria-label="Address line 1 *"
             placeholder="Address line 1 *"
             value={address.line1}
             onChange={(e) => setAddress({ ...address, line1: e.target.value })}
             disabled={pending}
           />
           <Input
+            aria-label="Address line 2"
             placeholder="Address line 2"
             value={address.line2}
             onChange={(e) => setAddress({ ...address, line2: e.target.value })}
@@ -286,18 +296,21 @@ export function CustomerCreateForm({ onCreated }: { onCreated?: () => void }) {
           />
           <div className="grid gap-3 sm:grid-cols-3">
             <Input
+              aria-label="City *"
               placeholder="City *"
               value={address.city}
               onChange={(e) => setAddress({ ...address, city: e.target.value })}
               disabled={pending}
             />
             <Input
+              aria-label="State"
               placeholder="State"
               value={address.stateProvince}
               onChange={(e) => setAddress({ ...address, stateProvince: e.target.value })}
               disabled={pending}
             />
             <Input
+              aria-label="Postal code"
               placeholder="Postal code"
               value={address.postalCode}
               onChange={(e) => setAddress({ ...address, postalCode: e.target.value })}

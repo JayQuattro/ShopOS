@@ -77,6 +77,7 @@ export function CommandPalette({ actions }: CommandPaletteProps) {
           </SheetHeader>
           <Input
             autoFocus
+            aria-label="Type a command or search…"
             placeholder="Type a command or search…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
