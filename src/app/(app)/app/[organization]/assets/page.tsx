@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ListSearch } from "@/components/shopos/list-search";
@@ -13,20 +15,22 @@ export default async function AssetsPage({
   searchParams,
 }: {
   params: Promise<{ organization: string }>;
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; cat?: string }>;
 }) {
   const { organization } = await params;
-  const { q: search } = await searchParams;
+  const { q: search, cat: categoryParam } = await searchParams;
   const context = await getRequestContext(organization);
   if (context.organizationId !== organization) {
     return <p className="text-destructive">Organization context mismatch.</p>;
   }
 
   const query = search?.trim() ?? "";
+  const category = categoryParam?.trim() ?? "";
   const assets = await db.asset.findMany({
     where: {
       organizationId: context.organizationId,
       status: { not: "SOLD" },
+      ...(category ? { category } : {}),
       ...(query
         ? {
             OR: [
@@ -62,6 +66,24 @@ export default async function AssetsPage({
     take: 100,
   });
 
+  const categoryCounts = await db.asset.groupBy({
+    by: ["category"],
+    where: { organizationId: context.organizationId, status: { not: "SOLD" } },
+    _count: { category: true },
+  });
+  const chips = categoryCounts
+    .map((row) => ({ key: row.category, count: row._count.category }))
+    .sort((a, b) => b.count - a.count);
+  const chipHref = (cat: string) => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (cat) params.set("cat", cat);
+    const qs = params.toString();
+    return qs
+      ? `/app/${context.organizationId}/assets?${qs}`
+      : `/app/${context.organizationId}/assets`;
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -75,11 +97,41 @@ export default async function AssetsPage({
           action={`/app/${context.organizationId}/assets`}
           query={query}
           placeholder="Search vehicle, plate, VIN, owner…"
+          {...(category ? { hiddenParams: { cat: category } } : {})}
         />
         <p className="text-sm text-muted-foreground">
           {assets.length} vehicle{assets.length === 1 ? "" : "s"}
+          {category ? ` · ${humanizeToken(category)}` : ""}
         </p>
       </div>
+
+      {chips.length > 1 ? (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by type">
+          <Link
+            href={chipHref("")}
+            className={`min-h-11 rounded-md border px-3 py-1.5 text-sm transition-colors ${
+              category === ""
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            All ({chips.reduce((sum, chip) => sum + chip.count, 0)})
+          </Link>
+          {chips.map((chip) => (
+            <Link
+              key={chip.key}
+              href={chipHref(chip.key)}
+              className={`min-h-11 rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                category === chip.key
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {humanizeToken(chip.key)} ({chip.count})
+            </Link>
+          ))}
+        </div>
+      ) : null}
 
       <Card>
         <CardContent className="p-0">

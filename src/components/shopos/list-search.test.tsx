@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const replace = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace }),
+}));
 
 import { ListSearch } from "@/components/shopos/list-search";
 
@@ -11,7 +16,15 @@ function hiddenInput(name: string): HTMLInputElement {
   return input;
 }
 
-afterEach(cleanup);
+beforeEach(() => {
+  replace.mockClear();
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  cleanup();
+});
 
 describe("ListSearch", () => {
   it("renders a GET search form targeting the current path", () => {
@@ -45,5 +58,53 @@ describe("ListSearch", () => {
     expect(hidden).toHaveAttribute("type", "hidden");
     expect(hidden.value).toBe("loc-1");
     expect(document.querySelector('input[type="hidden"][name="q"]')).toBeNull();
+  });
+
+  it("searches as you type, debounced, and syncs the URL", async () => {
+    render(<ListSearch action="/app/org/assets" placeholder="Search vehicles" />);
+
+    const input = screen.getByLabelText("Search vehicles");
+    fireEvent.change(input, { target: { value: "hon" } });
+    vi.advanceTimersByTime(200);
+    expect(replace).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "honda" } });
+    vi.advanceTimersByTime(350);
+
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledWith("/app/org/assets?q=honda");
+  });
+
+  it("clear button resets the field and the results immediately", async () => {
+    render(<ListSearch action="/app/org/assets" query="civic" placeholder="Search vehicles" />);
+
+    fireEvent.click(screen.getByLabelText("Clear search"));
+    expect(screen.getByLabelText("Search vehicles")).toHaveValue("");
+    expect(replace).toHaveBeenCalledWith("/app/org/assets");
+  });
+
+  it("Enter searches immediately without waiting for the debounce", async () => {
+    render(<ListSearch action="/app/org/assets" placeholder="Search vehicles" />);
+
+    const input = screen.getByLabelText("Search vehicles");
+    fireEvent.change(input, { target: { value: "plate" } });
+    fireEvent.submit(input.closest("form")!);
+
+    expect(replace).toHaveBeenCalledWith("/app/org/assets?q=plate");
+  });
+
+  it("preserves filter params in the live URL", async () => {
+    render(
+      <ListSearch
+        action="/app/org/assets"
+        placeholder="Search vehicles"
+        hiddenParams={{ cat: "automotive" }}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Search vehicles"), { target: { value: "civic" } });
+    vi.advanceTimersByTime(350);
+
+    expect(replace).toHaveBeenCalledWith("/app/org/assets?q=civic&cat=automotive");
   });
 });
