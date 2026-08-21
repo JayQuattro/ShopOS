@@ -146,6 +146,7 @@ export default async function InventoryPage({
                 .map((item) => (
                   <RecordListRow
                     key={item.id}
+                    href={`/app/${organization}/inventory/${item.id}`}
                     title={item.name}
                     description={
                       [

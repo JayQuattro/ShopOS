@@ -1,9 +1,46 @@
 import { randomUUID } from "node:crypto";
 
-import type { PrismaClient } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 
 export type InventoryServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
+
+export type StockMovementReason =
+  "RECEIVED" | "ISSUED_TO_JOB" | "MANUAL_ADJUSTMENT" | "RETURNED_TO_STOCK";
+
+/**
+ * Appends a movement row next to a quantityOnHand change. Callers must keep
+ * the movement insert in the same transaction as the stock update; the table
+ * is append-only (enforced by trigger), corrections are new rows.
+ */
+export async function recordStockMovement(
+  transaction: Prisma.TransactionClient,
+  context: TenantContext,
+  movement: Readonly<{
+    inventoryItemId: string;
+    delta: number;
+    reason: StockMovementReason;
+    locationId?: string | undefined;
+    workOrderId?: string | undefined;
+    partOrderLineId?: string | undefined;
+    note?: string | undefined;
+  }>,
+): Promise<void> {
+  await transaction.inventoryMovement.create({
+    data: {
+      id: randomUUID(),
+      organizationId: context.organizationId,
+      inventoryItemId: movement.inventoryItemId,
+      delta: movement.delta,
+      reason: movement.reason,
+      ...(movement.locationId ? { locationId: movement.locationId } : {}),
+      ...(movement.workOrderId ? { workOrderId: movement.workOrderId } : {}),
+      ...(movement.partOrderLineId ? { partOrderLineId: movement.partOrderLineId } : {}),
+      ...(movement.note ? { note: movement.note.slice(0, 280) } : {}),
+      ...(context.actorId ? { createdById: context.actorId } : {}),
+    },
+  });
+}
 
 export class InventoryFailed extends Error {
   constructor(
@@ -146,6 +183,12 @@ export async function adjustStock(
       where: { id: item.id },
       data: { quantityOnHand: next },
     });
+    await recordStockMovement(transaction, input.context, {
+      inventoryItemId: item.id,
+      delta: input.delta,
+      reason: input.delta > 0 ? "RETURNED_TO_STOCK" : "MANUAL_ADJUSTMENT",
+      note: input.note ?? (input.delta > 0 ? "Manual add to stock" : "Manual correction"),
+    });
     return { quantityOnHand: next };
   });
 }
@@ -163,6 +206,7 @@ export async function receiveIntoStock(
     unitCostMinor: number;
     currency?: string;
     binLocation?: string;
+    workOrderId?: string;
   },
 ): Promise<Readonly<{ itemId: string; quantityOnHand: number }>> {
   assertTenantAccess(
@@ -176,6 +220,17 @@ export async function receiveIntoStock(
   }
 
   return input.db.$transaction(async (transaction) => {
+    // When the receive hangs off a work order, resolve and validate it in
+    // this tenant so the movement lineage can never point across orgs.
+    let workOrder: { id: string; locationId: string } | null = null;
+    if (input.workOrderId) {
+      workOrder = await transaction.workOrder.findFirst({
+        where: { id: input.workOrderId, organizationId: input.context.organizationId },
+        select: { id: true, locationId: true },
+      });
+      if (!workOrder) throw new InventoryFailed("item_not_found");
+    }
+
     const existing = await transaction.inventoryItem.findFirst({
       where: { organizationId: input.context.organizationId, partNumber: input.partNumber.trim() },
       select: { id: true, quantityOnHand: true },
@@ -189,6 +244,14 @@ export async function receiveIntoStock(
           unitCostMinor: BigInt(input.unitCostMinor),
           ...(input.currency ? { currency: input.currency } : {}),
         },
+      });
+      await recordStockMovement(transaction, input.context, {
+        inventoryItemId: existing.id,
+        delta: input.quantity,
+        reason: "RECEIVED",
+        ...(workOrder ? { locationId: workOrder.locationId } : {}),
+        ...(workOrder ? { workOrderId: workOrder.id } : {}),
+        note: `Received ${input.partNumber.trim()}`,
       });
       return { itemId: existing.id, quantityOnHand: next };
     }
@@ -205,15 +268,121 @@ export async function receiveIntoStock(
         ...(input.binLocation ? { binLocation: input.binLocation.trim() } : {}),
       },
     });
+    await recordStockMovement(transaction, input.context, {
+      inventoryItemId: item.id,
+      delta: input.quantity,
+      reason: "RECEIVED",
+      ...(workOrder ? { locationId: workOrder.locationId } : {}),
+      ...(workOrder ? { workOrderId: workOrder.id } : {}),
+      note: `Received ${item.partNumber} (new item)`,
+    });
     return { itemId: item.id, quantityOnHand: item.quantityOnHand };
   });
 }
 
 /** Issues (consumes) stock for use on a job. */
 export async function issueStock(
-  input: InventoryServiceInput & { itemId: string; quantity: number },
+  input: InventoryServiceInput & {
+    itemId: string;
+    quantity: number;
+    workOrderId?: string;
+    note?: string;
+  },
 ): Promise<Readonly<{ quantityOnHand: number }>> {
-  return adjustStock({ ...input, delta: -input.quantity });
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.write",
+  );
+
+  if (!Number.isSafeInteger(input.quantity) || input.quantity < 1) {
+    throw new InventoryFailed("invalid_quantity");
+  }
+
+  return input.db.$transaction(async (transaction) => {
+    let workOrder: { id: string; locationId: string } | null = null;
+    if (input.workOrderId) {
+      workOrder = await transaction.workOrder.findFirst({
+        where: { id: input.workOrderId, organizationId: input.context.organizationId },
+        select: { id: true, locationId: true },
+      });
+      if (!workOrder) throw new InventoryFailed("item_not_found");
+    }
+
+    const item = await transaction.inventoryItem.findFirst({
+      where: { id: input.itemId, organizationId: input.context.organizationId },
+      select: { id: true, quantityOnHand: true },
+    });
+    if (!item) throw new InventoryFailed("item_not_found");
+    if (item.quantityOnHand - input.quantity < 0) {
+      throw new InventoryFailed("insufficient_stock");
+    }
+
+    const next = item.quantityOnHand - input.quantity;
+    await transaction.inventoryItem.update({
+      where: { id: item.id },
+      data: { quantityOnHand: next },
+    });
+    await recordStockMovement(transaction, input.context, {
+      inventoryItemId: item.id,
+      delta: -input.quantity,
+      reason: "ISSUED_TO_JOB",
+      ...(workOrder ? { locationId: workOrder.locationId, workOrderId: workOrder.id } : {}),
+      ...(input.note ? { note: input.note } : {}),
+    });
+    return { quantityOnHand: next };
+  });
+}
+
+export type StockMovementRow = Readonly<{
+  id: string;
+  delta: number;
+  reason: string;
+  note: string | null;
+  createdAt: Date;
+  workOrderId: string | null;
+  workOrderNumber: string | null;
+  createdByName: string | null;
+}>;
+
+/** Newest-first movement history for one item (or everything a job touched). */
+export async function listMovements(
+  input: InventoryServiceInput & { itemId?: string; workOrderId?: string; take?: number },
+): Promise<readonly StockMovementRow[]> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+
+  const rows = await input.db.inventoryMovement.findMany({
+    where: {
+      organizationId: input.context.organizationId,
+      ...(input.itemId ? { inventoryItemId: input.itemId } : {}),
+      ...(input.workOrderId ? { workOrderId: input.workOrderId } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: input.take ?? 50,
+    select: {
+      id: true,
+      delta: true,
+      reason: true,
+      note: true,
+      createdAt: true,
+      workOrder: { select: { id: true, number: true } },
+      createdBy: { select: { displayName: true } },
+    },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    delta: row.delta,
+    reason: row.reason,
+    note: row.note,
+    createdAt: row.createdAt,
+    workOrderId: row.workOrder?.id ?? null,
+    workOrderNumber: row.workOrder?.number ?? null,
+    createdByName: row.createdBy?.displayName ?? null,
+  }));
 }
 
 export type InventoryItemSummary = Readonly<{
