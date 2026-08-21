@@ -1,5 +1,6 @@
 "use client";
 
+import { PromptDialog } from "@/components/shopos/prompt-dialog";
 import { useEffect, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -32,6 +33,7 @@ export function QualityCheckCard({
 }) {
   const [state, setState] = useState<QcState | null>(null);
   const [pending, setPending] = useState(false);
+  const [asking, setAsking] = useState<"pass" | "fail" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -59,17 +61,7 @@ export function QualityCheckCard({
     };
   }, [workOrderId]);
 
-  async function act(action: "pass" | "fail") {
-    let note: string | undefined;
-    if (action === "fail") {
-      const reason = window.prompt("What failed the quality check?");
-      if (!reason || reason.trim().length < 3) return;
-      note = reason.trim();
-    } else {
-      const optional = window.prompt("Note (optional)");
-      if (optional === null) return;
-      if (optional.trim()) note = optional.trim();
-    }
+  async function act(action: "pass" | "fail", note?: string) {
     setPending(true);
     setError(null);
     try {
@@ -98,59 +90,96 @@ export function QualityCheckCard({
   if (!state.required && state.status === "pending") return null;
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">
-          Quality check
-          <Badge
-            variant={
-              state.status === "passed"
-                ? "default"
-                : state.status === "failed"
-                  ? "destructive"
-                  : "secondary"
-            }
-            className="ml-2"
-          >
-            {state.status}
-          </Badge>
-        </CardTitle>
-        {canWrite && state.status !== "passed" ? (
-          <div className="flex gap-2">
-            <Button size="sm" onClick={() => void act("pass")} disabled={pending}>
-              Pass
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => void act("fail")} disabled={pending}>
-              Fail
-            </Button>
-          </div>
-        ) : null}
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        {error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
-        {state.status === "passed" && state.passedAt ? (
-          <p className="text-sm text-muted-foreground">
-            Passed by {state.passedByDisplayName ?? "unknown"} ·{" "}
-            {formatDateTime(new Date(state.passedAt), timeZone, "en-US")}
-            {state.note ? ` — ${state.note}` : ""}
-          </p>
-        ) : state.status === "failed" && state.note ? (
-          <p className="text-sm text-destructive">{state.note}</p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {state.required
-              ? "Completion requires a passed quality check."
-              : "Quality checks are optional for this organization."}
-            {state.openTaskCount > 0
-              ? ` ${state.openTaskCount} checklist item${state.openTaskCount === 1 ? "" : "s"} still open or flagged.`
-              : ""}
-          </p>
-        )}
-      </CardContent>
-    </Card>
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">
+            Quality check
+            <Badge
+              variant={
+                state.status === "passed"
+                  ? "default"
+                  : state.status === "failed"
+                    ? "destructive"
+                    : "secondary"
+              }
+              className="ml-2"
+            >
+              {state.status}
+            </Badge>
+          </CardTitle>
+          {canWrite && state.status !== "passed" ? (
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => setAsking("pass")} disabled={pending}>
+                Pass
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAsking("fail")}
+                disabled={pending}
+              >
+                Fail
+              </Button>
+            </div>
+          ) : null}
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+          {state.status === "passed" && state.passedAt ? (
+            <p className="text-sm text-muted-foreground">
+              Passed by {state.passedByDisplayName ?? "unknown"} ·{" "}
+              {formatDateTime(new Date(state.passedAt), timeZone, "en-US")}
+              {state.note ? ` — ${state.note}` : ""}
+            </p>
+          ) : state.status === "failed" && state.note ? (
+            <p className="text-sm text-destructive">{state.note}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {state.required
+                ? "Completion requires a passed quality check."
+                : "Quality checks are optional for this organization."}
+              {state.openTaskCount > 0
+                ? ` ${state.openTaskCount} checklist item${state.openTaskCount === 1 ? "" : "s"} still open or flagged.`
+                : ""}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+      <PromptDialog
+        open={asking !== null}
+        title={asking === "fail" ? "What failed the quality check?" : "Quality check note"}
+        description={
+          asking === "fail"
+            ? "Required — describes what needs attention."
+            : "Optional note recorded with the pass."
+        }
+        fields={[
+          {
+            name: "note",
+            label: asking === "fail" ? "What failed" : "Note",
+            placeholder: "Left front bulb still out — ordered replacement",
+            type: "textarea",
+            required: asking === "fail",
+            autoFocus: true,
+          },
+        ]}
+        submitLabel={asking === "fail" ? "Record failure" : "Pass"}
+        pending={pending}
+        onCancel={() => setAsking(null)}
+        onSubmit={(values) => {
+          const note = values.note?.trim();
+          const action = asking;
+          if (action === null) return;
+          if (action === "fail" && (!note || note.length < 3)) return;
+          setAsking(null);
+          void act(action, note || undefined);
+        }}
+      />
+    </>
   );
 }

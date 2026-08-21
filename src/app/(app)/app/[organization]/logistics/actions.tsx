@@ -1,5 +1,6 @@
 "use client";
 
+import { PromptDialog } from "@/components/shopos/prompt-dialog";
 import { useState } from "react";
 
 import type { TransportStatus } from "@/modules/transport/transport-state-machine";
@@ -49,10 +50,11 @@ export function TransportCardActions({
     }
   }
 
-  async function cancel() {
-    const entered = window.prompt("Cancel this run — reason?");
-    if (!entered || !entered.trim()) return;
-    await post({ action: "cancel", reason: entered.trim() });
+  const [askingCancel, setAskingCancel] = useState(false);
+
+  async function cancel(reason: string) {
+    await post({ action: "cancel", reason });
+    setAskingCancel(false);
   }
 
   return (
@@ -113,13 +115,30 @@ export function TransportCardActions({
         <button
           type="button"
           disabled={pending}
-          onClick={() => void cancel()}
+          onClick={() => setAskingCancel(true)}
           className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
         >
           Cancel
         </button>
       </div>
       {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
+      <PromptDialog
+        open={askingCancel}
+        title="Cancel this run"
+        fields={[
+          {
+            name: "reason",
+            label: "Reason",
+            placeholder: "Driver unavailable",
+            required: true,
+            autoFocus: true,
+          },
+        ]}
+        submitLabel="Cancel run"
+        pending={pending}
+        onCancel={() => setAskingCancel(false)}
+        onSubmit={(values) => void cancel((values.reason ?? "").trim())}
+      />
     </div>
   );
 }

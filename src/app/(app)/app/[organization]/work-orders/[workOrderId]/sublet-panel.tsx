@@ -1,5 +1,6 @@
 "use client";
 
+import { PromptDialog } from "@/components/shopos/prompt-dialog";
 import { useEffect, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -25,6 +26,7 @@ export function SubletPanel({ workOrderId, canWrite }: { workOrderId: string; ca
   const [sublets, setSublets] = useState<Sublet[]>([]);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
+  const [returnAsk, setReturnAsk] = useState<Sublet | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -217,22 +219,7 @@ export function SubletPanel({ workOrderId, canWrite }: { workOrderId: string; ca
                       size="sm"
                       variant="outline"
                       disabled={pending}
-                      onClick={() => {
-                        const actual = window.prompt(
-                          "Actual cost from the vendor ($, blank if none)",
-                        );
-                        if (actual === null) return;
-                        void act(
-                          {
-                            action: "return",
-                            subletId: sublet.id,
-                            ...(actual.trim() !== ""
-                              ? { actualMinor: Math.round((Number(actual) || 0) * 100) }
-                              : {}),
-                          },
-                          `${sublet.vendorName} returned.`,
-                        );
-                      }}
+                      onClick={() => setReturnAsk(sublet)}
                     >
                       Mark returned
                     </Button>
@@ -254,6 +241,40 @@ export function SubletPanel({ workOrderId, canWrite }: { workOrderId: string; ca
           </ul>
         )}
       </CardContent>
+      {returnAsk ? (
+        <PromptDialog
+          open
+          title={`Mark returned — ${returnAsk.vendorName}`}
+          description="Enter the vendor's actual cost, or leave blank if not billed yet."
+          fields={[
+            {
+              name: "actual",
+              label: "Actual cost ($)",
+              type: "number",
+              placeholder: "150.00",
+              autoFocus: true,
+            },
+          ]}
+          submitLabel="Mark returned"
+          pending={pending}
+          onCancel={() => setReturnAsk(null)}
+          onSubmit={(values) => {
+            const sublet = returnAsk;
+            const actual = values.actual ?? "";
+            setReturnAsk(null);
+            void act(
+              {
+                action: "return",
+                subletId: sublet.id,
+                ...(actual.trim() !== ""
+                  ? { actualMinor: Math.round((Number(actual) || 0) * 100) }
+                  : {}),
+              },
+              `${sublet.vendorName} returned.`,
+            );
+          }}
+        />
+      ) : null}
     </Card>
   );
 }

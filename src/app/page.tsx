@@ -8,6 +8,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { db } from "@/db/client";
 import { getCurrentSession } from "@/modules/identity/session";
@@ -55,17 +56,19 @@ const workflow = [
 ] as const;
 
 export default async function HomePage() {
-  // Signed-in visitors belong in their workspace; surface a direct path in.
+  // Signed-in visitors belong in their workspace: `/` is home, so it sends
+  // them straight there (first membership, or onboarding when they have
+  // none). The marketing page remains for signed-out visitors.
   const session = await getCurrentSession();
-  let workspaceHref: string | null = null;
   if (session) {
     const membership = await db.organizationMembership.findFirst({
       where: { userId: session.user.id, active: true },
       orderBy: { createdAt: "asc" },
       select: { organization: { select: { id: true } } },
     });
-    workspaceHref = membership ? `/app/${membership.organization.id}` : "/onboarding/organization";
+    redirect(membership ? `/app/${membership.organization.id}` : "/onboarding/organization");
   }
+  const workspaceHref: string | null = null;
 
   return (
     <div className="min-h-svh overflow-hidden bg-background">

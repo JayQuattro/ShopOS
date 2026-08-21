@@ -7,6 +7,8 @@ import { resolveShellContext, type ShellLocation } from "@/modules/tenancy/shell
 import { CommandPalette, type CommandAction } from "./command-palette";
 import { MobileSidebar } from "./mobile-sidebar";
 import { OrgLocationSwitcher } from "./org-location-switcher";
+import Link from "next/link";
+
 import { Sidebar } from "./sidebar";
 import { UserMenu } from "./user-menu";
 
@@ -56,7 +58,13 @@ export async function AppShell({ children, organizationId }: AppShellProps) {
       {/* Desktop sidebar */}
       <aside className="hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar md:block">
         <div className="flex h-[var(--control-height)] items-center px-4">
-          <span className="text-sm font-bold tracking-tight text-sidebar-foreground">ShopOS</span>
+          <Link
+            href="/"
+            aria-label="ShopOS home"
+            className="text-sm font-bold tracking-tight text-sidebar-foreground hover:underline"
+          >
+            ShopOS
+          </Link>
         </div>
         <Sidebar organizationId={shell.organization.id} permissions={shell.tenant.permissions} />
       </aside>
