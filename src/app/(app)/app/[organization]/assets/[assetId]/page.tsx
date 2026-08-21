@@ -12,6 +12,7 @@ import { humanizeToken } from "@/lib/labels";
 import { db } from "@/db/client";
 import { formatDate, formatMoney } from "@/i18n/formatters";
 import { MaintenancePanel } from "./maintenance-panel";
+import { activeWarrantyForAsset } from "@/modules/invoices/warranty-service";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 
 export default async function AssetDetailPage({
@@ -63,6 +64,10 @@ export default async function AssetDetailPage({
       </Card>
     );
   }
+
+  const warrantyCoverage = asset
+    ? await activeWarrantyForAsset({ db, context, assetId: asset.id })
+    : [];
 
   const newWorkOrderHref = `/app/${context.organizationId}/work-orders?new=1&customer=${asset.customer.id}`;
 
@@ -200,6 +205,38 @@ export default async function AssetDetailPage({
           isAutomobile={asset.category === "automobile"}
           canWrite={context.permissions.has("assets.write")}
         />
+      </PageSection>
+
+      <PageSection
+        id="warranty"
+        title="Warranty coverage"
+        description="Open coverage from issued invoices — so warrantied work isn't re-charged by accident."
+      >
+        {warrantyCoverage.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No open warranty coverage.</p>
+        ) : (
+          <RecordList>
+            {warrantyCoverage.map((coverage) => (
+              <RecordListRow
+                key={coverage.invoiceId}
+                href={`/app/${context.organizationId}/work-orders/${coverage.workOrderId}`}
+                title={`${coverage.workOrderNumber} · ${coverage.invoiceNumber}`}
+                description={[
+                  coverage.customerConcern,
+                  `issued ${formatDate(coverage.issuedAt, "UTC", "en-US")}`,
+                  coverage.expiresAt
+                    ? `covered until ${formatDate(coverage.expiresAt, "UTC", "en-US")}`
+                    : "time-unlimited",
+                  coverage.warrantyMiles
+                    ? `or ${Intl.NumberFormat("en-US").format(coverage.warrantyMiles)} mi from invoice (last known ${Intl.NumberFormat("en-US").format(coverage.lastKnownMileage ?? 0)} mi)`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              />
+            ))}
+          </RecordList>
+        )}
       </PageSection>
 
       <PageSection id="history" title="Service history" description="Last 25 visits.">

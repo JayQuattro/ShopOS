@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { InvoiceDisclaimers } from "./invoice-disclaimers";
+import { WarrantyEditor } from "./warranty-editor";
 import { formatMoney } from "@/i18n/formatters";
 import { parseMoneyInput } from "@/i18n/money-input";
 
@@ -19,6 +20,9 @@ type InvoiceData = {
   paidMinor: string | null;
   currency: string;
   paymentUrl: string | null;
+  warrantyMonths: number | null;
+  warrantyMiles: number | null;
+  issuedAt: string | null;
 };
 
 export function InvoicePanel({
@@ -156,6 +160,9 @@ export function InvoicePanel({
         paidMinor: "0",
         currency: "USD",
         paymentUrl: null,
+        warrantyMonths: data.warrantyMonths ?? null,
+        warrantyMiles: data.warrantyMiles ?? null,
+        issuedAt: null,
       });
       window.location.reload();
     } catch (e) {
@@ -315,7 +322,16 @@ export function InvoicePanel({
       </div>
 
       {invoice.id ? (
-        <InvoiceDisclaimers invoiceId={invoice.id} canEdit={invoice.status === "DRAFT"} />
+        <>
+          <InvoiceDisclaimers invoiceId={invoice.id} canEdit={invoice.status === "DRAFT"} />
+          <WarrantyEditor
+            invoiceId={invoice.id}
+            canEdit={invoice.status === "DRAFT"}
+            initialMonths={invoice.warrantyMonths}
+            initialMiles={invoice.warrantyMiles}
+            issuedAt={invoice.issuedAt}
+          />
+        </>
       ) : null}
 
       {invoice.status === "DRAFT" ? (

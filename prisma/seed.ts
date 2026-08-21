@@ -105,6 +105,8 @@ async function seed(): Promise<void> {
         slug: "atlas-service",
         name: "Atlas Service Collective",
         defaultCurrency: "USD",
+        defaultWarrantyMonths: 24,
+        defaultWarrantyMiles: 24_000,
       },
     });
 
@@ -512,6 +514,8 @@ async function seed(): Promise<void> {
         totalMinor: 34_304n,
         paidMinor: 34_304n,
         issuedAt: new Date("2026-07-23T10:00:00Z"),
+        warrantyMonths: 24,
+        warrantyMiles: 24_000,
       },
     });
 

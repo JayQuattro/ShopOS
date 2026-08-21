@@ -138,6 +138,9 @@ export async function WorkOrderDetailPane({
           paidMinor: true,
           currency: true,
           paymentUrl: true,
+          warrantyMonths: true,
+          warrantyMiles: true,
+          issuedAt: true,
         },
       },
       assistingTechnicians: {
@@ -477,6 +480,9 @@ export async function WorkOrderDetailPane({
                               paidMinor: wo.invoice.paidMinor.toString(),
                               paymentUrl: wo.invoice.paymentUrl,
                               currency: wo.invoice.currency,
+                              warrantyMonths: wo.invoice.warrantyMonths,
+                              warrantyMiles: wo.invoice.warrantyMiles,
+                              issuedAt: wo.invoice.issuedAt?.toISOString() ?? null,
                             }
                           : {
                               id: null,
@@ -486,6 +492,9 @@ export async function WorkOrderDetailPane({
                               paidMinor: null,
                               paymentUrl: null,
                               currency: "USD",
+                              warrantyMonths: null,
+                              warrantyMiles: null,
+                              issuedAt: null,
                             }
                       }
                     />
