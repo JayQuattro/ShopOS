@@ -1204,9 +1204,13 @@ model InvoiceDisclaimer {
   name           String       @db.VarChar(120)
   body           String       @db.VarChar(2000)
   position       Int
+  serviceGroupKey   String?      @map("service_group_key") @db.VarChar(80)
+  serviceGroupLabel String?      @map("service_group_label") @db.VarChar(160)
+  invoiceLineId     String?      @map("invoice_line_id") @db.Uuid
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   invoice        Invoice      @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+  invoiceLine       InvoiceLine? @relation(fields: [organizationId, invoiceLineId], references: [organizationId, id], onDelete: SetNull)
 
   @@unique([organizationId, id], map: "invoice_disclaimers_org_id_unique")
   @@unique([invoiceId, position], map: "invoice_disclaimers_invoice_position_unique")
@@ -2193,8 +2197,11 @@ model InvoiceLine {
   invoice              Invoice        @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
   sourceEstimateLine   EstimateLine?  @relation(fields: [organizationId, sourceEstimateLineId], references: [organizationId, id], onDelete: Restrict)
   inventoryItemId      String?        @map("inventory_item_id") @db.Uuid
+  warrantyMonths       Int?            @map("warranty_months")
+  warrantyMiles        Int?            @map("warranty_miles")
   inventoryItem        InventoryItem? @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: SetNull)
   stockMovements       InventoryMovement[]
+  scopedDisclaimers    InvoiceDisclaimer[]
 
   @@index([organizationId, inventoryItemId], map: "invoice_lines_org_item_idx")
   @@unique([organizationId, id], map: "invoice_lines_org_id_unique")

@@ -39,7 +39,13 @@ export default async function InvoicePrintPage({
       warrantyMiles: true,
       disclaimers: {
         orderBy: { position: "asc" as const },
-        select: { id: true, name: true, body: true },
+        select: {
+          id: true,
+          name: true,
+          body: true,
+          serviceGroupLabel: true,
+          invoiceLine: { select: { description: true } },
+        },
       },
       organization: {
         select: {
@@ -215,7 +221,15 @@ export default async function InvoicePrintPage({
             <ul className="flex flex-col gap-2">
               {invoice.disclaimers.map((disclaimer) => (
                 <li key={disclaimer.id}>
-                  <p className="font-semibold">{disclaimer.name}</p>
+                  <p className="font-semibold">
+                    {disclaimer.name}
+                    {disclaimer.invoiceLine?.description || disclaimer.serviceGroupLabel ? (
+                      <span className="font-normal text-neutral-500">
+                        {" "}
+                        ({disclaimer.invoiceLine?.description ?? disclaimer.serviceGroupLabel})
+                      </span>
+                    ) : null}
+                  </p>
                   <p className="whitespace-pre-line text-neutral-700">{disclaimer.body}</p>
                 </li>
               ))}

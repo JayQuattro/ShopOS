@@ -27,6 +27,8 @@ export type DisclaimerTemplateRow = Readonly<{
   body: string;
   triggerKey: string | null;
   active: boolean;
+  /** Display scope for applied rows: job label, line description, or whole invoice. */
+  scope?: string | null;
 }>;
 
 export async function listTemplates(
@@ -203,6 +205,9 @@ export async function applyDisclaimer(
     templateId?: string;
     name?: string;
     body?: string;
+    /** Attach to a job (group key) or a single invoice line; omit for invoice-wide. */
+    serviceGroupKey?: string;
+    invoiceLineId?: string;
   },
 ): Promise<Readonly<{ disclaimerId: string }>> {
   assertTenantAccess(
@@ -237,6 +242,35 @@ export async function applyDisclaimer(
   // Snapshots are part of the document; once issued, the invoice is history.
   if (invoice.status !== "DRAFT") throw new DisclaimerFailed("invoice_not_draft");
 
+  // Scope resolution: the line (or any line of the named job) must belong
+  // to this invoice in this tenant; the job label is snapshotted for display.
+  let serviceGroupLabel: string | null = null;
+  let invoiceLineId: string | null = null;
+  const scopeLine =
+    input.invoiceLineId || input.serviceGroupKey
+      ? await input.db.invoiceLine.findFirst({
+          where: {
+            organizationId: input.context.organizationId,
+            invoiceId: invoice.id,
+            ...(input.invoiceLineId
+              ? { id: input.invoiceLineId }
+              : { sourceEstimateLine: { serviceGroupKey: input.serviceGroupKey! } }),
+          },
+          select: {
+            id: true,
+            sourceEstimateLine: { select: { serviceGroupKey: true, serviceGroupLabel: true } },
+          },
+        })
+      : null;
+  if (input.invoiceLineId || input.serviceGroupKey) {
+    if (!scopeLine) throw new DisclaimerFailed("disclaimer_not_found");
+    invoiceLineId = input.invoiceLineId ? scopeLine.id : null;
+    const group = scopeLine.sourceEstimateLine;
+    serviceGroupLabel =
+      group?.serviceGroupLabel ??
+      (group && group.serviceGroupKey !== "general" ? group.serviceGroupKey : null);
+  }
+
   const last = await input.db.invoiceDisclaimer.findFirst({
     where: { invoiceId: invoice.id },
     orderBy: { position: "desc" },
@@ -251,6 +285,9 @@ export async function applyDisclaimer(
       name,
       body,
       position: (last?.position ?? 0) + 1,
+      ...(input.serviceGroupKey ? { serviceGroupKey: input.serviceGroupKey } : {}),
+      ...(serviceGroupLabel ? { serviceGroupLabel } : {}),
+      ...(invoiceLineId ? { invoiceLineId } : {}),
     },
   });
   return { disclaimerId: disclaimer.id };
@@ -294,7 +331,21 @@ export async function listApplied(
   const rows = await input.db.invoiceDisclaimer.findMany({
     where: { organizationId: input.context.organizationId, invoiceId: input.invoiceId },
     orderBy: { position: "asc" },
-    select: { id: true, name: true, body: true },
+    select: {
+      id: true,
+      name: true,
+      body: true,
+      serviceGroupLabel: true,
+      invoiceLineId: true,
+      invoiceLine: { select: { description: true } },
+    },
   });
-  return rows.map((row) => ({ ...row, triggerKey: null, active: true }));
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    body: row.body,
+    triggerKey: null,
+    active: true,
+    scope: row.invoiceLine?.description ?? row.serviceGroupLabel ?? "Whole invoice",
+  }));
 }

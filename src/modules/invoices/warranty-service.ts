@@ -20,6 +20,16 @@ export async function setInvoiceWarranty(
     invoiceId: string;
     warrantyMonths?: number | null;
     warrantyMiles?: number | null;
+    /** Per-line terms (job granularity): null clears to the invoice default. */
+    lines?:
+      | ReadonlyArray<
+          Readonly<{
+            lineId: string;
+            warrantyMonths?: number | null | undefined;
+            warrantyMiles?: number | null | undefined;
+          }>
+        >
+      | undefined;
   },
 ): Promise<Readonly<{ warrantyMonths: number | null; warrantyMiles: number | null }>> {
   assertTenantAccess(
@@ -44,12 +54,55 @@ export async function setInvoiceWarranty(
   if (!invoice) throw new WarrantyFailed("invoice_not_found");
   if (invoice.status !== "DRAFT") throw new WarrantyFailed("invoice_not_draft");
 
-  await input.db.invoice.update({
-    where: { id: invoice.id },
-    data: {
-      warrantyMonths: months,
-      warrantyMiles: miles,
-    },
+  for (const line of input.lines ?? []) {
+    if (
+      line.warrantyMonths !== undefined &&
+      line.warrantyMonths !== null &&
+      (!Number.isSafeInteger(line.warrantyMonths) || line.warrantyMonths < 1)
+    ) {
+      throw new WarrantyFailed("invalid_terms");
+    }
+    if (
+      line.warrantyMiles !== undefined &&
+      line.warrantyMiles !== null &&
+      (!Number.isSafeInteger(line.warrantyMiles) || line.warrantyMiles < 1)
+    ) {
+      throw new WarrantyFailed("invalid_terms");
+    }
+  }
+
+  await input.db.$transaction(async (transaction) => {
+    const fresh = await transaction.invoice.findFirst({
+      where: { id: invoice.id, organizationId: input.context.organizationId },
+      select: { status: true },
+    });
+    if (fresh?.status !== "DRAFT") throw new WarrantyFailed("invoice_not_draft");
+
+    await transaction.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        warrantyMonths: months,
+        warrantyMiles: miles,
+      },
+    });
+    for (const line of input.lines ?? []) {
+      const owned = await transaction.invoiceLine.findFirst({
+        where: {
+          id: line.lineId,
+          organizationId: input.context.organizationId,
+          invoiceId: invoice.id,
+        },
+        select: { id: true },
+      });
+      if (!owned) throw new WarrantyFailed("invoice_not_found");
+      await transaction.invoiceLine.update({
+        where: { id: owned.id },
+        data: {
+          warrantyMonths: line.warrantyMonths ?? null,
+          warrantyMiles: line.warrantyMiles ?? null,
+        },
+      });
+    }
   });
   return { warrantyMonths: months, warrantyMiles: miles };
 }
@@ -60,6 +113,8 @@ export type WarrantyCoverage = Readonly<{
   workOrderId: string;
   workOrderNumber: string;
   customerConcern: string;
+  /** Job the terms cover; "Whole invoice" for the invoice-level fallback. */
+  jobLabel: string;
   issuedAt: Date;
   warrantyMonths: number | null;
   warrantyMiles: number | null;
@@ -103,7 +158,15 @@ export async function activeWarrantyForAsset(
       status: { in: ["ISSUED", "PARTIALLY_PAID", "PAID"] },
       issuedAt: { not: null },
       workOrder: { assetId: asset.id },
-      OR: [{ warrantyMonths: { not: null } }, { warrantyMiles: { not: null } }],
+      OR: [
+        { warrantyMonths: { not: null } },
+        { warrantyMiles: { not: null } },
+        {
+          lines: {
+            some: { OR: [{ warrantyMonths: { not: null } }, { warrantyMiles: { not: null } }] },
+          },
+        },
+      ],
     },
     orderBy: { issuedAt: "desc" },
     select: {
@@ -113,26 +176,102 @@ export async function activeWarrantyForAsset(
       warrantyMonths: true,
       warrantyMiles: true,
       workOrder: { select: { id: true, number: true, customerConcern: true } },
+      lines: {
+        orderBy: { position: "asc" },
+        select: {
+          id: true,
+          warrantyMonths: true,
+          warrantyMiles: true,
+          sourceEstimateLine: {
+            select: { serviceGroupKey: true, serviceGroupLabel: true },
+          },
+        },
+      },
     },
   });
 
-  return invoices
-    .filter((invoice) => {
-      if (!invoice.warrantyMonths) return true; // miles-only never lapses by time
-      return addMonths(invoice.issuedAt!, invoice.warrantyMonths) > now;
-    })
-    .map((invoice) => ({
-      invoiceId: invoice.id,
-      invoiceNumber: invoice.number,
-      workOrderId: invoice.workOrder.id,
-      workOrderNumber: invoice.workOrder.number,
-      customerConcern: invoice.workOrder.customerConcern,
-      issuedAt: invoice.issuedAt!,
-      warrantyMonths: invoice.warrantyMonths,
-      warrantyMiles: invoice.warrantyMiles,
-      expiresAt: invoice.warrantyMonths
-        ? addMonths(invoice.issuedAt!, invoice.warrantyMonths)
-        : null,
-      lastKnownMileage: asset.automotiveProfile?.lastKnownMileage ?? null,
-    }));
+  const coverage: WarrantyCoverage[] = [];
+  const mileage = asset.automotiveProfile?.lastKnownMileage ?? null;
+  for (const invoice of invoices) {
+    // Group lines by job; explicit line terms cover their job, and the
+    // invoice-level terms are the fallback for everything else.
+    const jobsWithTerms = new Map<string, { label: string; months: number; miles: number }>();
+    let anyUngroupedLine = false;
+    for (const line of invoice.lines) {
+      const explicit = line.warrantyMonths !== null || line.warrantyMiles !== null ? line : null;
+      const group = line.sourceEstimateLine;
+      const label =
+        group?.serviceGroupLabel ??
+        (group && group.serviceGroupKey !== "general" ? group.serviceGroupKey : null);
+      if (!explicit) {
+        if (!label) anyUngroupedLine = true;
+        continue;
+      }
+      const key = group?.serviceGroupKey ?? "__line__";
+      const existing = jobsWithTerms.get(key);
+      const months = Math.max(existing?.months ?? 0, explicit.warrantyMonths ?? 0);
+      const miles = Math.max(existing?.miles ?? 0, explicit.warrantyMiles ?? 0);
+      jobsWithTerms.set(key, { label: label ?? "Line item", months, miles });
+    }
+
+    const coveredJobs = new Set(jobsWithTerms.keys());
+    const hasJobWithoutTerms =
+      anyUngroupedLine ||
+      new Set(
+        invoice.lines
+          .map((line) => line.sourceEstimateLine?.serviceGroupKey ?? "__line__")
+          .filter((key) => !coveredJobs.has(key)),
+      ).size > 0;
+
+    const rows: Array<{ label: string; months: number; miles: number }> = [
+      ...[...jobsWithTerms.values()],
+      // The invoice-level fallback covers any job without explicit terms.
+      ...(invoice.warrantyMonths || invoice.warrantyMiles
+        ? hasJobWithoutTerms || jobsWithTerms.size === 0
+          ? [
+              {
+                label: "Whole invoice",
+                months: invoice.warrantyMonths ?? 0,
+                miles: invoice.warrantyMiles ?? 0,
+              },
+            ]
+          : []
+        : []),
+    ];
+
+    for (const row of rows) {
+      if (row.months > 0) {
+        const expiresAt = addMonths(invoice.issuedAt!, row.months);
+        if (expiresAt <= now) continue;
+        coverage.push({
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          workOrderId: invoice.workOrder.id,
+          workOrderNumber: invoice.workOrder.number,
+          customerConcern: invoice.workOrder.customerConcern,
+          jobLabel: row.label,
+          issuedAt: invoice.issuedAt!,
+          warrantyMonths: row.months,
+          warrantyMiles: row.miles > 0 ? row.miles : null,
+          expiresAt,
+          lastKnownMileage: mileage,
+        });
+      } else {
+        coverage.push({
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          workOrderId: invoice.workOrder.id,
+          workOrderNumber: invoice.workOrder.number,
+          customerConcern: invoice.workOrder.customerConcern,
+          jobLabel: row.label,
+          issuedAt: invoice.issuedAt!,
+          warrantyMonths: null,
+          warrantyMiles: row.miles,
+          expiresAt: null,
+          lastKnownMileage: mileage,
+        });
+      }
+    }
+  }
+  return coverage;
 }
