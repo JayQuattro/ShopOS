@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { AuthorizationMethod, PrismaClient } from "@/generated/prisma/client";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
+import { releaseActiveReservations } from "@/modules/inventory/inventory-service";
 import { transitionStatus } from "@/modules/work-orders/work-order-service";
 
 export type AuthorizationServiceInput = Readonly<{ db: PrismaClient; context: TenantContext }>;
@@ -154,6 +155,50 @@ export async function recordAuthorization(
             decision: "DECLINED",
           },
         });
+      }
+
+      // Reservation hooks: a declined line releases exactly the stock held
+      // for it, and a fully-declined revision releases every hold on the
+      // work order (the estimate was rejected).
+      const declinedLineIds = [
+        ...input.decisions.filter((d) => d.decision === "DECLINED").map((d) => d.estimateLineId),
+        ...autoDeclined,
+      ];
+      if (declinedLineIds.length > 0) {
+        await releaseActiveReservations(
+          transaction,
+          input.context,
+          { estimateLineIds: declinedLineIds },
+          "Released: estimate line declined",
+        );
+      }
+      const hasAnyApproval =
+        input.decisions.some((d) => d.decision === "APPROVED") || autoDeclined.length > 0;
+      if (!hasAnyApproval) {
+        const requiredLines = await transaction.estimateLine.findMany({
+          where: {
+            organizationId: input.context.organizationId,
+            estimateRevisionId: revision.id,
+            authorizationRequired: true,
+          },
+          select: { id: true },
+        });
+        const decisionsAfter = await transaction.authorizationDecision.findMany({
+          where: { estimateLineId: { in: requiredLines.map((line) => line.id) } },
+          select: { decision: true },
+        });
+        if (
+          requiredLines.length > 0 &&
+          decisionsAfter.length === requiredLines.length &&
+          decisionsAfter.every((d) => d.decision === "DECLINED")
+        ) {
+          await releaseActiveReservations(
+            transaction,
+            input.context,
+            { workOrderId: revision.workOrderId },
+            "Released: estimate rejected",
+          );
+        }
       }
 
       // Activity event.

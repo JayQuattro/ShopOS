@@ -230,6 +230,7 @@ model User {
   createdAppointments   Appointment[]                    @relation("AppointmentCreatedBy")
   sentSmsMessages       SmsMessage[]                     @relation("SmsSentBy")
   createdStockMovements InventoryMovement[]               @relation("InventoryMovementCreatedBy")
+  createdStockReservations InventoryReservation[]        @relation("InventoryReservationCreatedBy")
   timeEntries            TimeEntry[]                       @relation("TimeEntryWorker")
   createdTasks           WorkOrderTask[]                @relation("TaskCreatedBy")
   createdPartOrders       PartOrder[]                    @relation("PartOrderCreatedBy")
@@ -360,6 +361,7 @@ model Organization {
   authorizationLinks  AuthorizationLink[]
   connectorInstances  ConnectorInstance[]
   inventoryMovements  InventoryMovement[]
+  inventoryReservations InventoryReservation[]
 
   @@map("organizations")
 }
@@ -948,6 +950,7 @@ model WorkOrder {
   tasks              WorkOrderTask[]
   partOrders         PartOrder[]
   stockMovements     InventoryMovement[]
+  inventoryReservations InventoryReservation[]
   trackerLink        RepairTrackerLink?
   loanerCheckouts    LoanerCheckout[]
   subletWorks        SubletWork[]
@@ -1162,6 +1165,39 @@ model ShopFee {
   @@map("shop_fees")
 }
 
+enum InventoryReservationStatus {
+  ACTIVE    @map("active")
+  RELEASED  @map("released")
+  CONSUMED  @map("consumed")
+
+  @@map("inventory_reservation_status")
+}
+
+model InventoryReservation {
+  id              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String                    @map("organization_id") @db.Uuid
+  inventoryItemId String                    @map("inventory_item_id") @db.Uuid
+  workOrderId     String                    @map("work_order_id") @db.Uuid
+  estimateLineId  String?                   @map("estimate_line_id") @db.Uuid
+  quantity        Int
+  status          InventoryReservationStatus @default(ACTIVE)
+  note            String?                   @db.VarChar(280)
+  createdById     String?                   @map("created_by_id") @db.Uuid
+  createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  releasedAt      DateTime?                 @map("released_at") @db.Timestamptz(6)
+  consumedAt      DateTime?                 @map("consumed_at") @db.Timestamptz(6)
+  organization    Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  inventoryItem   InventoryItem             @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
+  workOrder       WorkOrder                 @relation(fields: [organizationId, workOrderId], references: [organizationId, id], onDelete: Restrict)
+  estimateLine    EstimateLine?             @relation(fields: [organizationId, estimateLineId], references: [organizationId, id], onDelete: SetNull)
+  createdBy       User?                     @relation("InventoryReservationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, id], map: "inventory_reservations_org_id_unique")
+  @@index([organizationId, inventoryItemId, status], map: "inventory_reservations_org_item_status_idx")
+  @@index([organizationId, workOrderId, status], map: "inventory_reservations_org_work_order_status_idx")
+  @@map("inventory_reservations")
+}
+
 enum InventoryMovementReason {
   RECEIVED          @map("received")
   ISSUED_TO_JOB     @map("issued_to_job")
@@ -1230,6 +1266,7 @@ model InventoryItem {
   category        InventoryCategory? @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: SetNull)
   orderLines      PartOrderLine[]
   movements       InventoryMovement[]
+  reservations    InventoryReservation[]
 
   @@unique([organizationId, id], map: "inventory_items_org_id_unique")
   @@unique([organizationId, locationId, partNumber], map: "inventory_items_org_loc_part_unique")
@@ -1980,6 +2017,8 @@ model EstimateLine {
   revision               EstimateRevision        @relation(fields: [organizationId, estimateRevisionId], references: [organizationId, id], onDelete: Restrict)
   authorizationDecisions AuthorizationDecision[]
   invoiceLines           InvoiceLine[]
+
+  stockReservations InventoryReservation[]
 
   @@unique([estimateRevisionId, position], map: "estimate_lines_revision_position_unique")
   @@unique([organizationId, id], map: "estimate_lines_org_id_unique")

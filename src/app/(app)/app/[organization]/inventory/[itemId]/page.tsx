@@ -9,7 +9,11 @@ import { EmptyState } from "@/components/shopos/states";
 import { db } from "@/db/client";
 import { humanizeToken } from "@/lib/labels";
 import { formatDate, formatDateTime, formatMoney } from "@/i18n/formatters";
-import { listMovements } from "@/modules/inventory/inventory-service";
+import {
+  itemAvailability,
+  listMovements,
+  listReservations,
+} from "@/modules/inventory/inventory-service";
 import { listPurchaseHistory } from "@/modules/parts/part-order-service";
 import { getRequestContext } from "@/modules/tenancy/request-context";
 
@@ -62,9 +66,11 @@ export default async function InventoryItemPage({
     );
   }
 
-  const [movements, purchases] = await Promise.all([
+  const [movements, purchases, availability, reservations] = await Promise.all([
     listMovements({ db, context, itemId: item.id, take: 50 }),
     listPurchaseHistory({ db, context, inventoryItemId: item.id }),
+    itemAvailability({ db, context, itemId: item.id }),
+    listReservations({ db, context, itemId: item.id, take: 25 }),
   ]);
 
   const money = (minor: string | bigint) => formatMoney(Number(minor), item.currency, "en-US");
@@ -94,6 +100,14 @@ export default async function InventoryItemPage({
                   <span className="text-sm text-muted-foreground"> {item.unitOfMeasure}</span>
                 ) : null}
               </p>
+              {availability.reserved > 0 ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {availability.reserved} held for jobs ·{" "}
+                  <span className="font-medium text-foreground">
+                    {availability.available} available
+                  </span>
+                </p>
+              ) : null}
               {low ? (
                 <Badge variant="destructive" className="mt-2 text-[10px]">
                   at/below reorder point ({item.reorderPoint})
@@ -183,6 +197,48 @@ export default async function InventoryItemPage({
                   >
                     {movement.delta > 0 ? `+${movement.delta}` : movement.delta}
                   </span>
+                }
+              />
+            ))}
+          </RecordList>
+        )}
+      </PageSection>
+
+      <PageSection
+        id="holds"
+        title="Stock holds"
+        description="Parts held for pending jobs — released automatically when an estimate is declined or superseded."
+      >
+        {reservations.length === 0 ? (
+          <EmptyState
+            title="No holds"
+            description="Holding stock for a pending estimate will show here."
+          />
+        ) : (
+          <RecordList>
+            {reservations.map((reservation) => (
+              <RecordListRow
+                key={reservation.id}
+                href={`/app/${context.organizationId}/work-orders/${reservation.workOrderId}`}
+                title={`${reservation.itemName} ×${reservation.quantity} · ${reservation.workOrderNumber}`}
+                description={[
+                  reservation.note,
+                  reservation.createdByName,
+                  formatDateTime(reservation.createdAt, "UTC", "en-US"),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                trailing={
+                  <Badge
+                    variant={reservation.status === "ACTIVE" ? "default" : "secondary"}
+                    className="text-[10px]"
+                  >
+                    {reservation.status === "ACTIVE"
+                      ? "held"
+                      : reservation.status === "CONSUMED"
+                        ? "issued"
+                        : "released"}
+                  </Badge>
                 }
               />
             ))}

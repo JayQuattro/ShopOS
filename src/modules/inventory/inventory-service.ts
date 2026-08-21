@@ -50,7 +50,10 @@ export class InventoryFailed extends Error {
       | "invalid_name"
       | "duplicate_part_number"
       | "invalid_quantity"
-      | "insufficient_stock",
+      | "insufficient_stock"
+      | "work_order_not_found"
+      | "work_order_not_open"
+      | "line_not_found",
   ) {
     super("The inventory operation could not be completed.");
     this.name = "InventoryFailed";
@@ -897,4 +900,320 @@ export async function uomSummary(
     ...group,
     totalBaseUnits: Math.round(group.totalBaseUnits * 1000) / 1000,
   }));
+}
+
+// --- Reservations (soft holds over on-hand stock) ---
+
+export type ItemAvailability = Readonly<{
+  onHand: number;
+  reserved: number;
+  available: number;
+}>;
+
+/**
+ * Holds stock for a pending work order without touching on-hand. The
+ * optional estimate-line link lets declines and superseded revisions release
+ * exactly the hold that belonged to them.
+ */
+export async function reserveStock(
+  input: InventoryServiceInput & {
+    itemId: string;
+    workOrderId: string;
+    quantity: number;
+    estimateLineId?: string;
+    note?: string;
+  },
+): Promise<Readonly<{ reservationId: string; available: number }>> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.write",
+  );
+
+  if (!Number.isSafeInteger(input.quantity) || input.quantity < 1) {
+    throw new InventoryFailed("invalid_quantity");
+  }
+
+  return input.db.$transaction(async (transaction) => {
+    const [item, workOrder, line] = await Promise.all([
+      transaction.inventoryItem.findFirst({
+        where: { id: input.itemId, organizationId: input.context.organizationId },
+        select: { id: true, quantityOnHand: true },
+      }),
+      transaction.workOrder.findFirst({
+        where: { id: input.workOrderId, organizationId: input.context.organizationId },
+        select: { id: true, status: true },
+      }),
+      input.estimateLineId
+        ? transaction.estimateLine.findFirst({
+            where: {
+              id: input.estimateLineId,
+              organizationId: input.context.organizationId,
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    if (!item) throw new InventoryFailed("item_not_found");
+    if (!workOrder) throw new InventoryFailed("work_order_not_found");
+    if (input.estimateLineId && !line) throw new InventoryFailed("line_not_found");
+    if (workOrder.status === "CANCELLED" || workOrder.status === "CLOSED") {
+      throw new InventoryFailed("work_order_not_open");
+    }
+
+    const reserved = await sumActiveReservations(transaction, input.context, item.id);
+    if (item.quantityOnHand - reserved - input.quantity < 0) {
+      throw new InventoryFailed("insufficient_stock");
+    }
+
+    const reservation = await transaction.inventoryReservation.create({
+      data: {
+        id: randomUUID(),
+        organizationId: input.context.organizationId,
+        inventoryItemId: item.id,
+        workOrderId: workOrder.id,
+        ...(input.estimateLineId ? { estimateLineId: input.estimateLineId } : {}),
+        quantity: input.quantity,
+        ...(input.note ? { note: input.note.slice(0, 280) } : {}),
+        ...(input.context.actorId ? { createdById: input.context.actorId } : {}),
+      },
+    });
+    return {
+      reservationId: reservation.id,
+      available: item.quantityOnHand - reserved - input.quantity,
+    };
+  });
+}
+
+async function sumActiveReservations(
+  transaction: Prisma.TransactionClient,
+  context: TenantContext,
+  itemId: string,
+): Promise<number> {
+  const rows = await transaction.inventoryReservation.aggregate({
+    where: {
+      organizationId: context.organizationId,
+      inventoryItemId: itemId,
+      status: "ACTIVE",
+    },
+    _sum: { quantity: true },
+  });
+  return rows._sum.quantity ?? 0;
+}
+
+/**
+ * Marks ACTIVE reservations RELEASED. Used by the manual release action and
+ * by estimate lifecycle hooks (declined lines, superseded revisions,
+ * cancelled work orders). Runs inside the caller's transaction when one is
+ * provided.
+ */
+export async function releaseActiveReservations(
+  transaction: Prisma.TransactionClient,
+  context: TenantContext,
+  where: Readonly<{
+    reservationIds?: readonly string[];
+    estimateLineIds?: readonly string[];
+    workOrderId?: string;
+  }>,
+  note: string,
+): Promise<number> {
+  const result = await transaction.inventoryReservation.updateMany({
+    where: {
+      organizationId: context.organizationId,
+      status: "ACTIVE",
+      ...(where.reservationIds ? { id: { in: [...where.reservationIds] } } : {}),
+      ...(where.estimateLineIds ? { estimateLineId: { in: [...where.estimateLineIds] } } : {}),
+      ...(where.workOrderId ? { workOrderId: where.workOrderId } : {}),
+    },
+    data: { status: "RELEASED", releasedAt: new Date(), note: note.slice(0, 280) },
+  });
+  return result.count;
+}
+
+/** Releases one reservation from the UI. */
+export async function releaseReservation(
+  input: InventoryServiceInput & { reservationId: string },
+): Promise<Readonly<{ released: boolean }>> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.write",
+  );
+  const count = await releaseActiveReservations(
+    input.db,
+    input.context,
+    { reservationIds: [input.reservationId] },
+    "Released manually",
+  );
+  return { released: count > 0 };
+}
+
+/**
+ * Converts every ACTIVE reservation on a work order into stock consumption:
+ * on-hand is decremented, an ISSUED_TO_JOB movement is written per hold, and
+ * the reservation is marked CONSUMED. Already-released holds are untouched,
+ * so the action is idempotent.
+ */
+export async function issueReservationsForWorkOrder(
+  input: InventoryServiceInput & { workOrderId: string },
+): Promise<Readonly<{ issued: number }>> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.write",
+  );
+
+  return input.db.$transaction(async (transaction) => {
+    const workOrder = await transaction.workOrder.findFirst({
+      where: { id: input.workOrderId, organizationId: input.context.organizationId },
+      select: { id: true, locationId: true },
+    });
+    if (!workOrder) throw new InventoryFailed("work_order_not_found");
+
+    const reservations = await transaction.inventoryReservation.findMany({
+      where: {
+        organizationId: input.context.organizationId,
+        workOrderId: workOrder.id,
+        status: "ACTIVE",
+      },
+      select: { id: true, inventoryItemId: true, quantity: true },
+    });
+    if (reservations.length === 0) return { issued: 0 };
+
+    for (const reservation of reservations) {
+      const item = await transaction.inventoryItem.findFirst({
+        where: {
+          id: reservation.inventoryItemId,
+          organizationId: input.context.organizationId,
+        },
+        select: { id: true, quantityOnHand: true },
+      });
+      if (!item) throw new InventoryFailed("item_not_found");
+      if (item.quantityOnHand - reservation.quantity < 0) {
+        throw new InventoryFailed("insufficient_stock");
+      }
+      await transaction.inventoryItem.update({
+        where: { id: item.id },
+        data: { quantityOnHand: item.quantityOnHand - reservation.quantity },
+      });
+      await recordStockMovement(transaction, input.context, {
+        inventoryItemId: item.id,
+        delta: -reservation.quantity,
+        reason: "ISSUED_TO_JOB",
+        locationId: workOrder.locationId,
+        workOrderId: workOrder.id,
+        note: "Issued from reservation",
+      });
+      await transaction.inventoryReservation.update({
+        where: { id: reservation.id },
+        data: { status: "CONSUMED", consumedAt: new Date() },
+      });
+    }
+    return { issued: reservations.length };
+  });
+}
+
+/** On-hand vs held vs available for one item. */
+export async function itemAvailability(
+  input: InventoryServiceInput & { itemId: string },
+): Promise<ItemAvailability> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+
+  const item = await input.db.inventoryItem.findFirst({
+    where: { id: input.itemId, organizationId: input.context.organizationId },
+    select: { quantityOnHand: true },
+  });
+  if (!item) throw new InventoryFailed("item_not_found");
+
+  const reserved = await sumActiveReservations(input.db, input.context, input.itemId);
+  return {
+    onHand: item.quantityOnHand,
+    reserved,
+    available: Math.max(0, item.quantityOnHand - reserved),
+  };
+}
+
+export type ReservationRow = Readonly<{
+  id: string;
+  quantity: number;
+  status: string;
+  note: string | null;
+  createdAt: Date;
+  releasedAt: Date | null;
+  consumedAt: Date | null;
+  workOrderId: string;
+  workOrderNumber: string;
+  itemName: string;
+  createdByName: string | null;
+}>;
+
+/** Reservation history for an item or a work order, newest-first. */
+export async function listReservations(
+  input: InventoryServiceInput & { itemId?: string; workOrderId?: string; take?: number },
+): Promise<readonly ReservationRow[]> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "work_orders.read",
+  );
+
+  const rows = await input.db.inventoryReservation.findMany({
+    where: {
+      organizationId: input.context.organizationId,
+      ...(input.itemId ? { inventoryItemId: input.itemId } : {}),
+      ...(input.workOrderId ? { workOrderId: input.workOrderId } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: input.take ?? 50,
+    select: {
+      id: true,
+      quantity: true,
+      status: true,
+      note: true,
+      createdAt: true,
+      releasedAt: true,
+      consumedAt: true,
+      workOrderId: true,
+      workOrder: { select: { number: true } },
+      inventoryItem: { select: { name: true } },
+      createdBy: { select: { displayName: true } },
+    },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    quantity: row.quantity,
+    status: row.status,
+    note: row.note,
+    createdAt: row.createdAt,
+    releasedAt: row.releasedAt,
+    consumedAt: row.consumedAt,
+    workOrderId: row.workOrderId,
+    workOrderNumber: row.workOrder.number,
+    itemName: row.inventoryItem.name,
+    createdByName: row.createdBy?.displayName ?? null,
+  }));
+}
+
+/** Active-hold totals per item across the organization (for pickers). */
+export async function activeReservedQuantities(
+  db: PrismaClient,
+  context: TenantContext,
+): Promise<Readonly<Record<string, number>>> {
+  const rows = await db.inventoryReservation.groupBy({
+    by: ["inventoryItemId"],
+    where: {
+      organizationId: context.organizationId,
+      status: "ACTIVE",
+    },
+    _sum: { quantity: true },
+  });
+  const totals: Record<string, number> = {};
+  for (const row of rows) {
+    totals[row.inventoryItemId] = row._sum.quantity ?? 0;
+  }
+  return totals;
 }

@@ -4,6 +4,7 @@ import type { PrismaClient, PricedLineKind } from "@/generated/prisma/client";
 import { calculateLine, currencyCode, type PricedLineInput } from "@/modules/shared/money";
 import { computeStackedTax, resolveTaxComponents } from "@/modules/taxes/tax-stacks";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
+import { releaseActiveReservations } from "@/modules/inventory/inventory-service";
 import { transitionStatus } from "@/modules/work-orders/work-order-service";
 import { resolveLinkTtlHours } from "@/modules/estimates/authorization-link-service";
 import { feeLinesForPresentation } from "@/modules/taxes/shop-fee-service";
@@ -587,11 +588,27 @@ export async function supersedeRevision(
     });
     if (decidedLines) throw new EstimateFailed("revision_decided");
 
-    // Mark old revision as superseded.
+    // Mark old revision as superseded. Holds tied to its lines are
+    // released — the re-estimate re-holds what it still needs.
     await transaction.estimateRevision.update({
       where: { id: oldRevision.id },
       data: { status: "SUPERSEDED" },
     });
+    const oldLineIds = await transaction.estimateLine.findMany({
+      where: {
+        organizationId: input.context.organizationId,
+        estimateRevisionId: oldRevision.id,
+      },
+      select: { id: true },
+    });
+    if (oldLineIds.length > 0) {
+      await releaseActiveReservations(
+        transaction,
+        input.context,
+        { estimateLineIds: oldLineIds.map((line) => line.id) },
+        "Released: estimate superseded",
+      );
+    }
 
     const nextNumber = oldRevision.revisionNumber + 1;
     const newRevision = await transaction.estimateRevision.create({

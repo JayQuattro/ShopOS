@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
+import { releaseActiveReservations } from "@/modules/inventory/inventory-service";
 import {
   canTransition,
   InvalidStatusTransition,
@@ -159,6 +160,16 @@ export async function transitionStatus(
       },
     });
     if (update.count !== 1) throw new WorkOrderTransitionFailed("concurrent_change");
+
+    // A cancelled work order gives its stock holds back.
+    if (input.targetStatus === "CANCELLED") {
+      await releaseActiveReservations(
+        transaction,
+        input.context,
+        { workOrderId: wo.id },
+        "Released: work order cancelled",
+      );
+    }
 
     // Activity event.
     await transaction.activityEvent.create({
