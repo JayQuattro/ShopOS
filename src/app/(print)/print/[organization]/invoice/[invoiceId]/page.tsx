@@ -35,6 +35,10 @@ export default async function InvoicePrintPage({
       totalMinor: true,
       paidMinor: true,
       issuedAt: true,
+      disclaimers: {
+        orderBy: { position: "asc" as const },
+        select: { id: true, name: true, body: true },
+      },
       organization: {
         select: {
           name: true,
@@ -188,6 +192,19 @@ export default async function InvoicePrintPage({
             </div>
           </div>
         </PrintSection>
+
+        {invoice.disclaimers.length > 0 ? (
+          <PrintSection heading="Disclaimers">
+            <ul className="flex flex-col gap-2">
+              {invoice.disclaimers.map((disclaimer) => (
+                <li key={disclaimer.id}>
+                  <p className="font-semibold">{disclaimer.name}</p>
+                  <p className="whitespace-pre-line text-neutral-700">{disclaimer.body}</p>
+                </li>
+              ))}
+            </ul>
+          </PrintSection>
+        ) : null}
 
         {invoice.payments.length > 0 ? (
           <PrintSection heading="Payments">

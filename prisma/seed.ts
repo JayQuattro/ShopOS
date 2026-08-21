@@ -33,6 +33,8 @@ const ids = {
   motorcycleInvoicePart: "00000000-0000-4000-8000-000000000612",
   motorcycleInvoiceFee: "00000000-0000-4000-8000-000000000613",
   motorcyclePayment: "00000000-0000-4000-8000-000000000701",
+  disclaimerCustomerParts: "00000000-0000-4000-8000-000000000721",
+  disclaimerWarranty: "00000000-0000-4000-8000-000000000722",
   oaklineContact: "00000000-0000-4000-8000-000000000801",
   oaklineAddress: "00000000-0000-4000-8000-000000000802",
   // Operational demo (assignments, appointments, time, tasks, parts,
@@ -573,6 +575,29 @@ async function seed(): Promise<void> {
         taxMinor: 360n,
         totalMinor: 5_360n,
         position: 3,
+      },
+    });
+
+    // Default disclaimer library: suggestions exist but are never forced.
+    await transaction.disclaimerTemplate.upsert({
+      where: { id: ids.disclaimerCustomerParts },
+      update: {},
+      create: {
+        id: ids.disclaimerCustomerParts,
+        organizationId: ids.organization,
+        name: "Customer-supplied parts",
+        body: "Parts supplied by the customer were installed as provided. Our workmanship warranty covers labor only; we cannot warrant customer-supplied parts, and defects originating from them are not covered.",
+        triggerKey: "CUSTOMER_PARTS",
+      },
+    });
+    await transaction.disclaimerTemplate.upsert({
+      where: { id: ids.disclaimerWarranty },
+      update: {},
+      create: {
+        id: ids.disclaimerWarranty,
+        organizationId: ids.organization,
+        name: "Repair warranty",
+        body: "Repairs are warranted for 24 months or 24,000 miles from the invoice date, whichever comes first, covering defects in workmanship. The warranty excludes wear items, misuse, and subsequent damage from continued operation after a known failure.",
       },
     });
 

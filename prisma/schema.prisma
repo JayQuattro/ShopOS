@@ -362,6 +362,8 @@ model Organization {
   authorizationLinks  AuthorizationLink[]
   connectorInstances  ConnectorInstance[]
   inventoryMovements  InventoryMovement[]
+  disclaimerTemplates DisclaimerTemplate[]
+  invoiceDisclaimers  InvoiceDisclaimer[]
   inventoryReservations InventoryReservation[]
 
   @@map("organizations")
@@ -1164,6 +1166,49 @@ model ShopFee {
   @@unique([organizationId, name], map: "shop_fees_org_name_unique")
   @@index([organizationId, active], map: "shop_fees_org_active_idx")
   @@map("shop_fees")
+}
+
+enum DisclaimerTrigger {
+  CUSTOMER_PARTS @map("customer_parts")
+  SUBLET         @map("sublet")
+
+  @@map("disclaimer_trigger")
+}
+
+model DisclaimerTemplate {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  name           String            @db.VarChar(120)
+  body           String            @db.VarChar(2000)
+  /// When set, invoices matching the situation suggest this disclaimer.
+  /// Null templates are library-only (add manually whenever wanted).
+  triggerKey     DisclaimerTrigger? @map("trigger_key")
+  active         Boolean           @default(true)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, name], map: "disclaimer_templates_org_name_unique")
+  @@unique([organizationId, id], map: "disclaimer_templates_org_id_unique")
+  @@index([organizationId, active], map: "disclaimer_templates_org_active_idx")
+  @@map("disclaimer_templates")
+}
+
+model InvoiceDisclaimer {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  invoiceId      String       @map("invoice_id") @db.Uuid
+  name           String       @db.VarChar(120)
+  body           String       @db.VarChar(2000)
+  position       Int
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invoice        Invoice      @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "invoice_disclaimers_org_id_unique")
+  @@unique([invoiceId, position], map: "invoice_disclaimers_invoice_position_unique")
+  @@index([organizationId, invoiceId], map: "invoice_disclaimers_org_invoice_idx")
+  @@map("invoice_disclaimers")
 }
 
 enum InventoryReservationStatus {
@@ -2108,6 +2153,7 @@ model Invoice {
   location       Location      @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
   workOrder      WorkOrder     @relation(fields: [organizationId, locationId, workOrderId], references: [organizationId, locationId, id], onDelete: Restrict)
   lines          InvoiceLine[]
+  disclaimers    InvoiceDisclaimer[]
   payments       Payment[]
   refunds        Refund[]
   eInvoiceDocuments EInvoiceDocument[]

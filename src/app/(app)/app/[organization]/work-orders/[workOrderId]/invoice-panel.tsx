@@ -6,6 +6,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+import { InvoiceDisclaimers } from "./invoice-disclaimers";
 import { formatMoney } from "@/i18n/formatters";
 import { parseMoneyInput } from "@/i18n/money-input";
 
@@ -311,6 +313,10 @@ export function InvoicePanel({
           </p>
         </div>
       </div>
+
+      {invoice.id ? (
+        <InvoiceDisclaimers invoiceId={invoice.id} canEdit={invoice.status === "DRAFT"} />
+      ) : null}
 
       {invoice.status === "DRAFT" ? (
         <Button variant="default" size="sm" onClick={issueInvoice} disabled={pending}>
