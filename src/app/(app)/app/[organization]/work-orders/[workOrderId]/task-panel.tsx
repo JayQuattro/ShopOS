@@ -273,6 +273,8 @@ export function TaskPanel({
               onChange={(e) => setNewTitle(e.target.value)}
               placeholder="Add an inspection item or task (e.g. Front brakes)"
               disabled={pending}
+
+              aria-label="Add an inspection item or task"
             />
             <Button type="submit" size="sm" disabled={pending || newTitle.trim().length < 3}>
               Add

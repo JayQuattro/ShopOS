@@ -238,6 +238,7 @@ export function OrgEmailSettingsForm() {
             <>
               <p className="text-sm text-muted-foreground">{activeAdapter.description}</p>
               <Input
+                aria-label="Display name"
                 placeholder="Display name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}

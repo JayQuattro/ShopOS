@@ -228,6 +228,8 @@ export function SmsInbox({ orgPath }: { orgPath: string }) {
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder="Text message…"
                   disabled={pending}
+
+                  aria-label="Text message…"
                 />
                 <Button type="submit" disabled={pending || !draft.trim()}>
                   {pending ? "…" : "Send"}

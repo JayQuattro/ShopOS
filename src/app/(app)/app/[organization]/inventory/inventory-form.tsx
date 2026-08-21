@@ -245,6 +245,8 @@ export function InventoryForm({
                         void createCategory();
                       }
                     }}
+
+                    aria-label="New…"
                   />
                 ) : null}
               </div>

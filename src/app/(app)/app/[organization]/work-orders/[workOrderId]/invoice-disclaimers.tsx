@@ -285,6 +285,7 @@ export function InvoiceDisclaimers({
                 maxLength={120}
               />
               <textarea
+                aria-label="Disclaimer text printed on the invoice…"
                 placeholder="Disclaimer text printed on the invoice…"
                 value={manualBody}
                 onChange={(e) => setManualBody(e.target.value)}

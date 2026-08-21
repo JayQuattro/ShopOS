@@ -335,6 +335,8 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
                   }
                   placeholder="Part description"
                   className="max-w-xs"
+
+                  aria-label="Part description"
                 />
                 <Input
                   value={line.partNumber}
@@ -345,10 +347,13 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
                   }
                   placeholder="Part #"
                   className="w-28"
+
+                  aria-label="Part #"
                 />
                 <Input
                   type="number"
                   min={1}
+                  aria-label="Quantity"
                   value={line.quantity}
                   onChange={(e) =>
                     setLines((prev) =>
@@ -371,6 +376,8 @@ export function PartsPanel({ workOrderId, canWrite }: { workOrderId: string; can
                   }
                   placeholder="Cost"
                   className="w-24"
+
+                  aria-label="Cost"
                 />
                 {lines.length > 1 ? (
                   <Button
