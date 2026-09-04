@@ -10,6 +10,8 @@ import {
   ProvisionOrganizationFailed,
 } from "@/modules/organizations/provision-organization";
 
+export const dynamic = "force-dynamic";
+
 const onboardingSchema = z.object({
   organization: z.object({
     name: z.string().min(2).max(180),

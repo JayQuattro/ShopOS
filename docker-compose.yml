@@ -1,0 +1,73 @@
+# Demo / small self-host deployment — built for a Coolify server (or any
+# Docker host). Point Coolify's "Docker Compose" resource at this file.
+#
+# Required environment (set in Coolify or a .env next to this file):
+#   BETTER_AUTH_URL     public URL, e.g. https://shopos-demo.example.com
+#   BETTER_AUTH_SECRET  32+ chars — generate: openssl rand -base64 32
+#
+# Optional:
+#   APP_PORT (3000)      host port for the app
+#   MAILPIT_PORT (8025)  host port for the Mailpit web UI
+#   POSTGRES_PASSWORD    defaults to a demo password — change for anything
+#                        internet-facing
+#   SEED_DEMO (true)     seed the deterministic demo org on boot
+#
+# Demo sign-in once it is up: owner@example.test / demo-password-123
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shopos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shopos-demo}
+      POSTGRES_DB: ${POSTGRES_DB:-shopos}
+    volumes:
+      - shopos-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shopos} -d ${POSTGRES_DB:-shopos}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      target: demo
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-shopos}:${POSTGRES_PASSWORD:-shopos-demo}@db:5432/${POSTGRES_DB:-shopos}?schema=public
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL to the public URL, e.g. https://shopos-demo.example.com}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET to 32+ random chars}
+      NODE_ENV: production
+      SEED_DEMO: ${SEED_DEMO:-true}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+  worker:
+    build:
+      context: .
+      target: demo
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    command: ["pnpm", "worker"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-shopos}:${POSTGRES_PASSWORD:-shopos-demo}@db:5432/${POSTGRES_DB:-shopos}?schema=public
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
+      NODE_ENV: production
+      SKIP_MIGRATIONS: "true"
+
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+
+volumes:
+  shopos-db:
