@@ -48,6 +48,12 @@ installation's root secret-protection bootstrap may use deployment secrets.
 The initial adapter runtime is a reviewed extension boundary inside the modular monolith and worker. It
 does not load arbitrary organization-supplied code.
 
+Keyless public adapters (for example the NHTSA vPIC VIN decoder behind the
+`vehicle_identification` capability) may serve as the built-in default when no connector instance is
+configured. Such a default never carries credentials, sends only the operator-supplied input of the
+moment (a VIN to decode), remains replaceable or explicitly disableable through the same connector
+instances as every other adapter, and is never required to read or save existing shop data.
+
 ## Consequences
 
 Organizations can use platform-provided services or bring their own provider accounts without

@@ -11,6 +11,10 @@ const bodySchema = z.object({
   licensePlate: z.string().trim().max(32).optional(),
   plateJurisdiction: z.string().trim().max(32).optional(),
   lastKnownMileage: z.number().int().min(0).optional(),
+  trim: z.string().trim().max(120).optional(),
+  engine: z.string().trim().max(160).optional(),
+  transmission: z.string().trim().max(120).optional(),
+  drivetrain: z.string().trim().max(80).optional(),
 });
 
 /** Upserts automotive identity (VIN/plate) and mileage on an asset. */
@@ -57,6 +61,14 @@ export async function PUT(
         ...(parsed.data.lastKnownMileage !== undefined
           ? { lastKnownMileage: parsed.data.lastKnownMileage }
           : {}),
+        ...(parsed.data.trim !== undefined ? { trim: parsed.data.trim || null } : {}),
+        ...(parsed.data.engine !== undefined ? { engine: parsed.data.engine || null } : {}),
+        ...(parsed.data.transmission !== undefined
+          ? { transmission: parsed.data.transmission || null }
+          : {}),
+        ...(parsed.data.drivetrain !== undefined
+          ? { drivetrain: parsed.data.drivetrain || null }
+          : {}),
       },
       create: {
         assetId: asset.id,
@@ -68,6 +80,10 @@ export async function PUT(
         ...(parsed.data.lastKnownMileage !== undefined
           ? { lastKnownMileage: parsed.data.lastKnownMileage }
           : {}),
+        ...(parsed.data.trim ? { trim: parsed.data.trim } : {}),
+        ...(parsed.data.engine ? { engine: parsed.data.engine } : {}),
+        ...(parsed.data.transmission ? { transmission: parsed.data.transmission } : {}),
+        ...(parsed.data.drivetrain ? { drivetrain: parsed.data.drivetrain } : {}),
       },
     });
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });

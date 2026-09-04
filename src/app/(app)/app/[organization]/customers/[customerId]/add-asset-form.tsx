@@ -7,10 +7,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+type DecodedVehicle = {
+  year: number;
+  make: string;
+  model: string;
+  trim?: string;
+  engine?: string;
+  transmission?: string;
+  drivetrain?: string;
+  bodyStyle?: string;
+  fuelType?: string;
+};
+
 /**
  * Add a vehicle/asset from the customer's profile — where the thought
  * starts. Year/make/model build the display name; VIN and plate capture
- * identity; mileage seeds the service history.
+ * identity; mileage seeds the service history. A VIN can be decoded to
+ * pre-fill the details — always a shortcut, never a requirement.
  */
 export function AddAssetForm({
   customerId,
@@ -27,10 +40,50 @@ export function AddAssetForm({
   const [vin, setVin] = useState("");
   const [mileage, setMileage] = useState("");
   const [color, setColor] = useState("");
+  const [decoded, setDecoded] = useState<DecodedVehicle | null>(null);
+  const [decoding, setDecoding] = useState(false);
+  const [decodeError, setDecodeError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const label = "grid gap-1 text-sm font-medium";
+
+  async function decodeVin() {
+    setDecoding(true);
+    setDecodeError(null);
+    setDecoded(null);
+    try {
+      const res = await fetch("/api/assets/vin-decode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vin: vin.trim() }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const messages: Record<string, string> = {
+          invalid_vin:
+            body.reason === "length"
+              ? "VIN must be exactly 17 characters."
+              : body.reason === "characters"
+                ? "VINs never contain the letters I, O, or Q."
+                : "The VIN check digit doesn't match — double-check the number.",
+          no_match: "No vehicle found for that VIN. Enter the details manually.",
+          decode_unavailable: "VIN decoding isn't available right now. Enter details manually.",
+          permission_denied: "You don't have permission to add vehicles.",
+        };
+        throw new Error(messages[body.error ?? ""] ?? "Could not decode that VIN.");
+      }
+      const vehicle = body.vehicle as DecodedVehicle;
+      setDecoded(vehicle);
+      setYear(String(vehicle.year));
+      setMake(vehicle.make);
+      setModel(vehicle.model);
+    } catch (e) {
+      setDecodeError(e instanceof Error ? e.message : "Could not decode that VIN.");
+    } finally {
+      setDecoding(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,10 +117,10 @@ export function AddAssetForm({
         };
         throw new Error(messages[body.error ?? ""] ?? "Could not add the vehicle.");
       }
-      // Best-effort profile enrichment (plate/VIN/mileage) after creation.
+      // Best-effort profile enrichment (plate/VIN/mileage + decoded details) after creation.
       const created = await res.json();
       const assetId = created?.asset?.id;
-      if (assetId && (plate.trim() || vin.trim() || mileage.trim())) {
+      if (assetId && (plate.trim() || vin.trim() || mileage.trim() || decoded)) {
         await fetch(`/api/assets/${assetId}/profile`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -75,6 +128,10 @@ export function AddAssetForm({
             ...(plate.trim() ? { licensePlate: plate.trim() } : {}),
             ...(vin.trim() ? { vin: vin.trim() } : {}),
             ...(mileage.trim() ? { lastKnownMileage: parseInt(mileage, 10) } : {}),
+            ...(decoded?.trim ? { trim: decoded.trim } : {}),
+            ...(decoded?.engine ? { engine: decoded.engine } : {}),
+            ...(decoded?.transmission ? { transmission: decoded.transmission } : {}),
+            ...(decoded?.drivetrain ? { drivetrain: decoded.drivetrain } : {}),
           }),
         }).catch(() => undefined);
       }
@@ -86,6 +143,8 @@ export function AddAssetForm({
       setVin("");
       setMileage("");
       setColor("");
+      setDecoded(null);
+      setDecodeError(null);
       if (onSuccess) onSuccess();
       else window.location.reload();
     } catch (e) {
@@ -164,13 +223,40 @@ export function AddAssetForm({
           </label>
           <label className={`${label} md:col-span-2`}>
             VIN
-            <Input
-              value={vin}
-              onChange={(e) => setVin(e.target.value.toUpperCase())}
-              placeholder="17-character VIN"
-              maxLength={17}
-              disabled={pending}
-            />
+            <span className="flex gap-2">
+              <Input
+                value={vin}
+                onChange={(e) => {
+                  setVin(e.target.value.toUpperCase());
+                  setDecoded(null);
+                  setDecodeError(null);
+                }}
+                placeholder="17-character VIN"
+                maxLength={17}
+                disabled={pending}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => void decodeVin()}
+                disabled={pending || decoding || vin.trim().length !== 17}
+              >
+                {decoding ? "Decoding…" : "Decode"}
+              </Button>
+            </span>
+            {decoded ? (
+              <span className="text-xs font-normal text-muted-foreground">
+                Decoded:{" "}
+                {[decoded.year, decoded.make, decoded.model, decoded.trim, decoded.bodyStyle]
+                  .filter(Boolean)
+                  .join(" ")}
+                {decoded.engine ? ` · ${decoded.engine}` : ""}
+              </span>
+            ) : null}
+            {decodeError ? (
+              <span className="text-xs font-normal text-destructive">{decodeError}</span>
+            ) : null}
           </label>
           <label className={label}>
             Mileage
