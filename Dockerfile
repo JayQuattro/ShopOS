@@ -23,6 +23,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL=postgres://placeholder:placeholder@localhost:5432/placeholder
+# Module-scope env validation runs during page-data collection; runtime
+# values come from the container environment, not these placeholders.
+ENV BETTER_AUTH_SECRET=placeholder-build-secret-not-used-at-runtime-00
+ENV BETTER_AUTH_URL=http://localhost:3000
 RUN pnpm db:generate
 RUN pnpm build
 
@@ -57,3 +61,31 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))"
 
 CMD ["node", "server.js"]
+
+# ---- Demo / small self-host target ----
+# Same build, full toolchain kept: the entrypoint can run `prisma migrate
+# deploy` and the deterministic demo seed at boot (docker/entrypoint.sh),
+# started with plain `next start`. Use with docker-compose.yml on a Coolify
+# server or any single-host Docker setup. Bigger image, zero wiring.
+#
+# Build: docker build --target demo -t shopos-demo .
+FROM builder AS demo
+RUN groupadd --system --gid 1001 shopos && \
+    useradd --system --uid 1001 --gid shopos --no-create-home --home-dir /app shopos
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+COPY --chown=shopos:shopos docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh && chown -R shopos:shopos /app
+
+USER shopos
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))"
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["pnpm", "start"]

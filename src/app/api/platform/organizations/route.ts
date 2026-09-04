@@ -14,6 +14,8 @@ import {
 import { listPlatformOrganizations } from "@/modules/platform/organizations";
 import { getPlatformRequestContext } from "@/modules/platform/request-context";
 
+export const dynamic = "force-dynamic";
+
 const platformProvisioningSchema = z.object({
   foundingUserId: z.string().uuid(),
   organization: z.object({

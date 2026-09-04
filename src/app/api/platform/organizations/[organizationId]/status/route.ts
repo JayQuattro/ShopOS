@@ -13,6 +13,8 @@ import {
 } from "@/modules/platform/organizations";
 import { getPlatformRequestContext } from "@/modules/platform/request-context";
 
+export const dynamic = "force-dynamic";
+
 const statusSchema = z.object({
   status: z.enum(["ACTIVE", "SUSPENDED"]),
   reason: z.string().min(10).max(500),
