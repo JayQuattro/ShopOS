@@ -156,9 +156,8 @@ describe("organization email connector configuration", { skip: shouldSkip }, () 
     expect(raw?.scope).toBe("organization");
     expect(raw?.encryptedSecret).toBeTruthy();
     expect(raw?.encryptedSecret).not.toContain("zepto_test_token_123");
-    const { decryptSecret, getMasterKeyFromEnv } = await import(
-      "@/modules/integrations/crypto/secret-cipher"
-    );
+    const { decryptSecret, getMasterKeyFromEnv } =
+      await import("@/modules/integrations/crypto/secret-cipher");
     const decrypted = JSON.parse(
       decryptSecret(raw!.encryptedSecret!, getMasterKeyFromEnv()!),
     ) as Record<string, string>;
