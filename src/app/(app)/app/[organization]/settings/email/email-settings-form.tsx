@@ -43,6 +43,7 @@ const SMTP_PRESET_HOSTS: Record<string, { host: string; port: string }> = {
   gmail: { host: "smtp.gmail.com", port: "587" },
   outlook: { host: "smtp.office365.com", port: "587" },
   zoho: { host: "smtp.zoho.com", port: "587" },
+  "zoho-zepto-smtp": { host: "smtp.zeptomail.com", port: "587" },
   "sendgrid-smtp": { host: "smtp.sendgrid.net", port: "587" },
   "mailgun-smtp": { host: "smtp.mailgun.org", port: "587" },
   "postmark-smtp": { host: "smtp.postmarkapp.com", port: "587" },

@@ -75,6 +75,13 @@ export const SMTP_PRESETS: ReadonlyArray<SmtpPreset> = [
   },
   { key: "zoho", displayName: "Zoho Mail", host: "smtp.zoho.com", port: 587, secure: false },
   {
+    key: "zoho-zepto-smtp",
+    displayName: "Zoho ZeptoMail (SMTP)",
+    host: "smtp.zeptomail.com",
+    port: 587,
+    secure: false,
+  },
+  {
     key: "sendgrid-smtp",
     displayName: "SendGrid (SMTP)",
     host: "smtp.sendgrid.net",
