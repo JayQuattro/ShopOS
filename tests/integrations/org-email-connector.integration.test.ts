@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { assertDedicatedTestDatabase, resetTestDatabase } from "../helpers/database";
 
@@ -257,5 +257,120 @@ describe("organization email connector configuration", { skip: shouldSkip }, () 
     await expect(
       deleteOrgEmailConnector({ db: dbModule.db, context: context() }),
     ).rejects.toMatchObject({ reason: "connector_not_found" });
+  });
+});
+
+describe("email test message", { skip: shouldSkip }, () => {
+  const fetchCalls: Array<{ url: string; init: RequestInit }> = [];
+
+  afterEach(() => {
+    env.NODE_ENV = "test";
+    vi.unstubAllGlobals();
+    fetchCalls.length = 0;
+  });
+
+  function stubFetch(ok: boolean) {
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit): Promise<Response> => {
+      fetchCalls.push({ url: String(url), init: init ?? {} });
+      return { ok, json: () => Promise.resolve({}) } as unknown as Response;
+    });
+  }
+
+  it("sends through the console adapter in the test environment and records the recipient", async () => {
+    const { sendOrgEmailTestMessage } = await import("@/modules/integrations/org-connectors");
+    const { getConsoleAuthDeliveryProvider } =
+      await import("@/modules/identity/delivery/console-auth-delivery-provider");
+
+    const console = getConsoleAuthDeliveryProvider();
+    console.reset();
+    const { context } = await seedOrg();
+
+    const result = await sendOrgEmailTestMessage({
+      db: dbModule.db,
+      context: context(),
+      to: "owner@shop.example",
+    });
+    expect(result).toEqual({ adapterKey: "console" });
+    expect(console.capturedRawSends().at(-1)?.to).toBe("owner@shop.example");
+  });
+
+  it("sends a real request through the configured provider in production", async () => {
+    const { upsertOrgEmailConnector, sendOrgEmailTestMessage } =
+      await import("@/modules/integrations/org-connectors");
+    const { context } = await seedOrg();
+    env.NODE_ENV = "production";
+    stubFetch(true);
+
+    await upsertOrgEmailConnector({
+      db: dbModule.db,
+      context: context(),
+      adapterKey: "zoho-zepto",
+      displayName: "Zepto",
+      configuration: { fromAddress: "service@shop.example", fromName: "Connector Org" },
+      secret: { sendMailToken: "zepto_token" },
+    });
+
+    const result = await sendOrgEmailTestMessage({
+      db: dbModule.db,
+      context: context(),
+      to: "owner@shop.example",
+    });
+    expect(result).toEqual({ adapterKey: "zoho-zepto" });
+
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0]?.url).toBe("https://api.zeptomail.com/v1.0/email");
+    const body = JSON.parse(String(fetchCalls[0]?.init.body)) as Record<string, unknown>;
+    expect(body.to).toEqual([{ email_address: { address: "owner@shop.example" } }]);
+    expect(body.subject).toBe("ShopOS test email");
+    expect(String(body.textbody)).toContain("Connector Org");
+  });
+
+  it("reports send_failed when the provider rejects the message", async () => {
+    const { upsertOrgEmailConnector, sendOrgEmailTestMessage } =
+      await import("@/modules/integrations/org-connectors");
+    const { context } = await seedOrg();
+    env.NODE_ENV = "production";
+    stubFetch(false);
+
+    await upsertOrgEmailConnector({
+      db: dbModule.db,
+      context: context(),
+      adapterKey: "zoho-zepto",
+      displayName: "Zepto",
+      configuration: { fromAddress: "service@shop.example" },
+      secret: { sendMailToken: "zepto_token" },
+    });
+
+    await expect(
+      sendOrgEmailTestMessage({ db: dbModule.db, context: context(), to: "owner@shop.example" }),
+    ).rejects.toMatchObject({ reason: "send_failed" });
+  });
+
+  it("reports email_not_configured in production with no connector anywhere", async () => {
+    const { sendOrgEmailTestMessage } = await import("@/modules/integrations/org-connectors");
+    const { context } = await seedOrg();
+    env.NODE_ENV = "production";
+
+    await expect(
+      sendOrgEmailTestMessage({ db: dbModule.db, context: context(), to: "owner@shop.example" }),
+    ).rejects.toMatchObject({ reason: "email_not_configured" });
+  });
+
+  it("rejects malformed recipients", async () => {
+    const { sendOrgEmailTestMessage } = await import("@/modules/integrations/org-connectors");
+    const { context } = await seedOrg();
+
+    await expect(
+      sendOrgEmailTestMessage({ db: dbModule.db, context: context(), to: "not-an-email" }),
+    ).rejects.toMatchObject({ reason: "invalid_recipient" });
+  });
+
+  it("denies test sends without organizations.manage", async () => {
+    const { sendOrgEmailTestMessage } = await import("@/modules/integrations/org-connectors");
+    const { context } = await seedOrg({ managePermission: false });
+
+    await expect(
+      sendOrgEmailTestMessage({ db: dbModule.db, context: context(), to: "owner@shop.example" }),
+    ).rejects.toMatchObject({ reason: "permission_denied" });
   });
 });

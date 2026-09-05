@@ -4,10 +4,21 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { assertTenantAccess, type TenantContext } from "@/modules/tenancy/policy";
 import { encryptSecret, getMasterKeyFromEnv } from "@/modules/integrations/crypto/secret-cipher";
 import { getAdapterDefinition } from "@/modules/integrations/email/adapters/adapter-types";
-import { invalidateEmailDeliveryCache } from "@/modules/integrations/email/email-delivery-resolver";
+import type { GenericEmailSender } from "@/modules/integrations/email/generic-email-sender";
+import {
+  instantiateAdapter,
+  invalidateEmailDeliveryCache,
+} from "@/modules/integrations/email/email-delivery-resolver";
+import { getConsoleAuthDeliveryProvider } from "@/modules/identity/delivery/console-auth-delivery-provider";
 
 export type OrgConnectorFailedReason =
-  "invalid_adapter" | "invalid_configuration" | "encryption_key_missing" | "connector_not_found";
+  | "invalid_adapter"
+  | "invalid_configuration"
+  | "encryption_key_missing"
+  | "connector_not_found"
+  | "invalid_recipient"
+  | "email_not_configured"
+  | "send_failed";
 
 export class OrgConnectorOperationFailed extends Error {
   constructor(public readonly reason: OrgConnectorFailedReason) {
@@ -166,4 +177,87 @@ export async function deleteOrgEmailConnector(
   });
 
   invalidateEmailDeliveryCache();
+}
+
+/**
+ * Resolves the provider a real send would use right now: the org connector,
+ * then the platform connector (ADR 0008), with the console adapter standing in
+ * for unconfigured development environments. Null in production when nothing
+ * is configured.
+ */
+async function resolveEffectiveEmailSender(
+  db: PrismaClient,
+  organizationId: string,
+): Promise<GenericEmailSender | null> {
+  if (process.env.NODE_ENV === "test") {
+    return getConsoleAuthDeliveryProvider();
+  }
+
+  const connector =
+    (await db.connectorInstance.findFirst({
+      where: { organizationId, capability: "email_delivery", status: "active" },
+      select: { adapterKey: true, configuration: true, encryptedSecret: true },
+    })) ??
+    (await db.connectorInstance.findFirst({
+      where: { scope: "platform", capability: "email_delivery", status: "active" },
+      select: { adapterKey: true, configuration: true, encryptedSecret: true },
+    }));
+
+  const provider = connector
+    ? instantiateAdapter(connector.adapterKey, connector.configuration, connector.encryptedSecret)
+    : null;
+  // Every email adapter implements both AuthDeliveryProvider and
+  // GenericEmailSender; narrow at runtime so a future adapter that only
+  // handles auth mail can't silently break test sends.
+  if (provider && typeof (provider as { sendRaw?: unknown }).sendRaw === "function") {
+    return provider as unknown as GenericEmailSender;
+  }
+
+  return process.env.NODE_ENV !== "production" ? getConsoleAuthDeliveryProvider() : null;
+}
+
+export type EmailTestSendResult = Readonly<{ adapterKey: string }>;
+
+/**
+ * Sends one real test message through the provider this organization's email
+ * currently resolves to, so "save" can be followed by proof it works.
+ */
+export async function sendOrgEmailTestMessage(
+  input: Readonly<{ db: PrismaClient; context: TenantContext; to: string }>,
+): Promise<EmailTestSendResult> {
+  assertTenantAccess(
+    input.context,
+    { organizationId: input.context.organizationId },
+    "organizations.manage",
+  );
+
+  const to = input.to.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) || to.length > 254) {
+    throw new OrgConnectorOperationFailed("invalid_recipient");
+  }
+
+  const sender = await resolveEffectiveEmailSender(input.db, input.context.organizationId);
+  if (!sender || sender.key === "none") {
+    throw new OrgConnectorOperationFailed("email_not_configured");
+  }
+
+  const organization = await input.db.organization.findUnique({
+    where: { id: input.context.organizationId },
+    select: { name: true },
+  });
+
+  try {
+    await sender.sendRaw({
+      organizationId: input.context.organizationId,
+      to,
+      subject: "ShopOS test email",
+      text:
+        `This is a test message from ${organization?.name ?? "your shop"}, sent through the ` +
+        `"${sender.key}" email connector. If you are reading it, email delivery is working.`,
+    });
+  } catch {
+    throw new OrgConnectorOperationFailed("send_failed");
+  }
+
+  return { adapterKey: sender.key };
 }

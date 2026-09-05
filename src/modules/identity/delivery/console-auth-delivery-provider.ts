@@ -1,4 +1,5 @@
 import type { AuthDeliveryMessage, AuthDeliveryProvider } from "./auth-delivery-provider";
+import type { GenericEmailSender } from "@/modules/integrations/email/generic-email-sender";
 
 const CAPTURE_LIMIT = 64;
 
@@ -43,10 +44,11 @@ type ConsoleAuthDeliveryProviderOptions = {
  * the harness can extract a verification token from the delivery callback. This
  * full capture is process-local and never logged.
  */
-export class ConsoleAuthDeliveryProvider implements AuthDeliveryProvider {
+export class ConsoleAuthDeliveryProvider implements AuthDeliveryProvider, GenericEmailSender {
   readonly key = "console";
   private readonly captured: CapturedAuthDeliveryMessage[] = [];
   private readonly full: FullAuthDeliveryMessage[] = [];
+  private readonly rawSends: Array<Readonly<{ to: string; recordedAt: string }>> = [];
   private readonly retainFullMessages: boolean;
 
   constructor(options: ConsoleAuthDeliveryProviderOptions = {}) {
@@ -98,6 +100,30 @@ export class ConsoleAuthDeliveryProvider implements AuthDeliveryProvider {
   reset(): void {
     this.captured.length = 0;
     this.full.length = 0;
+    this.rawSends.length = 0;
+  }
+
+  /**
+   * GenericEmailSender path for transactional sends (e.g. connector test
+   * messages). Records only the recipient and timestamp; the subject and body
+   * are never retained or logged.
+   */
+  async sendRaw(
+    input: Readonly<{ organizationId: string; to: string; subject: string; text: string }>,
+  ): Promise<void> {
+    const recordedAt = new Date().toISOString();
+    this.rawSends.push({ to: input.to, recordedAt });
+    if (this.rawSends.length > CAPTURE_LIMIT) {
+      this.rawSends.shift();
+    }
+    if (process.env.NODE_ENV !== "test") {
+      console.info(`[auth-delivery] raw send -> ${input.to}`);
+    }
+  }
+
+  /** Returns a defensive copy of recorded raw sends (recipient + time only). */
+  capturedRawSends(): ReadonlyArray<Readonly<{ to: string; recordedAt: string }>> {
+    return [...this.rawSends];
   }
 }
 
