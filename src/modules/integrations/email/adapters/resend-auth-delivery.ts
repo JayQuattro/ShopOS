@@ -3,6 +3,7 @@ import type {
   AuthDeliveryProvider,
 } from "@/modules/identity/delivery/auth-delivery-provider";
 import type { GenericEmailSender } from "@/modules/integrations/email/generic-email-sender";
+import { providerErrorDetail } from "@/modules/integrations/email/adapters/http-email-adapter";
 import type { ResendConfiguration, ResendSecret } from "./adapter-types";
 
 /**
@@ -51,7 +52,9 @@ export class ResendAuthDeliveryProvider implements AuthDeliveryProvider, Generic
       }),
     });
     if (!res.ok) {
-      throw new Error(`email adapter resend failed with status ${res.status}`);
+      throw new Error(
+        `email adapter resend failed with status ${res.status}${await providerErrorDetail(res)}`,
+      );
     }
   }
 

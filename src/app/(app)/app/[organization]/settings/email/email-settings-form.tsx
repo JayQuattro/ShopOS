@@ -185,7 +185,10 @@ export function OrgEmailSettingsForm() {
             "The provider rejected the send. Check the credentials and that the sender address is verified with the provider.",
           permission_denied: "You don't have permission to manage organization settings.",
         };
-        throw new Error(messages[body.error ?? ""] ?? "Could not send the test email.");
+        const friendly = messages[body.error ?? ""] ?? "Could not send the test email.";
+        throw new Error(
+          typeof body.detail === "string" && body.detail ? `${friendly}\n${body.detail}` : friendly,
+        );
       }
       const via =
         body.adapterKey === "console" ? "the dev console (no real email sent)" : body.adapterKey;
@@ -277,7 +280,9 @@ export function OrgEmailSettingsForm() {
             </Button>
           </div>
           {testResult ? <p className="text-sm text-muted-foreground">{testResult}</p> : null}
-          {testError ? <p className="text-sm text-destructive">{testError}</p> : null}
+          {testError ? (
+            <p className="text-sm text-destructive whitespace-pre-line">{testError}</p>
+          ) : null}
         </CardContent>
       </Card>
 

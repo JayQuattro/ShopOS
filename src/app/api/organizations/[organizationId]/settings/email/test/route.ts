@@ -64,7 +64,10 @@ export async function POST(
         email_not_configured: 409,
         send_failed: 424,
       };
-      return Response.json({ error: error.reason }, { status: statusMap[error.reason] ?? 400 });
+      return Response.json(
+        { error: error.reason, ...(error.detail ? { detail: error.detail } : {}) },
+        { status: statusMap[error.reason] ?? 400 },
+      );
     }
     return mapTenantError(error);
   }

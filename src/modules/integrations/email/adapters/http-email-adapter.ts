@@ -65,7 +65,9 @@ export abstract class HttpEmailAdapter implements AuthDeliveryProvider, GenericE
       body: JSON.stringify(this.buildBody(from, input.to, input.subject, input.text)),
     });
     if (!res.ok) {
-      throw new Error(`email adapter ${this.key} failed with status ${res.status}`);
+      throw new Error(
+        `email adapter ${this.key} failed with status ${res.status}${await providerErrorDetail(res)}`,
+      );
     }
   }
 
@@ -106,4 +108,41 @@ function buildTextBody(message: AuthDeliveryMessage): string {
   if (m.url) return `Click the link to continue: ${m.url}`;
   if (m.otp) return `Your code is: ${m.otp}`;
   return "Open ShopOS to continue.";
+}
+
+/**
+ * Extracts a human-readable reason from a provider's error response body so
+ * connector test sends can show why the provider rejected the message (e.g.
+ * ZeptoMail's "from address not allowed", SendGrid's field errors). Returns ""
+ * when nothing useful can be read — the status code alone is still reported.
+ */
+export async function providerErrorDetail(res: Response): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    const text = extractErrorText(body);
+    return text ? `: ${text.slice(0, 300)}` : "";
+  } catch {
+    return "";
+  }
+}
+
+function extractErrorText(value: unknown): string | null {
+  if (typeof value === "string") return value.trim() || null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const text = extractErrorText(item);
+      if (text) return text;
+    }
+    return null;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["message", "detail", "error", "errors", "errorMessage", "title"]) {
+      if (key in record) {
+        const text = extractErrorText(record[key]);
+        if (text) return text;
+      }
+    }
+  }
+  return null;
 }
