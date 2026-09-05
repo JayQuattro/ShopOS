@@ -7,11 +7,7 @@ import { getAdapterDefinition } from "@/modules/integrations/email/adapters/adap
 import { invalidateEmailDeliveryCache } from "@/modules/integrations/email/email-delivery-resolver";
 
 export type OrgConnectorFailedReason =
-  | "invalid_adapter"
-  | "invalid_configuration"
-  | "encryption_key_missing"
-  | "connector_not_found"
-  | "entitlement_not_granted";
+  "invalid_adapter" | "invalid_configuration" | "encryption_key_missing" | "connector_not_found";
 
 export class OrgConnectorOperationFailed extends Error {
   constructor(public readonly reason: OrgConnectorFailedReason) {
@@ -29,23 +25,6 @@ export type OrgEmailConnectorSummary = Readonly<{
   status: string;
   updatedAt: Date;
 }>;
-
-/**
- * Checks whether the organization has the `integrations.custom` entitlement
- * enabled, which is required for org-scoped connector configuration.
- */
-async function assertOrgConnectorEntitlement(
-  db: PrismaClient,
-  organizationId: string,
-): Promise<void> {
-  const entitlement = await db.organizationEntitlement.findFirst({
-    where: { organizationId, key: "integrations.custom", enabled: true },
-    select: { id: true },
-  });
-  if (!entitlement) {
-    throw new OrgConnectorOperationFailed("entitlement_not_granted");
-  }
-}
 
 export async function getOrgEmailConnector(
   db: PrismaClient,
@@ -89,7 +68,6 @@ export async function upsertOrgEmailConnector(
     { organizationId: input.context.organizationId },
     "organizations.manage",
   );
-  await assertOrgConnectorEntitlement(input.db, input.context.organizationId);
 
   const adapter = getAdapterDefinition(input.adapterKey);
   if (!adapter) throw new OrgConnectorOperationFailed("invalid_adapter");

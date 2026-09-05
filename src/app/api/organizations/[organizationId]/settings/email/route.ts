@@ -109,12 +109,7 @@ export async function DELETE(
 
 function orgConnectorError(error: unknown): Response {
   if (error instanceof OrgConnectorOperationFailed) {
-    const status =
-      error.reason === "connector_not_found"
-        ? 404
-        : error.reason === "entitlement_not_granted"
-          ? 403
-          : 400;
+    const status = error.reason === "connector_not_found" ? 404 : 400;
     return Response.json({ error: error.reason }, { status });
   }
   return mapTenantError(error);
