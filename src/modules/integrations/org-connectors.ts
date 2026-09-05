@@ -21,7 +21,11 @@ export type OrgConnectorFailedReason =
   | "send_failed";
 
 export class OrgConnectorOperationFailed extends Error {
-  constructor(public readonly reason: OrgConnectorFailedReason) {
+  constructor(
+    public readonly reason: OrgConnectorFailedReason,
+    /** Optional provider/transport detail, safe to show to org managers. */
+    public readonly detail?: string,
+  ) {
     super("The organization connector operation could not be completed.");
     this.name = "OrgConnectorOperationFailed";
   }
@@ -255,8 +259,13 @@ export async function sendOrgEmailTestMessage(
         `This is a test message from ${organization?.name ?? "your shop"}, sent through the ` +
         `"${sender.key}" email connector. If you are reading it, email delivery is working.`,
     });
-  } catch {
-    throw new OrgConnectorOperationFailed("send_failed");
+  } catch (error) {
+    // Adapter messages carry the provider status and its own error text (no
+    // credentials) — exactly what a manager needs to fix the configuration.
+    throw new OrgConnectorOperationFailed(
+      "send_failed",
+      error instanceof Error ? error.message : undefined,
+    );
   }
 
   return { adapterKey: sender.key };

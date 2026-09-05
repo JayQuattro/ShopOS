@@ -261,6 +261,33 @@ describe("brevo adapter", () => {
   });
 });
 
+describe("provider error detail extraction", () => {
+  const adapter = new ZohoZeptoAdapter(
+    { fromAddress: "service@shop.example" },
+    { sendMailToken: "zepto_token" },
+  );
+
+  it("surfaces the provider's own error message on rejection", async () => {
+    fetchResult = {
+      ok: false,
+      status: 403,
+      json: () =>
+        Promise.resolve({
+          error: { code: "SM_303", message: "from address is not allowed for this Mail Agent" },
+        }),
+    } as unknown as Response;
+
+    await expect(sendRaw(adapter)).rejects.toThrow(
+      "email adapter zoho-zepto failed with status 403: from address is not allowed for this Mail Agent",
+    );
+  });
+
+  it("keeps the plain status message when the body has nothing readable", async () => {
+    fetchResult = jsonResponse(false);
+    await expect(sendRaw(adapter)).rejects.toThrow("email adapter zoho-zepto failed with status");
+  });
+});
+
 describe("zoho zepto adapter", () => {
   const adapter = new ZohoZeptoAdapter(
     { fromAddress: "service@shop.example", fromName: "Atlas" },
