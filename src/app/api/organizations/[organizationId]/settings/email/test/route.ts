@@ -56,10 +56,13 @@ export async function POST(
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof OrgConnectorOperationFailed) {
+      // 4xx statuses only: Cloudflare (and similar fronting proxies) replace
+      // origin 502/504 bodies with their own error pages, which would hide
+      // these JSON reasons from the UI.
       const statusMap: Record<string, number> = {
         invalid_recipient: 422,
-        email_not_configured: 503,
-        send_failed: 502,
+        email_not_configured: 409,
+        send_failed: 424,
       };
       return Response.json({ error: error.reason }, { status: statusMap[error.reason] ?? 400 });
     }
