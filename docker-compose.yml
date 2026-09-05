@@ -44,6 +44,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET to 32+ random chars}
       NODE_ENV: production
       SEED_DEMO: ${SEED_DEMO:-true}
+      CONNECTOR_ENCRYPTION_KEY: ${CONNECTOR_ENCRYPTION_KEY:?set CONNECTOR_ENCRYPTION_KEY to a 32-byte base64 key (openssl rand -base64 32) for encrypting integration credentials}
     ports:
       - "${APP_PORT:-3000}:3000"
 
@@ -62,6 +63,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}
       NODE_ENV: production
       SKIP_MIGRATIONS: "true"
+      CONNECTOR_ENCRYPTION_KEY: ${CONNECTOR_ENCRYPTION_KEY:?}
 
   mailpit:
     image: axllent/mailpit

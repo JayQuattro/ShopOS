@@ -23,6 +23,9 @@ Demo sign-in: `owner@example.test` / `demo-password-123` (also
    - `BETTER_AUTH_URL` — the public URL Coolify assigns
      (e.g. `https://shopos-demo.example.com`)
    - `BETTER_AUTH_SECRET` — 32+ random chars: `openssl rand -base64 32`
+   - `CONNECTOR_ENCRYPTION_KEY` — 32-byte base64 key (`openssl rand -base64 32`)
+     used to envelope-encrypt integration credentials (email/SMS/storage keys).
+     Required whenever you configure your own connectors.
    - Optional: `POSTGRES_PASSWORD` (change this for anything internet-facing),
      `APP_PORT` (default 3000), `MAILPIT_PORT` (default 8025),
      `SEED_DEMO` (default `true`)
