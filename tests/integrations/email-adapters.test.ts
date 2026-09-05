@@ -298,8 +298,9 @@ describe("zoho zepto adapter", () => {
     await sendRaw(adapter);
 
     const call = lastCall();
-    expect(call.url).toBe("https://api.zeptomail.com/v1.0/email");
-    expect(new Headers(call.init.headers).get("Authorization")).toBe("Bearer zepto_token");
+    expect(call.url).toBe("https://api.zeptomail.com/v1.0/email/send");
+    // ZeptoMail uses its own auth scheme, not Bearer.
+    expect(new Headers(call.init.headers).get("Authorization")).toBe("Zoho-enczapikey zepto_token");
     expect(sentBody(call)).toEqual({
       from: { address: "service@shop.example", name: "Atlas" },
       to: [{ email_address: { address: "customer@example.com" } }],
@@ -311,6 +312,17 @@ describe("zoho zepto adapter", () => {
   it("rejects on a non-ok response", async () => {
     fetchResult = jsonResponse(false);
     await expect(sendRaw(adapter)).rejects.toThrow("email adapter zoho-zepto failed");
+  });
+
+  it("uses tokens copied with the Zoho-enczapikey prefix verbatim", async () => {
+    const copied = new ZohoZeptoAdapter(
+      { fromAddress: "service@shop.example" },
+      { sendMailToken: "Zoho-enczapikey ABCDEF1234567890" },
+    );
+    await sendRaw(copied);
+    expect(new Headers(lastCall().init.headers).get("Authorization")).toBe(
+      "Zoho-enczapikey ABCDEF1234567890",
+    );
   });
 });
 
