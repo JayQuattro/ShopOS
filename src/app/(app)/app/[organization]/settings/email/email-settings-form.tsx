@@ -120,7 +120,9 @@ export function OrgEmailSettingsForm() {
         throw new Error(
           body.error === "invalid_configuration"
             ? "Fill in the required fields."
-            : (body.error ?? "Failed to save"),
+            : body.error === "encryption_key_missing"
+              ? "The server has no connector encryption key configured. Set CONNECTOR_ENCRYPTION_KEY and restart."
+              : (body.error ?? "Failed to save"),
         );
       }
       setSuccess(
