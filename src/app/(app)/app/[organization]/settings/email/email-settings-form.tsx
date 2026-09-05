@@ -88,9 +88,7 @@ export function OrgEmailSettingsForm() {
             setConfig(configMap);
           }
         } else if (res.status === 403) {
-          setError(
-            "Your plan does not include custom integrations. Upgrade to configure your own email provider.",
-          );
+          setError("You don't have permission to manage organization settings.");
         }
       } finally {
         setLoading(false);
@@ -120,8 +118,8 @@ export function OrgEmailSettingsForm() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(
-          body.error === "entitlement_not_granted"
-            ? "Your plan does not include custom integrations."
+          body.error === "invalid_configuration"
+            ? "Fill in the required fields."
             : (body.error ?? "Failed to save"),
         );
       }
