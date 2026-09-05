@@ -1,4 +1,5 @@
 import type { AuthDeliveryMessage, AuthDeliveryProvider } from "./auth-delivery-provider";
+import type { GenericEmailSender } from "@/modules/integrations/email/generic-email-sender";
 
 /**
  * Safe no-op adapter and the production default when no real delivery provider
@@ -10,7 +11,7 @@ import type { AuthDeliveryMessage, AuthDeliveryProvider } from "./auth-delivery-
  * an address exists. A real provider (SMTP/Resend/etc.) will replace this behind
  * the same interface.
  */
-export class NullAuthDeliveryProvider implements AuthDeliveryProvider {
+export class NullAuthDeliveryProvider implements AuthDeliveryProvider, GenericEmailSender {
   readonly key = "none";
   private readonly counts = new Map<AuthDeliveryMessage["kind"], number>();
 
@@ -21,6 +22,12 @@ export class NullAuthDeliveryProvider implements AuthDeliveryProvider {
 
   sentMessages(): number {
     return [...this.counts.values()].reduce((total, count) => total + count, 0);
+  }
+
+  /** GenericEmailSender path: discards the message without error. */
+  async sendRaw(): Promise<void> {
+    // Fail safe: no-op. Production with no connector swallows transactional
+    // sends rather than crashing callers.
   }
 
   sentByKind(): ReadonlyMap<AuthDeliveryMessage["kind"], number> {

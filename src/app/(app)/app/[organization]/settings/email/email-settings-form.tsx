@@ -70,6 +70,10 @@ export function OrgEmailSettingsForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [testTo, setTestTo] = useState("");
+  const [testPending, setTestPending] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -160,6 +164,39 @@ export function OrgEmailSettingsForm() {
     }
   }
 
+  async function sendTestEmail() {
+    if (!testTo.trim()) return;
+    setTestPending(true);
+    setTestResult(null);
+    setTestError(null);
+    try {
+      const res = await fetch(`${apiBase}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testTo.trim() }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const messages: Record<string, string> = {
+          invalid_recipient: "Enter a valid email address.",
+          email_not_configured:
+            "No email provider is configured yet — save a connector (or ask your platform operator to) and try again.",
+          send_failed:
+            "The provider rejected the send. Check the credentials and that the sender address is verified with the provider.",
+          permission_denied: "You don't have permission to manage organization settings.",
+        };
+        throw new Error(messages[body.error ?? ""] ?? "Could not send the test email.");
+      }
+      const via =
+        body.adapterKey === "console" ? "the dev console (no real email sent)" : body.adapterKey;
+      setTestResult(`Test email sent to ${testTo.trim()} via ${via}.`);
+    } catch (e) {
+      setTestError(e instanceof Error ? e.message : "Could not send the test email.");
+    } finally {
+      setTestPending(false);
+    }
+  }
+
   if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (
@@ -205,6 +242,44 @@ export function OrgEmailSettingsForm() {
           </AlertDescription>
         </Alert>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Send a test email</CardTitle>
+          <CardDescription>
+            Sends one real message through the provider this organization&apos;s email currently
+            resolves to — your connector, or the platform default if you haven&apos;t set one.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <label className="grid gap-1 text-sm font-medium sm:max-w-md">
+            Deliver to
+            <Input
+              type="email"
+              value={testTo}
+              onChange={(e) => {
+                setTestTo(e.target.value);
+                setTestResult(null);
+                setTestError(null);
+              }}
+              placeholder="you@yourshop.com"
+              disabled={testPending}
+            />
+          </label>
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void sendTestEmail()}
+              disabled={testPending || !testTo.trim()}
+            >
+              {testPending ? "Sending…" : "Send test email"}
+            </Button>
+          </div>
+          {testResult ? <p className="text-sm text-muted-foreground">{testResult}</p> : null}
+          {testError ? <p className="text-sm text-destructive">{testError}</p> : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
