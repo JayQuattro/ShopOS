@@ -327,7 +327,10 @@ describe("email test message", { skip: shouldSkip }, () => {
     expect(result).toEqual({ adapterKey: "zoho-zepto" });
 
     expect(fetchCalls).toHaveLength(1);
-    expect(fetchCalls[0]?.url).toBe("https://api.zeptomail.com/v1.0/email");
+    expect(fetchCalls[0]?.url).toBe("https://api.zeptomail.com/v1.0/email/send");
+    expect(new Headers(fetchCalls[0]?.init.headers).get("Authorization")).toBe(
+      "Zoho-enczapikey zepto_token",
+    );
     const body = JSON.parse(String(fetchCalls[0]?.init.body)) as Record<string, unknown>;
     expect(body.to).toEqual([{ email_address: { address: "owner@shop.example" } }]);
     expect(body.subject).toBe("ShopOS test email");

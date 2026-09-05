@@ -245,7 +245,7 @@ export type ZohoZeptoSecret = Readonly<{ sendMailToken: string }>;
 
 export class ZohoZeptoAdapter extends HttpEmailAdapter {
   readonly key = "zoho-zepto";
-  protected readonly endpoint = "https://api.zeptomail.com/v1.0/email";
+  protected readonly endpoint = "https://api.zeptomail.com/v1.0/email/send";
   protected readonly verifyEndpoint = "https://api.zeptomail.com/v1.0/account";
 
   constructor(
@@ -256,7 +256,13 @@ export class ZohoZeptoAdapter extends HttpEmailAdapter {
   }
 
   protected buildHeaders(): Record<string, string> {
-    return { Authorization: `Bearer ${this.secret.sendMailToken}` };
+    // ZeptoMail authenticates with its own scheme — `Authorization:
+    // Zoho-enczapikey <key>` — not Bearer. Copied tokens already carry the
+    // `Zoho-enczapikey` prefix (the console shows it), so use them verbatim
+    // and add the scheme only when someone pastes the bare secret.
+    const token = this.secret.sendMailToken.trim();
+    const authorization = /^zoho-enczapikey\s/i.test(token) ? token : `Zoho-enczapikey ${token}`;
+    return { Authorization: authorization };
   }
 
   protected buildBody(from: string, to: string, subject: string, text: string) {
