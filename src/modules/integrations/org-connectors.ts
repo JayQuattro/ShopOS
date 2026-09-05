@@ -87,14 +87,19 @@ export async function upsertOrgEmailConnector(
   const adapter = getAdapterDefinition(input.adapterKey);
   if (!adapter) throw new OrgConnectorOperationFailed("invalid_adapter");
 
+  // Trim pasted values: credentials and config fields never carry meaningful
+  // surrounding whitespace, and a stray trailing newline silently breaks auth.
+  const configuration = trimStringValues(input.configuration);
+  const secret = trimSecretValues(input.secret);
+
   // Validate required fields.
   for (const field of adapter.configFields) {
-    if (field.required && !input.configuration[field.name]) {
+    if (field.required && !configuration[field.name]) {
       throw new OrgConnectorOperationFailed("invalid_configuration");
     }
   }
   for (const field of adapter.secretFields) {
-    if (field.required && !input.secret[field.name]) {
+    if (field.required && !secret[field.name]) {
       throw new OrgConnectorOperationFailed("invalid_configuration");
     }
   }
@@ -102,7 +107,7 @@ export async function upsertOrgEmailConnector(
   const masterKey = getMasterKeyFromEnv();
   if (!masterKey) throw new OrgConnectorOperationFailed("encryption_key_missing");
 
-  const encryptedSecret = encryptSecret(JSON.stringify(input.secret), masterKey);
+  const encryptedSecret = encryptSecret(JSON.stringify(secret), masterKey);
 
   const result = await input.db.$transaction(async (transaction) => {
     await transaction.connectorInstance.updateMany({
@@ -122,7 +127,7 @@ export async function upsertOrgEmailConnector(
         capability: "email_delivery",
         adapterKey: input.adapterKey,
         displayName: input.displayName,
-        configuration: JSON.parse(JSON.stringify(input.configuration)),
+        configuration: JSON.parse(JSON.stringify(configuration)),
         encryptedSecret,
         status: "active",
         createdByUserId: input.context.actorId,
@@ -269,4 +274,17 @@ export async function sendOrgEmailTestMessage(
   }
 
   return { adapterKey: sender.key };
+}
+
+function trimStringValues<T extends Record<string, unknown>>(record: T): T {
+  return Object.fromEntries(
+    Object.entries(record).map(([key, value]) => [
+      key,
+      typeof value === "string" ? value.trim() : value,
+    ]),
+  ) as T;
+}
+
+function trimSecretValues(secret: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(secret).map(([key, value]) => [key, value.trim()]));
 }

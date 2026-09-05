@@ -135,8 +135,9 @@ describe("organization email connector configuration", { skip: shouldSkip }, () 
       context: context(),
       adapterKey: "zoho-zepto",
       displayName: "Shop ZeptoMail",
-      configuration: { fromAddress: "service@shop.example", fromName: "Atlas Service" },
-      secret: { sendMailToken: "zepto_test_token_123" },
+      // Stray whitespace from a copy-paste must not survive the save.
+      configuration: { fromAddress: " service@shop.example ", fromName: "Atlas Service" },
+      secret: { sendMailToken: " zepto_test_token_123 " },
     });
     expect(created.connectorId).toBeTruthy();
 
@@ -146,6 +147,8 @@ describe("organization email connector configuration", { skip: shouldSkip }, () 
     expect(read?.hasSecret).toBe(true);
     expect(read?.configuration).toMatchObject({ fromAddress: "service@shop.example" });
 
+    // The stored secret is decrypted trimmed as well (a trailing newline
+    // would break provider auth with a bare 401), and never in plaintext.
     const raw = await dbModule.db.connectorInstance.findFirst({
       where: { organizationId: orgId, capability: "email_delivery" },
       select: { encryptedSecret: true, scope: true },
@@ -153,6 +156,13 @@ describe("organization email connector configuration", { skip: shouldSkip }, () 
     expect(raw?.scope).toBe("organization");
     expect(raw?.encryptedSecret).toBeTruthy();
     expect(raw?.encryptedSecret).not.toContain("zepto_test_token_123");
+    const { decryptSecret, getMasterKeyFromEnv } = await import(
+      "@/modules/integrations/crypto/secret-cipher"
+    );
+    const decrypted = JSON.parse(
+      decryptSecret(raw!.encryptedSecret!, getMasterKeyFromEnv()!),
+    ) as Record<string, string>;
+    expect(decrypted.sendMailToken).toBe("zepto_test_token_123");
 
     const audit = await dbModule.db.auditEvent.findFirst({
       where: { organizationId: orgId, action: "integrations.connector_configured" },
